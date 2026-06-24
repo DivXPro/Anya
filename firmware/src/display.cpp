@@ -48,14 +48,6 @@ void disp_status_bar(int8_t rssi, bool wsConnected) {
         M5.Display.print("○ Elf");
     }
 
-    // ── RSSI text ──
-    M5.Display.setTextColor(TFT_DARKGREY);
-    M5.Display.setCursor(52, 2);
-    if (rssi < 0) {
-        M5.Display.printf("%d dBm", rssi);
-    } else {
-        M5.Display.print("--- dBm");
-    }
 }
 
 // ── Mascot ──────────────────────────────────────────────────
