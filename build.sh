@@ -2,96 +2,47 @@
 set -euo pipefail
 
 # ============================================================
-# Elf Build Script
-# Compiles both the desktop app and firmware
-# Usage: ./build.sh [desktop|firmware|all]
+# Elf Desktop Build Script
+# Compiles the Wails desktop app and wraps it into a .app bundle
+# Usage: ./build.sh
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DESKTOP_DIR="$SCRIPT_DIR/desktop"
-FIRMWARE_DIR="$SCRIPT_DIR/firmware"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 NC='\033[0m'
 
-log()  { echo -e "${GREEN}[BUILD]${NC} $1"; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-err()  { echo -e "${RED}[ERROR]${NC} $1"; }
+log() { echo -e "${GREEN}[BUILD]${NC} $1"; }
+err() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-build_desktop() {
-    log "Building desktop app..."
+export PATH="$PATH:$(go env GOPATH)/bin"
 
-    export PATH="$PATH:$(go env GOPATH)/bin"
-
-    if ! command -v wails3 &>/dev/null; then
-        err "wails3 not found in PATH. Install with: go install github.com/wailsapp/wails/v3/cmd/wails3@latest"
+for cmd in wails3 node go; do
+    if ! command -v "$cmd" &>/dev/null; then
+        err "$cmd not found."
         exit 1
     fi
+done
 
-    if ! command -v node &>/dev/null; then
-        err "node not found. Install Node.js 18+."
-        exit 1
-    fi
+cd "$DESKTOP_DIR"
 
-    if ! command -v go &>/dev/null; then
-        err "go not found. Install Go 1.22+."
-        exit 1
-    fi
+# Install frontend deps if needed
+if [ ! -d "frontend/node_modules" ]; then
+    log "Installing frontend dependencies..."
+    (cd frontend && npm install)
+fi
 
-    cd "$DESKTOP_DIR"
+# Full Wails build (bindings + frontend + Go)
+wails3 build
 
-    # Install frontend deps if needed
-    if [ ! -d "frontend/node_modules" ]; then
-        log "Installing frontend dependencies..."
-        (cd frontend && npm install)
-    fi
+# Wrap into macOS .app bundle
+if [[ "$(uname)" == "Darwin" ]]; then
+    log "Wrapping into .app bundle..."
+    bash bundle.sh
+    log "App: $(realpath bin/Elf.app)"
+fi
 
-    # Full Wails build (bindings + frontend + Go)
-    wails3 build
-
-    if [ -f "bin/elf" ]; then
-        log "Desktop binary: $(realpath bin/elf) ($(du -sh bin/elf | cut -f1))"
-        file bin/elf
-    else
-        err "Desktop build failed — bin/elf not found"
-        exit 1
-    fi
-}
-
-build_firmware() {
-    log "Building firmware..."
-
-    if ! command -v pio &>/dev/null; then
-        err "PlatformIO CLI not found. Install with: pip install platformio"
-        exit 1
-    fi
-
-    cd "$FIRMWARE_DIR"
-
-    pio run --project-dir "$FIRMWARE_DIR"
-
-    log "Firmware build complete."
-    warn "To upload to device: cd firmware && pio run --target upload"
-}
-
-case "${1:-all}" in
-    desktop)
-        build_desktop
-        ;;
-    firmware)
-        build_firmware
-        ;;
-    all)
-        build_desktop
-        echo ""
-        build_firmware
-        ;;
-    *)
-        echo "Usage: $0 [desktop|firmware|all]"
-        exit 1
-        ;;
-esac
-
+log "Desktop binary: $(realpath bin/elf) ($(du -sh bin/elf | cut -f1))"
 log "Done."
