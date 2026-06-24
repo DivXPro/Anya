@@ -46,7 +46,7 @@ h1{font-size:1.3em;text-align:center;padding:16px 20px 8px;flex-shrink:0;positio
 #status.ok{color:#4ade80}
 </style></head>
 <body>
-<h1>Elf WiFi Setup<button id="rescan" onclick="reScan()">&#x21bb;</button></h1>
+<h1>Choose WiFi to connect<button id="rescan" onclick="reScan()">&#x21bb;</button></h1>
 <div id="status"></div>
 <div id="top-area">
 <div id="scanning" class="scanning">Scanning networks...</div>
