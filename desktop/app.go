@@ -21,17 +21,23 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type App struct {
-	ctx       context.Context
-	db        *sql.DB
-	desktopID string
-	localIP   string
-	router    *acp.Router
-	wsServer  *gateway.Server
-	stt       speech.STTEngine
-	tts       speech.TTSEngine
+	ctx            context.Context
+	db             *sql.DB
+	desktopID      string
+	localIP        string
+	router         *acp.Router
+	wsServer       *gateway.Server
+	stt            speech.STTEngine
+	tts            speech.TTSEngine
+	trayDeviceItem *application.MenuItem
+}
+
+func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
+	a.trayDeviceItem = item
 }
 
 func NewApp() *App {
@@ -128,6 +134,15 @@ func (a *App) handleDeviceConnect(dev gateway.DeviceAdapter) {
 	info := dev.Info()
 	log.Printf("[elf] device connected: %s (%s)", info.ID, info.Model)
 
+	// Update tray menu
+	if a.trayDeviceItem != nil {
+		name := info.Name
+		if len(name) > 16 {
+			name = name[:16]
+		}
+		a.trayDeviceItem.SetLabel(name + "  ● 已连接")
+	}
+
 	agents, err := store.ListAgents(a.db)
 	if err != nil || len(agents) == 0 {
 		log.Printf("[elf] no agents configured")
@@ -153,6 +168,11 @@ func (a *App) handleDeviceConnect(dev gateway.DeviceAdapter) {
 
 func (a *App) handleDeviceDisconnect(deviceID string) {
 	log.Printf("[elf] device disconnected: %s", deviceID)
+
+	// Update tray menu
+	if a.trayDeviceItem != nil {
+		a.trayDeviceItem.SetLabel("未连接设备")
+	}
 }
 
 func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {

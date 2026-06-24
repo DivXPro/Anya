@@ -28,16 +28,16 @@ func main() {
 		},
 	})
 
-	// Main window — hidden initially, shown via menu bar icon
+	// Main window — hidden initially, opened via menu
 	mainWindow := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:         "Elf",
-		Width:         420,
-		Height:        620,
-		URL:           "/",
-		MinWidth:      360,
-		MinHeight:     480,
-		Hidden:        true,
-		HideOnEscape:  true,
+		Title:           "Elf",
+		Width:           420,
+		Height:          620,
+		URL:             "/",
+		MinWidth:        360,
+		MinHeight:       480,
+		Hidden:          true,
+		HideOnEscape:    true,
 		HideOnFocusLost: false,
 		Mac: application.MacWindow{
 			Backdrop:                application.MacBackdropTranslucent,
@@ -60,23 +60,30 @@ func main() {
 		systemTray.SetTemplateIcon(icons.SystrayMacTemplate)
 	}
 
-	// Right-click menu
+	// Tray menu
 	menu := wailsApp.NewMenu()
-	menu.Add("Show Elf").OnClick(func(_ *application.Context) {
+	deviceItem := menu.Add("未连接设备")
+	deviceItem.SetEnabled(false)
+	menu.AddSeparator()
+	menu.Add("打开 Elf").OnClick(func(_ *application.Context) {
 		mainWindow.Show()
 		mainWindow.Focus()
 	})
-	menu.Add("Hide Elf").OnClick(func(_ *application.Context) {
-		mainWindow.Hide()
-	})
 	menu.AddSeparator()
-	menu.Add("Quit").OnClick(func(_ *application.Context) {
+	menu.Add("退出").OnClick(func(_ *application.Context) {
+		mainWindow.Close()
 		wailsApp.Quit()
 	})
+
 	systemTray.SetMenu(menu)
 
-	// Left-click tray icon → toggle window
-	systemTray.AttachWindow(mainWindow).WindowOffset(5)
+	// Give App access to update device status
+	elfApp.SetTrayDeviceItem(deviceItem)
+
+	// Left-click → show menu
+	systemTray.OnClick(func() {
+		systemTray.OpenMenu()
+	})
 
 	if err := wailsApp.Run(); err != nil {
 		log.Fatal(err)
