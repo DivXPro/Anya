@@ -2,6 +2,7 @@
 #include <M5Unified.h>
 
 void disp_init();
+void disp_status_bar(int8_t rssi, bool wsConnected);
 void disp_wifi_setup(const char* hotspotSsid);
 void disp_wifi_connecting(const char* ssid);
 void disp_pair_ready();

@@ -56,6 +56,11 @@ bool wifi_connected() {
     return WiFi.status() == WL_CONNECTED;
 }
 
+int8_t wifi_rssi() {
+    if (WiFi.status() != WL_CONNECTED) return 0;
+    return WiFi.RSSI();
+}
+
 String wifi_get_local_ip() {
     return WiFi.localIP().toString();
 }

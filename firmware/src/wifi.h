@@ -8,6 +8,7 @@ extern String wifi_ssid;
 bool wifi_init();
 bool wifi_connected();
 bool wifi_has_credentials();
+int8_t wifi_rssi();
 void wifi_save_credentials(const char* ssid, const char* password);
 void wifi_clear_credentials();
 

@@ -103,6 +103,17 @@ void loop() {
     ws_loop();
     http_loop();
 
+    // Update status bar with live WiFi RSSI + WS connection (every ~1s)
+    {
+        static unsigned long lastStatusUpdate = 0;
+        unsigned long now = millis();
+        if (now - lastStatusUpdate > 1000) {
+            lastStatusUpdate = now;
+            int8_t rssi = wifi_connected() ? wifi_rssi() : 0;
+            state_update_status(rssi, ws_connected());
+        }
+    }
+
     if (!ws_connected() && !advertising && wifi_connected()) {
         mdns_start_advertise(deviceID, deviceName);
         advertising = true;
