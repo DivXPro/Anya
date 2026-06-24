@@ -1,0 +1,8 @@
+desktop/build/
+desktop/frontend/node_modules/
+desktop/frontend/dist/
+*.exe
+*.dmg
+.DS_Store
+firmware/.pio/
+firmware/.vscode/
