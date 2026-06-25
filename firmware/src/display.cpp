@@ -57,10 +57,7 @@ void disp_status_bar(int8_t rssi, bool wifiConnected, bool wsConnected, const ch
     }
 
     // Left label: show SSID when provided (e.g. on Pair screen), otherwise agent name.
-    // Align text baseline so the letter body sits on the same midline as the dot.
-    M5.Display.setTextSize(1);
-    M5.Display.setTextColor(TFT_WHITE);
-    M5.Display.setCursor(13, DOT_Y + 3);
+    // Use middle-left datum so the text is vertically centered in the 16px bar.
     const char* label = (ssid && ssid[0]) ? ssid : agent;
     if (label && label[0]) {
         int maxChars = (M5.Display.width() - 50) / 6;
@@ -70,7 +67,10 @@ void disp_status_bar(int8_t rssi, bool wifiConnected, bool wsConnected, const ch
         if (len >= (int)sizeof(buf)) len = (int)sizeof(buf) - 1;
         strncpy(buf, label, len);
         buf[len] = '\0';
-        M5.Display.print(buf);
+        M5.Display.setTextSize(1);
+        M5.Display.setTextColor(TFT_WHITE);
+        M5.Display.setTextDatum(textdatum_t::middle_left);
+        M5.Display.drawString(buf, 13, STATUS_BAR_H / 2);
     }
 }
 
