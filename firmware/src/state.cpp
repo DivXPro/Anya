@@ -12,6 +12,8 @@ static bool lastWsConnected = false;
 
 void state_init() {
     disp_init();
+    // Draw empty status bar immediately so layout is consistent from the start
+    disp_status_bar(-1, false, "");
 }
 
 void state_update_status(int8_t rssi, bool wsConnected) {
