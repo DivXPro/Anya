@@ -115,11 +115,11 @@ static String buildScanJson() {
     return json;
 }
 
-// ── Screen drawing (portrait 80×160, consistent with display.cpp) ──
+// ── Screen drawing (matches display.cpp: 80×80 square at y=24) ──
 static const int P_MASCOT_CX = 40;
-static const int P_MASCOT_CY = 58;
-static const int P_MASCOT_R  = 24;
-static const int P_PROMPT_Y  = 108;
+static const int P_MASCOT_CY = 64;
+static const int P_MASCOT_R  = 34;
+static const int P_PROMPT_Y  = 120;
 static bool portalDrawn = false;
 
 static void portalCenterPrint(const char* s, int y) {

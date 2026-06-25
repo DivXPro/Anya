@@ -2,11 +2,18 @@
 #include <cstring>
 
 // Layout — portrait 80×160
+//   0-16    status bar
+//  16-24    gap
+//  24-104   mascot area (80×80 full-width square)
+// 104-112   gap
+// 112-160   prompt text
 static const int STATUS_BAR_H = 16;
-static const int MASCOT_CX   = 40;  // center of 80px screen
-static const int MASCOT_CY   = 58;
-static const int MASCOT_R    = 24;
-static const int PROMPT_Y    = 108; // below mascot: 58+24=82, +26px gap
+static const int MASCOT_TOP   = 24;
+static const int MASCOT_SIZE  = 80;   // full width
+static const int MASCOT_CX    = 40;   // center of 80px
+static const int MASCOT_CY    = 64;   // center of square (24 + 80/2)
+static const int MASCOT_R     = 34;   // fits in 80×80 with padding
+static const int PROMPT_Y     = 120;  // below mascot area + gap
 
 void disp_init() {
     M5.Display.setRotation(0);
@@ -39,15 +46,13 @@ void disp_status_bar(int8_t rssi, bool wsConnected, const char* agent) {
     M5.Display.setTextSize(1);
     if (wsConnected) {
         M5.Display.setTextColor(TFT_GREEN);
-        M5.Display.setCursor(3, 3);
-        M5.Display.print("●");
     } else {
         M5.Display.setTextColor(TFT_DARKGREY);
-        M5.Display.setCursor(3, 3);
-        M5.Display.print("○");
     }
+    M5.Display.setCursor(3, 3);
+    M5.Display.print(wsConnected ? "●" : "○");
 
-    // Agent name, right after the dot
+    // Agent name
     M5.Display.setTextColor(TFT_BLACK);
     M5.Display.setCursor(11, 3);
     if (agent && agent[0]) {
@@ -57,17 +62,19 @@ void disp_status_bar(int8_t rssi, bool wsConnected, const char* agent) {
 
 // ── Mascot ───────────────────────────────────────────────────
 static void drawMascot() {
+    // Background square (subtle)
+    M5.Display.fillRoundRect(0, MASCOT_TOP, MASCOT_SIZE, MASCOT_SIZE, 12, TFT_WHITE);
+    // Circle "face"
     M5.Display.fillCircle(MASCOT_CX, MASCOT_CY, MASCOT_R, TFT_LIGHTGREY);
+    // "Elf" label centered in circle
     M5.Display.setTextColor(TFT_BLACK);
     M5.Display.setTextSize(1);
-    // "Elf" is ~18px wide at text size 1, centered in circle
     M5.Display.setCursor(MASCOT_CX - 9, MASCOT_CY - 4);
     M5.Display.print("Elf");
 }
 
 // ── Prompt ───────────────────────────────────────────────────
 static void centerPrint(const char* s, int y) {
-    // ~6px per char at text size 1
     int w = (int)strlen(s) * 6;
     M5.Display.setCursor((M5.Display.width() - w) / 2, y);
     M5.Display.print(s);
