@@ -54,7 +54,7 @@ void setup() {
         wifiOK = wifi_portal_begin();
     }
     if (!wifiOK) {
-        disp_error("WiFi setup failed");
+        disp_error("WiFi setup failed", "Elf");
         return;
     }
     http_setup_connect_endpoint();

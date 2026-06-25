@@ -115,25 +115,28 @@ static String buildScanJson() {
     return json;
 }
 
-// ── Screen drawing ──────────────────────────────────────────
+// ── Screen drawing (portrait 80×160, drawn once to avoid flicker) ──
+static bool portalDrawn = false;
 static void drawPortalScreen() {
+    if (portalDrawn) return;
     M5.Display.fillScreen(TFT_WHITE);
     M5.Display.setTextColor(TFT_BLACK);
-    M5.Display.setTextSize(2);
-    M5.Display.fillCircle(80, 40, 32, TFT_LIGHTGREY);
-    M5.Display.setCursor(14, 92);
-    M5.Display.print("Connect Elf-hotspot");
-    M5.Display.setCursor(50, 116);
-    M5.Display.print("and setup");
+    M5.Display.setTextSize(1);
+    M5.Display.fillCircle(40, 54, 20, TFT_LIGHTGREY);
+    M5.Display.setCursor(8, 90);
+    M5.Display.print("Connect hotspot");
+    M5.Display.setCursor(14, 108);
+    M5.Display.print("Elf-hotspot");
+    portalDrawn = true;
 }
 
 static void drawConnectingScreen(const char* ssid) {
     M5.Display.fillScreen(TFT_WHITE);
     M5.Display.setTextColor(TFT_BLACK);
-    M5.Display.setTextSize(2);
-    M5.Display.fillCircle(80, 40, 32, TFT_LIGHTGREY);
-    M5.Display.setCursor(18, 98);
-    M5.Display.print("Connecting WiFi");
+    M5.Display.setTextSize(1);
+    M5.Display.fillCircle(40, 54, 20, TFT_LIGHTGREY);
+    M5.Display.setCursor(12, 90);
+    M5.Display.print("Connecting...");
 }
 
 // ── Main portal loop ────────────────────────────────────────
