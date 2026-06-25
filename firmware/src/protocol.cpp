@@ -47,6 +47,9 @@ void protocol_handle_message(const char* json) {
     } else if (strcmp(type, "pairing_required") == 0) {
         String boundID = wifi_get_bound_desktop_id();
         if (boundID.length() > 0) {
+            // The desktop no longer authorizes this device. Clear the binding
+            // so we stop trying to reconnect and go back to advertising.
+            wifi_clear_bound_desktop();
             ws_disconnect();
             return;
         }

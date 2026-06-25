@@ -19,7 +19,7 @@ void disp_init() {
 }
 
 // ── Status Bar ────────────────────────────────────────────────
-void disp_status_bar(int8_t rssi, bool wsConnected, const char* agent) {
+void disp_status_bar(int8_t rssi, bool wsConnected, const char* agent, const char* ssid) {
     M5.Display.fillRect(0, 0, M5.Display.width(), STATUS_BAR_H, TFT_BLACK);
     M5.Display.drawFastHLine(0, STATUS_BAR_H, M5.Display.width(), TFT_DARKGREY);
 
@@ -49,11 +49,19 @@ void disp_status_bar(int8_t rssi, bool wsConnected, const char* agent) {
     M5.Display.setCursor(3, 3);
     M5.Display.print(wsConnected ? "●" : "○");
 
-    // Agent name
+    // Left label: show SSID when provided (e.g. on Pair screen), otherwise agent name
     M5.Display.setTextColor(TFT_WHITE);
     M5.Display.setCursor(11, 3);
-    if (agent && agent[0]) {
-        M5.Display.print(agent);
+    const char* label = (ssid && ssid[0]) ? ssid : agent;
+    if (label && label[0]) {
+        int maxChars = (M5.Display.width() - 50) / 6;
+        int len = strlen(label);
+        if (len > maxChars) len = maxChars;
+        char buf[64];
+        if (len >= (int)sizeof(buf)) len = (int)sizeof(buf) - 1;
+        strncpy(buf, label, len);
+        buf[len] = '\0';
+        M5.Display.print(buf);
     }
 }
 

@@ -95,6 +95,14 @@ void wifi_save_bound_desktop(const char* desktop_id, const char* ip, uint16_t po
     prefs.end();
 }
 
+void wifi_clear_bound_desktop() {
+    prefs.begin("elf-wifi", false);
+    prefs.remove("bound_desktop_id");
+    prefs.remove("bound_desktop_ip");
+    prefs.remove("bound_desktop_port");
+    prefs.end();
+}
+
 String wifi_get_bound_desktop_id() {
     prefs.begin("elf-wifi", true);
     String id = prefs.getString("bound_desktop_id", "");

@@ -10,17 +10,21 @@ static bool connected = false;
 static int8_t lastRssi = 0;
 static bool lastWsConnected = false;
 
+static const char* status_ssid() {
+    return (current == State::PAIR_READY) ? wifi_ssid.c_str() : nullptr;
+}
+
 void state_init() {
     disp_init();
     // Draw empty status bar immediately so layout is consistent from the start
-    disp_status_bar(-1, false, "");
+    disp_status_bar(-1, false, "", status_ssid());
 }
 
 void state_update_status(int8_t rssi, bool wsConnected) {
     if (rssi == lastRssi && wsConnected == lastWsConnected) return;
     lastRssi = rssi;
     lastWsConnected = wsConnected;
-    disp_status_bar(rssi, wsConnected, agentName);
+    disp_status_bar(rssi, wsConnected, agentName, status_ssid());
 }
 
 void state_transition(State s) {
@@ -54,7 +58,7 @@ void state_transition(State s) {
         case State::PLAYING:
             break;
     }
-    disp_status_bar(lastRssi, lastWsConnected, agentName);
+    disp_status_bar(lastRssi, lastWsConnected, agentName, status_ssid());
 }
 
 void state_set_agent(const char* name) {
@@ -66,7 +70,7 @@ void state_set_agent(const char* name) {
 
 void state_set_summary(const char* text) {
     disp_playing(text, agentName);
-    disp_status_bar(lastRssi, lastWsConnected, agentName);
+    disp_status_bar(lastRssi, lastWsConnected, agentName, status_ssid());
 }
 
 void state_force_idle() {
@@ -74,7 +78,7 @@ void state_force_idle() {
     lastWsConnected = false;
     current = State::IDLE;
     disp_idle(agentName, false);
-    disp_status_bar(lastRssi, false, agentName);
+    disp_status_bar(lastRssi, false, agentName, status_ssid());
 }
 
 void state_play_audio(const uint8_t* data, size_t len) {

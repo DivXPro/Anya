@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"time"
@@ -44,17 +46,20 @@ func NewApp() *App {
 	return &App{}
 }
 
-func (a *App) Startup(ctx context.Context) {
+// ServiceStartup is called by Wails v3 when the service is initialized.
+func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
 	a.ctx = ctx
 	log.Println("[elf] starting up...")
 
 	dataDir := filepath.Join(os.Getenv("HOME"), ".elf")
-	os.MkdirAll(dataDir, 0755)
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("create data dir: %w", err)
+	}
 
 	// 1. Init store
 	db, err := store.InitDB(filepath.Join(dataDir, "elf.db"))
 	if err != nil {
-		log.Fatalf("[elf] init db: %v", err)
+		return fmt.Errorf("init db: %w", err)
 	}
 	a.db = db
 
@@ -95,7 +100,7 @@ func (a *App) Startup(ctx context.Context) {
 		log.Printf("[elf] pending device authorization: %s (%s)", deviceID, deviceName)
 	})
 	if err := a.wsServer.Start(); err != nil {
-		log.Fatalf("[elf] start ws server: %v", err)
+		return fmt.Errorf("start ws server: %w", err)
 	}
 
 	// Background IP self-healing: auto-reconnect known devices
@@ -115,19 +120,24 @@ func (a *App) Startup(ctx context.Context) {
 	}()
 
 	log.Println("[elf] startup complete")
+	return nil
 }
 
 func (a *App) ScanDevices() ([]discovery.DiscoveredDevice, error) {
 	return discovery.ScanDevices()
 }
 
-func (a *App) Shutdown(ctx context.Context) {
+// ServiceShutdown is called by Wails v3 when the service is shutting down.
+func (a *App) ServiceShutdown() error {
 	log.Println("[elf] shutting down...")
-	a.wsServer.Stop()
+	if a.wsServer != nil {
+		a.wsServer.Stop()
+	}
 	if a.db != nil {
 		a.db.Close()
 	}
 	log.Println("[elf] shutdown complete")
+	return nil
 }
 
 func (a *App) handleDeviceConnect(dev gateway.DeviceAdapter) {
@@ -313,50 +323,80 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 	log.Printf("[elf] request complete")
 }
 
-// ConnectToDevice pre-authorizes a scanned device and sends a one-time token.
+// ConnectToDevice notifies a scanned device to open a WebSocket back to the desktop.
+// The device is NOT authorized here; authorization happens after the device sends
+// a valid hello and the user approves it via AuthorizePendingDevice. This prevents
+// the auto-reconnect loop from repeatedly notifying the device while the first
+// handshake is still in progress.
 func (a *App) ConnectToDevice(deviceIP string, devicePort int, deviceID string, deviceName string) error {
-	a.localIP = discovery.LocalIP()
-	if err := store.AuthorizeDevice(a.db, deviceID, deviceName); err != nil {
-		return err
+	a.localIP = discovery.LocalIPFor(net.ParseIP(deviceIP))
+	log.Printf("[elf] user connecting to device %s (%s) at %s:%d via local %s", deviceName, deviceID, deviceIP, devicePort, a.localIP)
+	if a.db == nil {
+		log.Printf("[elf] db is nil, cannot connect device")
+		return fmt.Errorf("database not initialized")
 	}
 	return a.notifyDeviceToConnect(deviceIP, devicePort, deviceID)
 }
 
 func (a *App) notifyDeviceToConnect(deviceIP string, devicePort int, deviceID string) error {
-	a.localIP = discovery.LocalIP()
+	log.Printf("[elf] notifyDeviceToConnect enter %s", deviceID)
+	a.localIP = discovery.LocalIPFor(net.ParseIP(deviceIP))
+	log.Printf("[elf] localIP for %s is %s", deviceIP, a.localIP)
 	token := make([]byte, 16)
+	log.Printf("[elf] reading random token for %s", deviceID)
 	if _, err := rand.Read(token); err != nil {
+		log.Printf("[elf] rand.Read failed: %v", err)
 		return err
 	}
+	log.Printf("[elf] token generated for %s", deviceID)
 	pairingToken := hex.EncodeToString(token)
+	log.Printf("[elf] setting pairing token for %s", deviceID)
 	a.wsServer.SetPairingToken(deviceID, pairingToken)
-	return discovery.NotifyDevice(deviceIP, devicePort, a.localIP, 9876, a.desktopID, pairingToken)
+	log.Printf("[elf] notifying device %s to connect back to %s:%d", deviceID, a.localIP, 9876)
+	if err := discovery.NotifyDevice(deviceIP, devicePort, a.localIP, 9876, a.desktopID, pairingToken); err != nil {
+		log.Printf("[elf] notify device %s failed: %v", deviceID, err)
+		return err
+	}
+	log.Printf("[elf] notify device %s succeeded", deviceID)
+	return nil
 }
 
 func (a *App) autoReconnectKnownDevices(ctx context.Context) {
-	ticker := time.NewTicker(5 * time.Second)
+	// Only run reconnect scans periodically. A longer interval is fine here
+	// because this is just a background self-healing mechanism.
+	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			discovered, err := discovery.ScanDevices()
-			if err != nil {
-				continue
-			}
 			authorized, err := store.ListAuthorizedDevices(a.db)
 			if err != nil {
 				continue
 			}
-			known := map[string]bool{}
+			// Build a list of authorized devices that are currently offline.
+			// If every authorized device is already connected, skip scanning
+			// entirely to avoid unnecessary mDNS traffic and log noise.
+			offline := make([]store.AuthorizedDevice, 0)
 			for _, d := range authorized {
-				if !d.Revoked {
-					known[d.DeviceID] = true
+				if !d.Revoked && !a.wsServer.IsDeviceConnected(d.DeviceID) {
+					offline = append(offline, d)
 				}
 			}
+			if len(offline) == 0 {
+				continue
+			}
+			discovered, err := discovery.ScanDevices()
+			if err != nil {
+				continue
+			}
+			offlineIDs := map[string]bool{}
+			for _, d := range offline {
+				offlineIDs[d.DeviceID] = true
+			}
 			for _, d := range discovered {
-				if known[d.DeviceID] && !a.wsServer.IsDeviceConnected(d.DeviceID) {
+				if offlineIDs[d.DeviceID] {
 					if err := a.notifyDeviceToConnect(d.IP, d.Port, d.DeviceID); err != nil {
 						log.Printf("[elf] auto reconnect notify failed for %s: %v", d.DeviceID, err)
 					}

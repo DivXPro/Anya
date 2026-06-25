@@ -26,7 +26,11 @@ export function AuthorizeDevice(deviceID: string): $CancellablePromise<void> {
 }
 
 /**
- * ConnectToDevice pre-authorizes a scanned device and sends a one-time token.
+ * ConnectToDevice notifies a scanned device to open a WebSocket back to the desktop.
+ * The device is NOT authorized here; authorization happens after the device sends
+ * a valid hello and the user approves it via AuthorizePendingDevice. This prevents
+ * the auto-reconnect loop from repeatedly notifying the device while the first
+ * handshake is still in progress.
  */
 export function ConnectToDevice(deviceIP: string, devicePort: number, deviceID: string, deviceName: string): $CancellablePromise<void> {
     return $Call.ByID(1376679050, deviceIP, devicePort, deviceID, deviceName);
@@ -70,14 +74,6 @@ export function SetSetting(key: string, value: string): $CancellablePromise<void
 
 export function SetTrayDeviceItem(item: application$0.MenuItem | null): $CancellablePromise<void> {
     return $Call.ByID(3133036894, item);
-}
-
-export function Shutdown(): $CancellablePromise<void> {
-    return $Call.ByID(2987688963);
-}
-
-export function Startup(): $CancellablePromise<void> {
-    return $Call.ByID(2154875234);
 }
 
 export function UpdateAgent(agent: store$0.Agent): $CancellablePromise<void> {

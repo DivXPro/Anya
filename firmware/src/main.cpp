@@ -1,6 +1,7 @@
 #include <M5Unified.h>
 #include <Preferences.h>
 #include <esp_mac.h>
+#include <esp_log.h>
 #include "elf_wifi.h"
 #include "wifi_portal.h"
 #include "ws_client.h"
@@ -41,11 +42,13 @@ void init_device_identity() {
 void setup() {
     auto cfg = M5.config();
     M5.begin(cfg);
+    ESP_LOGI("elf", "firmware setup start");
     init_device_identity();
 
     state_init();
     audio_init();
     btn_init();
+    ws_init();
     protocol_init();
 
     bool wifiOK = wifi_init();
@@ -63,25 +66,16 @@ void setup() {
     String boundID = wifi_get_bound_desktop_id();
     String boundIP = wifi_get_bound_desktop_ip();
     uint16_t boundPort = wifi_get_bound_desktop_port();
-    bool connected = false;
 
     if (boundIP.length() > 0) {
-        connected = ws_connect(boundIP.c_str(), boundPort);
-    }
-
-    if (!connected) {
+        ESP_LOGI("main", "bound reconnect to %s:%d", boundIP.c_str(), boundPort);
+        ws_set_hello_data(deviceID, deviceName, boundID.c_str(), "");
+        ws_connect(boundIP.c_str(), boundPort);
+        state_transition(State::PAIRING);
+    } else {
         mdns_start_advertise(deviceID, deviceName);
         advertising = true;
         state_transition(State::PAIR_READY);
-    }
-
-    if (connected) {
-        char hello[256];
-        snprintf(hello, sizeof(hello),
-            "{\"type\":\"hello\",\"payload\":{\"device_id\":\"%s\",\"name\":\"%s\",\"bound_desktop_id\":\"%s\"}}",
-            deviceID, deviceName, boundID.c_str());
-        ws_send_text(hello);
-        state_transition(State::IDLE);
     }
 
     btn_on_ptt_press([]() {
@@ -114,31 +108,29 @@ void loop() {
         }
     }
 
-    if (!ws_connected() && !advertising && wifi_connected()) {
-        mdns_start_advertise(deviceID, deviceName);
-        advertising = true;
-        state_transition(State::PAIR_READY);
+    // WebSocket lifecycle: hello is sent from the onEvent(CONNECTED) callback.
+    // When the connection drops, go back to advertising so the desktop can find us again.
+    if (!ws_connected()) {
+        if (!advertising && wifi_connected()) {
+            mdns_start_advertise(deviceID, deviceName);
+            advertising = true;
+            state_transition(State::PAIR_READY);
+        }
     }
 
     if (connect_is_requested()) {
         connect_clear_request();
         String ip = connect_get_ip();
         uint16_t port = connect_get_port();
+        String token = connect_get_token();
+        String boundID = wifi_get_bound_desktop_id();
+        ESP_LOGI("main", "pairing request to %s:%d token=%s", ip.c_str(), port, token.c_str());
+        ws_set_hello_data(deviceID, deviceName, boundID.c_str(), token.c_str());
         state_transition(State::PAIRING);
-        if (ws_connect(ip.c_str(), port)) {
-            mdns_stop_advertise();
-            advertising = false;
-            char hello[256];
-            String token = connect_get_token();
-            String boundID = wifi_get_bound_desktop_id();
-            snprintf(hello, sizeof(hello),
-                "{\"type\":\"hello\",\"payload\":{\"device_id\":\"%s\",\"name\":\"%s\",\"bound_desktop_id\":\"%s\",\"pairing_token\":\"%s\"}}",
-                deviceID, deviceName, boundID.c_str(), token.c_str());
-            ws_send_text(hello);
-            state_transition(State::IDLE);
-        } else {
-            state_transition(State::PAIR_READY);
-        }
+        // Give the HTTP server time to finish sending the 200 OK response before
+        // this task starts the WebSocket handshake.
+        delay(100);
+        ws_connect(ip.c_str(), port);
     }
 
     if (audio_is_recording()) {

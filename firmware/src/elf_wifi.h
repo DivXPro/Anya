@@ -18,6 +18,7 @@ uint16_t wifi_get_desktop_port();
 String wifi_get_local_ip();
 
 void wifi_save_bound_desktop(const char* desktop_id, const char* ip, uint16_t port);
+void wifi_clear_bound_desktop();
 String wifi_get_bound_desktop_id();
 String wifi_get_bound_desktop_ip();
 uint16_t wifi_get_bound_desktop_port();

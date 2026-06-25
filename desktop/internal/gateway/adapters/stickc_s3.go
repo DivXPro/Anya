@@ -68,6 +68,7 @@ func (a *StickCS3Adapter) readLoop() {
 
 		switch msgType {
 		case websocket.TextMessage:
+			log.Printf("[stickc] raw text: %s", string(data))
 			var evt gateway.DeviceEvent
 			if err := json.Unmarshal(data, &evt); err != nil {
 				log.Printf("[stickc] parse error: %v", err)

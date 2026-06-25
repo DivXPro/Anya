@@ -19,6 +19,7 @@ type DeviceFactory func(ws *websocket.Conn) DeviceAdapter
 type Server struct {
 	port            int
 	httpServer      *http.Server
+	listener        net.Listener
 	upgrader        websocket.Upgrader
 	deviceFactory   DeviceFactory
 	onConnect       func(DeviceAdapter)
@@ -49,13 +50,16 @@ func NewServer(port int, db *sql.DB, desktopID string) *Server {
 		pendingNames:  make(map[string]string),
 		pendingTokens: make(map[string]string),
 		upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool { return true },
+			CheckOrigin:      func(r *http.Request) bool { return true },
+			ReadBufferSize:   4096,
+			WriteBufferSize:  4096,
+			EnableCompression: false,
 		},
 	}
 }
 
-func (s *Server) SetDeviceFactory(f DeviceFactory)                    { s.deviceFactory = f }
-func (s *Server) OnDeviceConnect(cb func(DeviceAdapter))              { s.onConnect = cb }
+func (s *Server) SetDeviceFactory(f DeviceFactory)                     { s.deviceFactory = f }
+func (s *Server) OnDeviceConnect(cb func(DeviceAdapter))               { s.onConnect = cb }
 func (s *Server) OnDeviceDisconnect(cb func(string))                   { s.onDisconnect = cb }
 func (s *Server) OnPendingDevice(cb func(deviceID, deviceName string)) { s.onPendingDevice = cb }
 
@@ -122,18 +126,28 @@ func (s *Server) Start() error {
 	if err != nil {
 		return fmt.Errorf("listen :%d: %w", s.port, err)
 	}
+	s.listener = ln
 
-	log.Printf("[gateway] WebSocket server listening on :%d", s.port)
+	log.Printf("[gateway] WebSocket server listening on %s", ln.Addr().String())
 	go s.httpServer.Serve(ln)
 	return nil
 }
 
+func (s *Server) Addr() string {
+	if s.listener == nil {
+		return ""
+	}
+	return s.listener.Addr().String()
+}
+
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[gateway] websocket connection from %s", r.RemoteAddr)
 	ws, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("[gateway] upgrade error: %v", err)
+		log.Printf("[gateway] upgrade error from %s: %v", r.RemoteAddr, err)
 		return
 	}
+	log.Printf("[gateway] websocket upgraded from %s", r.RemoteAddr)
 	adapter := s.deviceFactory(ws)
 
 	events, err := adapter.ReceiveEvent()
@@ -145,12 +159,15 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	var deviceID string
 	select {
 	case evt := <-events:
+		log.Printf("[gateway] received event type=%s from %s", evt.Type, r.RemoteAddr)
 		if evt.Type != "hello" || evt.Payload["device_id"] == nil {
+			log.Printf("[gateway] invalid hello from %s: type=%s payload=%v", r.RemoteAddr, evt.Type, evt.Payload)
 			adapter.Close()
 			return
 		}
 		deviceID, _ = evt.Payload["device_id"].(string)
 		if deviceID == "" {
+			log.Printf("[gateway] empty device_id in hello from %s", r.RemoteAddr)
 			adapter.Close()
 			return
 		}
