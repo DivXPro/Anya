@@ -10,5 +10,5 @@ void state_set_agent(const char* name);
 void state_set_summary(const char* text);
 void state_force_idle();
 void state_play_audio(const uint8_t* data, size_t len);
-void state_update_status(int8_t rssi, bool wsConnected);
+void state_update_status(int8_t rssi, bool wifiConnected, bool wsConnected);
 State state_current();

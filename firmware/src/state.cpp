@@ -8,6 +8,7 @@ static State current = State::WIFI_SETUP;
 static char agentName[32] = "Claude";
 static bool connected = false;
 static int8_t lastRssi = 0;
+static bool lastWifiConnected = false;
 static bool lastWsConnected = false;
 
 static const char* status_ssid() {
@@ -17,14 +18,15 @@ static const char* status_ssid() {
 void state_init() {
     disp_init();
     // Draw empty status bar immediately so layout is consistent from the start
-    disp_status_bar(-1, false, "", status_ssid());
+    disp_status_bar(-1, false, false, "", status_ssid());
 }
 
-void state_update_status(int8_t rssi, bool wsConnected) {
-    if (rssi == lastRssi && wsConnected == lastWsConnected) return;
+void state_update_status(int8_t rssi, bool wifiConnected, bool wsConnected) {
+    if (rssi == lastRssi && wifiConnected == lastWifiConnected && wsConnected == lastWsConnected) return;
     lastRssi = rssi;
+    lastWifiConnected = wifiConnected;
     lastWsConnected = wsConnected;
-    disp_status_bar(rssi, wsConnected, agentName, status_ssid());
+    disp_status_bar(rssi, wifiConnected, wsConnected, agentName, status_ssid());
 }
 
 void state_transition(State s) {
@@ -58,27 +60,29 @@ void state_transition(State s) {
         case State::PLAYING:
             break;
     }
-    disp_status_bar(lastRssi, lastWsConnected, agentName, status_ssid());
+    disp_status_bar(lastRssi, lastWifiConnected, lastWsConnected, agentName, status_ssid());
 }
 
 void state_set_agent(const char* name) {
     strncpy(agentName, name, sizeof(agentName)-1);
     agentName[sizeof(agentName)-1] = '\0';
     connected = true;
+    lastWifiConnected = true;
     lastWsConnected = true;
 }
 
 void state_set_summary(const char* text) {
     disp_playing(text, agentName);
-    disp_status_bar(lastRssi, lastWsConnected, agentName, status_ssid());
+    disp_status_bar(lastRssi, lastWifiConnected, lastWsConnected, agentName, status_ssid());
 }
 
 void state_force_idle() {
     connected = false;
+    lastWifiConnected = false;
     lastWsConnected = false;
     current = State::IDLE;
     disp_idle(agentName, false);
-    disp_status_bar(lastRssi, false, agentName, status_ssid());
+    disp_status_bar(lastRssi, false, false, agentName, status_ssid());
 }
 
 void state_play_audio(const uint8_t* data, size_t len) {

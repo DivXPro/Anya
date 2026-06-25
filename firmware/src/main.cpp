@@ -103,8 +103,9 @@ void loop() {
         unsigned long now = millis();
         if (now - lastStatusUpdate > 1000) {
             lastStatusUpdate = now;
-            int8_t rssi = wifi_connected() ? wifi_rssi() : 0;
-            state_update_status(rssi, ws_connected());
+            bool wifiConn = wifi_connected();
+            int8_t rssi = wifiConn ? wifi_rssi() : 0;
+            state_update_status(rssi, wifiConn, ws_connected());
         }
     }
 

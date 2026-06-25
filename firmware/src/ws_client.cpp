@@ -67,6 +67,9 @@ static void onEvent(WStype_t type, uint8_t* payload, size_t length) {
 void ws_init() {
     client.onEvent(onEvent);
     client.setReconnectInterval(5000);
+    // Ping every 10s; wait 3s for pong. If two consecutive pongs are missed,
+    // the library closes the connection so the device notices a dead desktop quickly.
+    client.enableHeartbeat(10000, 3000, 2);
 }
 
 bool ws_connect(const char* host, uint16_t port) {
