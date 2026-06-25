@@ -1,5 +1,5 @@
 #pragma once
-#include <WiFi.h>
+#include <Arduino.h>
 #include <Preferences.h>
 
 extern String wifi_local_ip;

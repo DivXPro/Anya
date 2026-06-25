@@ -1,5 +1,5 @@
 #include "mdns_client.h"
-#include "wifi.h"
+#include "elf_wifi.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 

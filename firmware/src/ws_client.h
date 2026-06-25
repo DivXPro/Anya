@@ -1,8 +1,6 @@
 #pragma once
-#include <ArduinoWebsockets.h>
+#include <WebSocketsClient.h>
 #include <functional>
-
-using namespace websockets;
 
 typedef std::function<void(const char* msg)> TextCallback;
 typedef std::function<void(const uint8_t* data, size_t len)> BinaryCallback;

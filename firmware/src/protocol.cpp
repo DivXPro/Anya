@@ -1,7 +1,7 @@
 #include "protocol.h"
 #include "ws_client.h"
 #include "state.h"
-#include "wifi.h"
+#include "elf_wifi.h"
 #include <ArduinoJson.h>
 #include <cstring>
 

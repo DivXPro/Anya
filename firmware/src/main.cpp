@@ -1,7 +1,7 @@
 #include <M5Unified.h>
 #include <Preferences.h>
 #include <esp_mac.h>
-#include "wifi.h"
+#include "elf_wifi.h"
 #include "wifi_portal.h"
 #include "ws_client.h"
 #include "mdns_client.h"

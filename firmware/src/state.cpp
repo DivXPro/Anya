@@ -1,7 +1,7 @@
 #include "state.h"
 #include "display.h"
 #include "audio.h"
-#include "wifi.h"
+#include "elf_wifi.h"
 #include <cstring>
 
 static State current = State::IDLE;

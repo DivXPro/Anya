@@ -14,6 +14,9 @@ import * as gateway$0 from "./internal/gateway/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as store$0 from "./internal/store/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as application$0 from "../github.com/wailsapp/wails/v3/pkg/application/models.js";
 
 /**
  * AuthorizeDevice is called from the frontend when user approves a device.
@@ -63,6 +66,10 @@ export function ScanDevices(): $CancellablePromise<discovery$0.DiscoveredDevice[
 
 export function SetSetting(key: string, value: string): $CancellablePromise<void> {
     return $Call.ByID(4214292049, key, value);
+}
+
+export function SetTrayDeviceItem(item: application$0.MenuItem | null): $CancellablePromise<void> {
+    return $Call.ByID(3133036894, item);
 }
 
 export function Shutdown(): $CancellablePromise<void> {

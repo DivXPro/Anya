@@ -7,12 +7,13 @@ static bool recording = false;
 void audio_init() {
     auto cfg = M5.Mic.config();
     cfg.sample_rate = 16000;
-    cfg.bit_depth = 16;
-    M5.Mic.begin(cfg);
+    M5.Mic.config(cfg);
+    M5.Mic.begin();
 
     auto spkCfg = M5.Speaker.config();
     spkCfg.sample_rate = 16000;
-    M5.Speaker.begin(spkCfg);
+    M5.Speaker.config(spkCfg);
+    M5.Speaker.begin();
 }
 
 void audio_start_recording() { recording = true; }
@@ -22,16 +23,15 @@ bool audio_is_recording() { return recording; }
 size_t audio_capture(uint8_t* buffer, size_t maxLen) {
     if (!recording || !M5.Mic.isEnabled()) return 0;
 
-    size_t bytesRead = 0;
-    int16_t sample;
-    while (M5.Mic.available() && bytesRead + sizeof(sample) <= maxLen) {
-        sample = M5.Mic.read();
-        memcpy(buffer + bytesRead, &sample, sizeof(sample));
-        bytesRead += sizeof(sample);
+    // Use M5.Mic.record() with int16_t buffer
+    size_t samples = maxLen / sizeof(int16_t);
+    if (M5.Mic.record(reinterpret_cast<int16_t*>(buffer), samples)) {
+        return samples * sizeof(int16_t);
     }
-    return bytesRead;
+    return 0;
 }
 
 void audio_play(const uint8_t* data, size_t len) {
+    // playRaw(const uint8_t*, size_t, sample_rate, stereo)
     M5.Speaker.playRaw(data, len, 16000, false);
 }

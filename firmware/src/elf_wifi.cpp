@@ -1,4 +1,5 @@
-#include "wifi.h"
+#include "elf_wifi.h"
+#include <WiFi.h>
 
 String wifi_local_ip = "";
 String wifi_ssid = "";
