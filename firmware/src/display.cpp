@@ -45,20 +45,21 @@ void disp_status_bar(int8_t rssi, bool wifiConnected, bool wsConnected, const ch
     //   grey   = no WiFi
     //   yellow = WiFi up, not connected to desktop
     //   green  = connected to desktop
-    M5.Display.setTextSize(1);
+    const int DOT_X = 6;
+    const int DOT_Y = STATUS_BAR_H / 2;
+    const int DOT_R = 3;
     if (wsConnected) {
-        M5.Display.setTextColor(TFT_GREEN);
+        M5.Display.fillCircle(DOT_X, DOT_Y, DOT_R, TFT_GREEN);
     } else if (wifiConnected) {
-        M5.Display.setTextColor(TFT_YELLOW);
+        M5.Display.fillCircle(DOT_X, DOT_Y, DOT_R, TFT_YELLOW);
     } else {
-        M5.Display.setTextColor(TFT_DARKGREY);
+        M5.Display.drawCircle(DOT_X, DOT_Y, DOT_R, TFT_DARKGREY);
     }
-    M5.Display.setCursor(3, 3);
-    M5.Display.print((wsConnected || wifiConnected) ? "●" : "○");
 
     // Left label: show SSID when provided (e.g. on Pair screen), otherwise agent name
+    M5.Display.setTextSize(1);
     M5.Display.setTextColor(TFT_WHITE);
-    M5.Display.setCursor(11, 3);
+    M5.Display.setCursor(13, 3);
     const char* label = (ssid && ssid[0]) ? ssid : agent;
     if (label && label[0]) {
         int maxChars = (M5.Display.width() - 50) / 6;
