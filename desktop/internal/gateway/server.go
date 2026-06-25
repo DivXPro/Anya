@@ -201,6 +201,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			adapter.Close()
 			return
 		}
+		log.Printf("[gateway] device %s authorized=%v bound=%q token=%q", deviceID, authorized, boundDesktopID, token)
 		if !authorized {
 			adapter.SendText(DeviceMessage{Type: "pairing_required", Payload: map[string]interface{}{"device_id": deviceID}})
 			s.pendingAuthMu.Lock()

@@ -7,12 +7,14 @@ function DeviceAuth() {
   const [devices, setDevices] = useState<AuthorizedDevice[]>([]);
   const [pending, setPending] = useState<PendingDevice[]>([]);
 
-  useEffect(() => {
+  const refresh = () => {
     App.ListAuthorizedDevices().then(v => setDevices(v || [])).catch(() => {});
     App.ListPendingDevices().then(v => setPending(v || [])).catch(() => {});
-    const timer = window.setInterval(() => {
-      App.ListPendingDevices().then(v => setPending(v || [])).catch(() => {});
-    }, 2000);
+  };
+
+  useEffect(() => {
+    refresh();
+    const timer = window.setInterval(refresh, 2000);
     return () => window.clearInterval(timer);
   }, []);
 

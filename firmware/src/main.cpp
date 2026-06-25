@@ -111,7 +111,13 @@ void loop() {
 
     // WebSocket lifecycle: hello is sent from the onEvent(CONNECTED) callback.
     // When the connection drops, go back to advertising so the desktop can find us again.
-    if (!ws_connected()) {
+    // When connected, stop advertising to avoid showing up in the desktop scan list.
+    if (ws_connected()) {
+        if (advertising) {
+            mdns_stop_advertise();
+            advertising = false;
+        }
+    } else {
         if (!advertising && wifi_connected()) {
             mdns_start_advertise(deviceID, deviceName);
             advertising = true;
