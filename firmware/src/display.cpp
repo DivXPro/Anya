@@ -42,16 +42,16 @@ void disp_status_bar(int8_t rssi, bool wifiConnected, bool wsConnected, const ch
     }
 
     // Connection dot: clearly visible states
-    //   grey   = no WiFi
-    //   yellow = WiFi up, not connected to desktop
-    //   green  = connected to desktop
+    //   grey  = no WiFi
+    //   red   = WiFi up, not connected to desktop
+    //   green = connected to desktop
     const int DOT_R = 3;
     const int DOT_Y = STATUS_BAR_H / 2;
     const int DOT_X = 6;
     if (wsConnected) {
         M5.Display.fillCircle(DOT_X, DOT_Y, DOT_R, TFT_GREEN);
     } else if (wifiConnected) {
-        M5.Display.fillCircle(DOT_X, DOT_Y, DOT_R, TFT_YELLOW);
+        M5.Display.fillCircle(DOT_X, DOT_Y, DOT_R, TFT_RED);
     } else {
         M5.Display.drawCircle(DOT_X, DOT_Y, DOT_R, TFT_DARKGREY);
     }
@@ -70,7 +70,7 @@ void disp_status_bar(int8_t rssi, bool wifiConnected, bool wsConnected, const ch
         M5.Display.setTextSize(1);
         M5.Display.setTextColor(TFT_WHITE);
         M5.Display.setTextDatum(textdatum_t::middle_left);
-        M5.Display.drawString(buf, 13, STATUS_BAR_H / 2);
+        M5.Display.drawString(buf, 16, STATUS_BAR_H / 2);
     }
 }
 
