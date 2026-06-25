@@ -1,5 +1,6 @@
 #include "wifi_portal.h"
 #include "elf_wifi.h"
+#include "mascot_img.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
@@ -115,39 +116,74 @@ static String buildScanJson() {
     return json;
 }
 
-// ── Screen drawing (matches display.cpp: 80×80 square at y=24) ──
-static const int P_MASCOT_CX = 40;
-static const int P_MASCOT_CY = 64;
-static const int P_MASCOT_R  = 34;
-static const int P_PROMPT_Y  = 120;
+// ── Screen drawing (240×135 landscape, matches display.cpp) ──
+static const int P_STATUS_BAR_H = 16;
+static const int P_GAP           = 8;
+static const int P_LINE_SPACING  = 18;
+static const int P_MASCOT_Y      = P_STATUS_BAR_H + P_GAP;          // y=24
+static const int P_PROMPT_Y      = P_MASCOT_Y + 80 + P_GAP;        // y=112
 static bool portalDrawn = false;
+static int  portalFrame  = 0;
+static unsigned long portalLastSwitch = 0;
+
+static void portalDrawStatusBar() {
+    M5.Display.fillRect(0, 0, M5.Display.width(), P_STATUS_BAR_H, TFT_BLACK);
+    M5.Display.drawFastHLine(0, P_STATUS_BAR_H, M5.Display.width(), TFT_DARKGREY);
+
+    // Connection dot (portal mode = not connected)
+    M5.Display.setTextSize(1);
+    M5.Display.setTextColor(TFT_DARKGREY);
+    M5.Display.setCursor(3, 3);
+    M5.Display.print("○");
+
+    // Agent name
+    M5.Display.setTextColor(TFT_WHITE);
+    M5.Display.setCursor(11, 3);
+    M5.Display.print("Elf");
+}
 
 static void portalCenterPrint(const char* s, int y) {
+    M5.Display.setTextColor(TFT_WHITE);
+    M5.Display.setTextSize(1);
     int w = strlen(s) * 6;
     M5.Display.setCursor((M5.Display.width() - w) / 2, y);
     M5.Display.print(s);
 }
 
+static void portalDrawMascot() {
+    // Animate: random frame every 2.5–4s
+    unsigned long now = millis();
+    if (portalLastSwitch == 0) portalLastSwitch = now;
+    if (now - portalLastSwitch > 60000 + (esp_random() % 30000)) {  // 60–90s
+        int next;
+        do { next = (esp_random() % MASCOT_FRAMES); } while (next == portalFrame && MASCOT_FRAMES > 1);
+        portalFrame = next;
+        portalLastSwitch = now;
+    }
+    int x = (M5.Display.width() - MASCOT_IMG_W) / 2;
+    M5.Display.pushImage(x, P_MASCOT_Y, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[portalFrame]);
+}
+
 static void drawPortalScreen() {
-    if (portalDrawn) return;
-    M5.Display.fillScreen(TFT_WHITE);
-    M5.Display.fillCircle(P_MASCOT_CX, P_MASCOT_CY, P_MASCOT_R, TFT_LIGHTGREY);
-    M5.Display.setTextColor(TFT_BLACK);
-    M5.Display.setTextSize(1);
-    M5.Display.setCursor(P_MASCOT_CX - 9, P_MASCOT_CY - 4);
-    M5.Display.print("Elf");
-    portalCenterPrint("Connect hotspot", P_PROMPT_Y);
-    portalCenterPrint("Elf-hotspot", P_PROMPT_Y + 18);
-    portalDrawn = true;
+    M5.Display.setRotation(1);
+
+    if (!portalDrawn) {
+        M5.Display.fillScreen(TFT_BLACK);
+        M5.Display.setBrightness(255);
+        portalDrawStatusBar();
+        portalCenterPrint("Connect to Elf-hotspot", P_PROMPT_Y);
+        portalDrawn = true;
+    }
+    portalDrawMascot();  // animate every call
 }
 
 static void drawConnectingScreen(const char* ssid) {
-    M5.Display.fillScreen(TFT_WHITE);
-    M5.Display.fillCircle(P_MASCOT_CX, P_MASCOT_CY, P_MASCOT_R, TFT_LIGHTGREY);
-    M5.Display.setTextColor(TFT_BLACK);
-    M5.Display.setTextSize(1);
-    M5.Display.setCursor(P_MASCOT_CX - 9, P_MASCOT_CY - 4);
-    M5.Display.print("Elf");
+    int x = (M5.Display.width() - MASCOT_IMG_W) / 2;
+
+    M5.Display.fillScreen(TFT_BLACK);
+    M5.Display.setBrightness(255);
+    portalDrawStatusBar();
+    M5.Display.pushImage(x, P_MASCOT_Y, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[portalFrame]);
     portalCenterPrint("Connecting...", P_PROMPT_Y);
 }
 
