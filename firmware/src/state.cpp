@@ -4,25 +4,26 @@
 #include "elf_wifi.h"
 #include <cstring>
 
-static State current = State::IDLE;
-static char agentName[32] = "Claude Code";
+static State current = State::WIFI_SETUP;
+static char agentName[32] = "Claude";
 static bool connected = false;
 static int8_t lastRssi = 0;
 static bool lastWsConnected = false;
 
 void state_init() {
     disp_init();
-    disp_idle(agentName, false);
+    // Don't draw idle here — setup() will transition to correct state
 }
 
 void state_update_status(int8_t rssi, bool wsConnected) {
+    if (rssi == lastRssi && wsConnected == lastWsConnected) return;
     lastRssi = rssi;
     lastWsConnected = wsConnected;
-    // Redraw status bar without full screen refresh
     disp_status_bar(rssi, wsConnected);
 }
 
 void state_transition(State s) {
+    if (s == current) return;  // guard: skip redraw if state unchanged
     current = s;
     switch (s) {
         case State::WIFI_SETUP:
@@ -52,7 +53,6 @@ void state_transition(State s) {
         case State::PLAYING:
             break;
     }
-    // After full redraw, update status bar with current values
     disp_status_bar(lastRssi, lastWsConnected);
 }
 
