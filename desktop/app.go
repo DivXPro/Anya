@@ -180,6 +180,11 @@ func (a *App) STTReady() bool {
 	return a.sttReady()
 }
 
+// GetSTTDownloadProgress exposes the local whisper model download progress.
+func (a *App) GetSTTDownloadProgress() speech.DownloadProgress {
+	return speech.GetDownloadProgress()
+}
+
 // ServiceShutdown is called by Wails v3 when the service is shutting down.
 func (a *App) ServiceShutdown() error {
 	log.Println("[elf] shutting down...")

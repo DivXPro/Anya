@@ -7,8 +7,40 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
+
+// DownloadProgress tracks the current model download state.
+type DownloadProgress struct {
+	Downloading bool  `json:"downloading"`
+	Total       int64 `json:"total"`
+	Downloaded  int64 `json:"downloaded"`
+}
+
+var (
+	progressMu sync.RWMutex
+	progress   DownloadProgress
+)
+
+// GetDownloadProgress returns a snapshot of the current model download progress.
+func GetDownloadProgress() DownloadProgress {
+	progressMu.RLock()
+	defer progressMu.RUnlock()
+	return progress
+}
+
+func setProgress(p DownloadProgress) {
+	progressMu.Lock()
+	progress = p
+	progressMu.Unlock()
+}
+
+func updateProgress(downloaded int64) {
+	progressMu.Lock()
+	progress.Downloaded = downloaded
+	progressMu.Unlock()
+}
 
 // downloadFile downloads a file from url to dest with resume support.
 // If dest already exists and the server supports range requests, the download
@@ -49,20 +81,22 @@ func downloadFile(url, dest string) error {
 	case http.StatusOK:
 		// Server does not support resume; start from scratch.
 		startOffset = 0
+		setProgress(DownloadProgress{Downloading: true, Total: resp.ContentLength})
 		out, err = os.Create(tmpDest)
 		if err != nil {
 			return fmt.Errorf("create temp file: %w", err)
 		}
 	case http.StatusPartialContent:
 		// Server supports resume; append to existing temp file.
+		total := parseTotalSize(resp, startOffset)
+		setProgress(DownloadProgress{Downloading: true, Total: total, Downloaded: startOffset})
 		out, err = os.OpenFile(tmpDest, os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			return fmt.Errorf("open temp file for append: %w", err)
 		}
 	case http.StatusRequestedRangeNotSatisfiable:
 		// Existing temp file is already complete (or larger than the resource).
-		// Treat it as finished and verify below.
-		startOffset = 0
+		setProgress(DownloadProgress{Downloading: false, Total: startOffset, Downloaded: startOffset})
 		out = nil
 	default:
 		return fmt.Errorf("unexpected http status %d", resp.StatusCode)
@@ -95,7 +129,22 @@ func downloadFile(url, dest string) error {
 		return fmt.Errorf("rename temp file: %w", err)
 	}
 
+	setProgress(DownloadProgress{Downloading: false, Total: info.Size(), Downloaded: info.Size()})
 	return nil
+}
+
+// parseTotalSize tries to determine the full resource size from response headers.
+func parseTotalSize(resp *http.Response, startOffset int64) int64 {
+	if cr := resp.Header.Get("Content-Range"); cr != "" {
+		var start, end, total int64
+		if _, err := fmt.Sscanf(cr, "bytes %d-%d/%d", &start, &end, &total); err == nil {
+			return total
+		}
+	}
+	if resp.ContentLength > 0 {
+		return startOffset + resp.ContentLength
+	}
+	return 0
 }
 
 // copyWithProgress copies from src to dst and logs progress every few MB.
@@ -114,6 +163,7 @@ func copyWithProgress(dst io.Writer, src io.Reader, startOffset int64) (int64, e
 				return total - startOffset, werr
 			}
 			total += int64(n)
+			updateProgress(total)
 			if total >= nextReport && time.Since(lastLog) > time.Second {
 				log.Printf("[speech] downloaded %.1f MB", float64(total)/(1024*1024))
 				nextReport = total + reportInterval

@@ -1,16 +1,26 @@
 import { useEffect, useState } from 'react';
 import { App } from '../../bindings/desktop';
+import type { DownloadProgress } from '../../bindings/desktop/internal/speech/models';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { Microphone, Language, MessageText, DashboardSpeed, MicrophoneCheck } from 'iconoir-react';
+
+function formatBytes(n: number): string {
+  if (n <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(n) / Math.log(1024));
+  return `${(n / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
 
 function SettingsTab() {
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [sttReady, setSttReady] = useState(false);
+  const [progress, setProgress] = useState<DownloadProgress>({ downloading: false, total: 0, downloaded: 0 });
 
   useEffect(() => {
     App.GetSettings()
@@ -25,13 +35,16 @@ function SettingsTab() {
       })
       .catch(() => {});
 
-    const checkReady = () => {
+    const poll = () => {
       App.STTReady()
         .then((ready) => setSttReady(ready))
         .catch(() => {});
+      App.GetSTTDownloadProgress()
+        .then((p) => setProgress(p))
+        .catch(() => {});
     };
-    checkReady();
-    const timer = window.setInterval(checkReady, 1000);
+    poll();
+    const timer = window.setInterval(poll, 500);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -39,6 +52,8 @@ function SettingsTab() {
     setSettings((prev) => ({ ...prev, [key]: value }));
     App.SetSetting(key, value).catch(console.error);
   };
+
+  const percent = progress.total > 0 ? Math.round((progress.downloaded / progress.total) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -77,26 +92,46 @@ function SettingsTab() {
 
           <Separator />
 
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="flex items-center gap-2">
-                <MicrophoneCheck className="h-4 w-4 text-muted-foreground" />
-                语音模型
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {sttReady ? '已加载，可识别语音' : '正在下载或加载模型...'}
-              </p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="flex items-center gap-2">
+                  <MicrophoneCheck className="h-4 w-4 text-muted-foreground" />
+                  语音模型
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {sttReady
+                    ? '已加载，可识别语音'
+                    : progress.downloading
+                    ? '正在下载模型...'
+                    : '等待下载或加载模型...'}
+                </p>
+              </div>
+              <Badge
+                variant="secondary"
+                className={
+                  sttReady
+                    ? 'bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
+                    : progress.downloading
+                    ? 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400'
+                    : ''
+                }
+              >
+                {sttReady ? '就绪' : progress.downloading ? '下载中' : '加载中'}
+              </Badge>
             </div>
-            <Badge
-              variant="secondary"
-              className={
-                sttReady
-                  ? 'bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
-                  : ''
-              }
-            >
-              {sttReady ? '就绪' : '加载中'}
-            </Badge>
+
+            {progress.downloading && progress.total > 0 && (
+              <div className="space-y-1.5">
+                <Progress value={percent} />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{percent}%</span>
+                  <span>
+                    {formatBytes(progress.downloaded)} / {formatBytes(progress.total)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

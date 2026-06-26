@@ -13,6 +13,9 @@ import * as discovery$0 from "./internal/discovery/models.js";
 import * as gateway$0 from "./internal/gateway/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as speech$0 from "./internal/speech/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as store$0 from "./internal/store/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -38,6 +41,13 @@ export function ConnectToDevice(deviceIP: string, devicePort: number, deviceID: 
 
 export function GetDeviceAlias(deviceID: string): $CancellablePromise<string> {
     return $Call.ByID(1475520567, deviceID);
+}
+
+/**
+ * GetSTTDownloadProgress exposes the local whisper model download progress.
+ */
+export function GetSTTDownloadProgress(): $CancellablePromise<speech$0.DownloadProgress> {
+    return $Call.ByID(2507448111);
 }
 
 export function GetSessionMessages(sessionID: string): $CancellablePromise<store$0.Message[] | null> {
