@@ -2,6 +2,8 @@ package acp
 
 type ACPAdapter interface {
 	Send(prompt string, history []Message) (<-chan StreamEvent, error)
+	LoadSession(acpSessionID string, history []Message) error
+	CurrentSessionID() string
 	Info() AgentInfo
 	IsRunning() bool
 	Stop() error

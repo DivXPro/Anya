@@ -17,6 +17,7 @@ import (
 
 	"desktop/internal/acp"
 	"desktop/internal/acp/adapters"
+	logoassets "desktop/internal/assets"
 	"desktop/internal/discovery"
 	"desktop/internal/gateway"
 	gatewayadapters "desktop/internal/gateway/adapters"
@@ -30,25 +31,102 @@ import (
 )
 
 type App struct {
-	ctx            context.Context
-	db             *sql.DB
-	desktopID      string
-	localIP        string
-	router         *acp.Router
-	wsServer       *gateway.Server
-	stt            speech.STTEngine
-	sttMu          sync.RWMutex
-	tts            speech.TTSEngine
-	trayDeviceItem *application.MenuItem
-	trayAgentMenu  *application.Menu
+	ctx             context.Context
+	db              *sql.DB
+	dataDir         string
+	desktopID       string
+	localIP         string
+	router          *acp.Router
+	wsServer        *gateway.Server
+	stt             speech.STTEngine
+	sttMu           sync.RWMutex
+	tts             speech.TTSEngine
+	trayDeviceItem  *application.MenuItem
+	trayAgentMenu   *application.Menu
+	trayOpenItem    *application.MenuItem
+	trayQuitItem    *application.MenuItem
+	trayDeviceName  string
+	trayUILanguage  string
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
 	a.trayDeviceItem = item
+	a.refreshTrayDeviceStatus()
 }
 
 func (a *App) SetTrayAgentMenu(menu *application.Menu) {
 	a.trayAgentMenu = menu
+	a.refreshTrayAgentMenu()
+}
+
+func (a *App) SetTrayOpenItem(item *application.MenuItem) {
+	a.trayOpenItem = item
+	a.refreshTrayOpenItem()
+}
+
+func (a *App) SetTrayQuitItem(item *application.MenuItem) {
+	a.trayQuitItem = item
+	a.refreshTrayQuitItem()
+}
+
+func (a *App) trayText(key string) string {
+	if a.trayUILanguage == "en" {
+		switch key {
+		case "noDevice":
+			return "No device connected"
+		case "connected":
+			return "Connected"
+		case "open":
+			return "Open Elf"
+		case "quit":
+			return "Quit"
+		}
+		return key
+	}
+	switch key {
+	case "noDevice":
+		return "未连接设备"
+	case "connected":
+		return "已连接"
+	case "open":
+		return "打开 Elf"
+	case "quit":
+		return "退出"
+	}
+	return key
+}
+
+func (a *App) refreshTrayDeviceStatus() {
+	if a.trayDeviceItem == nil {
+		return
+	}
+	if a.trayDeviceName == "" {
+		a.trayDeviceItem.SetLabel(a.trayText("noDevice"))
+		return
+	}
+	name := a.trayDeviceName
+	if len(name) > 16 {
+		name = name[:16]
+	}
+	a.trayDeviceItem.SetLabel(name + "  ● " + a.trayText("connected"))
+}
+
+func (a *App) refreshTrayOpenItem() {
+	if a.trayOpenItem != nil {
+		a.trayOpenItem.SetLabel(a.trayText("open"))
+	}
+}
+
+func (a *App) refreshTrayQuitItem() {
+	if a.trayQuitItem != nil {
+		a.trayQuitItem.SetLabel(a.trayText("quit"))
+	}
+}
+
+func (a *App) refreshTrayLanguage() {
+	a.refreshTrayDeviceStatus()
+	a.refreshTrayOpenItem()
+	a.refreshTrayQuitItem()
 }
 
 func NewApp() *App {
@@ -64,6 +142,7 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
 	}
+	a.dataDir = dataDir
 
 	// 1. Init store
 	db, err := store.InitDB(filepath.Join(dataDir, "elf.db"))
@@ -104,6 +183,12 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 		sttLang = "zh"
 	}
 	go a.loadSTTAssets(dataDir, sttLang)
+
+	uiLang, _ := store.GetSetting(a.db, "ui_language")
+	if uiLang == "" {
+		uiLang = "zh"
+	}
+	a.trayUILanguage = uiLang
 
 	// 4. Start WebSocket server with authorization
 	a.wsServer = gateway.NewServer(9876, a.db, a.desktopID)
@@ -156,22 +241,37 @@ func (a *App) ScanDevices() ([]discovery.DiscoveredDevice, error) {
 }
 
 // refreshAgentAvailability checks which agent commands are installed on this
-// machine. It keeps the currently enabled agent if it is still available,
-// otherwise it selects the first available one. If no agent is available,
-// all agents are disabled.
+// machine and updates their availability flag. It keeps the currently selected
+// agent if it is still available, otherwise it selects the first available one.
+// If no agent is available, the current selection is cleared.
 func (a *App) refreshAgentAvailability() error {
 	agents, err := store.ListAgents(a.db)
 	if err != nil {
 		return fmt.Errorf("list agents: %w", err)
 	}
 
-	availability := make(map[string]bool, len(agents))
-	var currentEnabled, firstAvailable string
+	var currentSelected, firstAvailable string
+	selectedAvailable := false
 	for _, ag := range agents {
-		available := isCommandAvailable(ag.Command)
-		availability[ag.ID] = available
+		command := ag.Command
+		if ag.ID == "claude-code" {
+			command = "claude"
+			if command != ag.Command {
+				ag.Command = command
+				if err := store.UpdateAgent(a.db, &ag); err != nil {
+					return fmt.Errorf("update claude command: %w", err)
+				}
+			}
+		}
 
-		version := getCommandVersion(ag.Command)
+		available := isCommandAvailable(command)
+		if ag.Enabled != available {
+			if err := store.UpdateAgentEnabled(a.db, ag.ID, available); err != nil {
+				return fmt.Errorf("update agent availability %s: %w", ag.ID, err)
+			}
+		}
+
+		version := getCommandVersion(command)
 		if version == "" {
 			version = ag.ID
 		}
@@ -179,8 +279,9 @@ func (a *App) refreshAgentAvailability() error {
 			return fmt.Errorf("update agent version %s: %w", ag.ID, err)
 		}
 
-		if ag.Enabled {
-			currentEnabled = ag.ID
+		if ag.Selected {
+			currentSelected = ag.ID
+			selectedAvailable = available
 		}
 		if available && firstAvailable == "" {
 			firstAvailable = ag.ID
@@ -188,19 +289,18 @@ func (a *App) refreshAgentAvailability() error {
 	}
 
 	switch {
-	case currentEnabled != "" && availability[currentEnabled]:
-		// Keep the user's current choice.
-		log.Printf("[elf] keeping active agent: %s", currentEnabled)
+	case currentSelected != "" && selectedAvailable:
+		log.Printf("[elf] keeping selected agent: %s", currentSelected)
 	case firstAvailable != "":
 		if err := a.SelectAgent(firstAvailable); err != nil {
-			return fmt.Errorf("select first available agent: %w", err)
+			return fmt.Errorf("select first available agent %s: %w", firstAvailable, err)
 		}
 		log.Printf("[elf] active agent: %s", firstAvailable)
 	default:
-		if err := store.DisableAllAgents(a.db); err != nil {
-			return fmt.Errorf("disable all agents: %w", err)
+		if err := store.ClearAgentSelection(a.db); err != nil {
+			return fmt.Errorf("clear agent selection: %w", err)
 		}
-		log.Println("[elf] no agent command found; agents disabled")
+		log.Println("[elf] no agent command found; selection cleared")
 	}
 
 	a.refreshTrayAgentMenu()
@@ -253,10 +353,20 @@ func (a *App) loadSTTAssets(dataDir, lang string) {
 		log.Printf("[elf] init stt error: %v", err)
 		return
 	}
-	a.sttMu.Lock()
-	a.stt = stt
-	a.sttMu.Unlock()
+	a.setSTT(stt)
 	log.Println("[elf] STT ready")
+}
+
+// reloadSTT re-initializes the STT engine with a new language without
+// restarting the application.
+func (a *App) reloadSTT(lang string) {
+	a.loadSTTAssets(a.dataDir, lang)
+}
+
+func (a *App) setSTT(stt speech.STTEngine) {
+	a.sttMu.Lock()
+	defer a.sttMu.Unlock()
+	a.stt = stt
 }
 
 // sttReady returns true if the STT engine has finished initializing.
@@ -300,28 +410,39 @@ func (a *App) handleDeviceConnect(dev gateway.DeviceAdapter) {
 	}
 
 	// Update tray menu
-	if a.trayDeviceItem != nil {
-		if len(displayName) > 16 {
-			displayName = displayName[:16]
-		}
-		a.trayDeviceItem.SetLabel(displayName + "  ● 已连接")
+	if len(displayName) > 16 {
+		displayName = displayName[:16]
 	}
+	a.trayDeviceName = displayName
+	a.refreshTrayDeviceStatus()
 
 	agents, err := store.ListAgents(a.db)
 	if err != nil || len(agents) == 0 {
 		log.Printf("[elf] no agents configured")
 		return
 	}
-	agentID := agents[0].ID
+	agentID := ""
 	for _, ag := range agents {
-		if ag.Enabled {
+		if ag.Selected {
 			agentID = ag.ID
 			break
 		}
 	}
-	session, err := store.CreateSession(a.db, info.ID, agentID)
+	if agentID == "" {
+		for _, ag := range agents {
+			if ag.Enabled {
+				agentID = ag.ID
+				break
+			}
+		}
+	}
+	if agentID == "" {
+		agentID = agents[0].ID
+	}
+
+	session, err := a.recoverOrCreateSession(info.ID, agentID)
 	if err != nil {
-		log.Printf("[elf] create session error: %v", err)
+		log.Printf("[elf] session setup error: %v", err)
 		return
 	}
 
@@ -330,13 +451,46 @@ func (a *App) handleDeviceConnect(dev gateway.DeviceAdapter) {
 	go a.handleDeviceEvents(dev, session.ID)
 }
 
+// recoverOrCreateSession looks for an existing open session for the device.
+// If one exists and the agent hasn't changed, it attempts to load the ACP
+// session so the conversation can continue. Otherwise it creates a new session.
+func (a *App) recoverOrCreateSession(deviceID, agentID string) (*store.Session, error) {
+	existing, err := store.GetOpenSessionForDevice(a.db, deviceID)
+	if err != nil {
+		return nil, fmt.Errorf("lookup open session: %w", err)
+	}
+	if existing != nil && existing.AgentID == agentID && existing.ACPSessionID != nil && *existing.ACPSessionID != "" {
+		history, err := store.GetSessionMessages(a.db, existing.ID)
+		if err != nil {
+			log.Printf("[elf] failed to load history for recovery: %v", err)
+			history = nil
+		}
+		acpHistory := make([]acp.Message, len(history))
+		for i, m := range history {
+			acpHistory[i] = acp.Message{Role: m.Role, Content: m.Content}
+		}
+		if err := a.router.LoadSession(agentID, *existing.ACPSessionID, acpHistory); err != nil {
+			log.Printf("[elf] failed to load acp session %s, creating new session: %v", *existing.ACPSessionID, err)
+			// Fall through to create a new session.
+		} else {
+			log.Printf("[elf] recovered session %s (acp=%s)", existing.ID, *existing.ACPSessionID)
+			return existing, nil
+		}
+	}
+
+	session, err := store.CreateSession(a.db, deviceID, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("create session: %w", err)
+	}
+	return session, nil
+}
+
 func (a *App) handleDeviceDisconnect(deviceID string) {
 	log.Printf("[elf] device disconnected: %s", deviceID)
 
 	// Update tray menu
-	if a.trayDeviceItem != nil {
-		a.trayDeviceItem.SetLabel("未连接设备")
-	}
+	a.trayDeviceName = ""
+	a.refreshTrayDeviceStatus()
 }
 
 func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
@@ -436,6 +590,15 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 	if err != nil {
 		dev.SendText(gateway.SummaryMessage("Agent 调用失败"))
 		return
+	}
+
+	// Persist the ACP session ID so the conversation can be recovered later.
+	if session.ACPSessionID == nil || *session.ACPSessionID == "" {
+		if acpSessionID, err := a.router.CurrentSessionID(session.AgentID); err == nil && acpSessionID != "" {
+			if err := store.UpdateSessionACPSession(a.db, sessionID, acpSessionID, session.AgentID); err != nil {
+				log.Printf("[elf] failed to save acp session id: %v", err)
+			}
+		}
 	}
 
 	// 5. Process response with timeout monitoring
@@ -606,6 +769,28 @@ func (a *App) GetSettings() (map[string]string, error) {
 }
 
 func (a *App) SetSetting(key, value string) error {
+	if key == "stt_language" {
+		old, _ := store.GetSetting(a.db, key)
+		if old != value {
+			if err := store.SetSetting(a.db, key, value); err != nil {
+				return err
+			}
+			log.Printf("[elf] stt language changed from %s to %s, reloading STT...", old, value)
+			go a.reloadSTT(value)
+			return nil
+		}
+	}
+	if key == "ui_language" {
+		old, _ := store.GetSetting(a.db, key)
+		if old != value {
+			if err := store.SetSetting(a.db, key, value); err != nil {
+				return err
+			}
+			a.trayUILanguage = value
+			a.refreshTrayLanguage()
+			return nil
+		}
+	}
 	return store.SetSetting(a.db, key, value)
 }
 
@@ -621,17 +806,16 @@ func (a *App) UpdateAgent(agent store.Agent) error {
 	return nil
 }
 
-// SelectAgent enables only the chosen agent and disables all others.
+// SelectAgent marks the chosen agent as selected and clears selection from all others.
 func (a *App) SelectAgent(agentID string) error {
 	agents, err := store.ListAgents(a.db)
 	if err != nil {
 		return err
 	}
 	for _, ag := range agents {
-		enabled := ag.ID == agentID
-		if ag.Enabled != enabled {
-			ag.Enabled = enabled
-			if err := store.UpdateAgent(a.db, &ag); err != nil {
+		selected := ag.ID == agentID
+		if ag.Selected != selected {
+			if err := store.UpdateAgentSelected(a.db, ag.ID, selected); err != nil {
 				return err
 			}
 		}
@@ -659,7 +843,12 @@ func (a *App) refreshTrayAgentMenu() {
 		if name == "" {
 			name = id
 		}
-		item := a.trayAgentMenu.AddRadio(name, ag.Enabled)
+		item := a.trayAgentMenu.AddRadio(name, ag.Selected)
+		if logo, err := logoassets.AgentLogo(id); err != nil {
+			log.Printf("[elf] load agent logo %s: %v", id, err)
+		} else if logo != nil {
+			item.SetBitmap(logo)
+		}
 		item.OnClick(func(_ *application.Context) {
 			if err := a.SelectAgent(id); err != nil {
 				log.Printf("[elf] select agent %s error: %v", id, err)
@@ -675,4 +864,12 @@ func (a *App) ListSessions(limit, offset int) ([]store.Session, error) {
 
 func (a *App) GetSessionMessages(sessionID string) ([]store.Message, error) {
 	return store.GetSessionMessages(a.db, sessionID)
+}
+
+func (a *App) ListMessages(limit, offset int) ([]store.Message, error) {
+	return store.ListMessages(a.db, limit, offset)
+}
+
+func (a *App) SearchMessages(query string, limit int) ([]store.Message, error) {
+	return store.SearchMessages(a.db, query, limit)
 }

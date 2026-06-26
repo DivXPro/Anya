@@ -1,29 +1,21 @@
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 import type { Tab } from '@/App';
-import { SmartphoneDevice, BrainResearch, ClockRotateRight, Voice } from 'iconoir-react';
+import { SmartphoneDevice, BrainResearch, ClockRotateRight, Settings } from 'iconoir-react';
 
-interface SidebarProps {
-  active: Tab;
-  onChange: (tab: Tab) => void;
-}
-
-const ITEMS: { key: Tab; label: string; icon: typeof SmartphoneDevice }[] = [
-  { key: 'device', label: '设备', icon: SmartphoneDevice },
-  { key: 'agent', label: 'Agent', icon: BrainResearch },
-  { key: 'history', label: '历史', icon: ClockRotateRight },
-  { key: 'settings', label: '语音服务', icon: Voice },
+const ITEMS: { key: Tab; labelKey: string; icon: typeof SmartphoneDevice }[] = [
+  { key: 'device', labelKey: 'tabs.device', icon: SmartphoneDevice },
+  { key: 'agent', labelKey: 'tabs.agent', icon: BrainResearch },
+  { key: 'history', labelKey: 'tabs.history', icon: ClockRotateRight },
+  { key: 'settings', labelKey: 'tabs.settings', icon: Settings },
 ];
 
-export function Sidebar({ active, onChange }: SidebarProps) {
+export function Sidebar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
+  const { t } = useTranslation();
+
   return (
-    <aside className="flex w-[220px] flex-col justify-between border-r border-border/50 bg-secondary/80 p-4 backdrop-blur-md">
+    <aside className="flex w-[220px] flex-col justify-between border-r border-border/50 bg-secondary/80 px-4 pb-4 pt-10 backdrop-blur-md">
       <div>
-        <div className="mb-8 flex items-center gap-3 px-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <span className="text-lg font-bold">E</span>
-          </div>
-          <span className="text-lg font-semibold tracking-tight">Elf</span>
-        </div>
         <nav className="space-y-1">
           {ITEMS.map((item) => {
             const Icon = item.icon;
@@ -40,14 +32,14 @@ export function Sidebar({ active, onChange }: SidebarProps) {
                 )}
               >
                 <Icon className="h-4 w-4" />
-                {item.label}
+                {t(item.labelKey)}
               </button>
             );
           })}
         </nav>
       </div>
       <div className="px-2 text-xs text-muted-foreground">
-        Hardware Agent
+        {t('app.tagline')}
       </div>
     </aside>
   );

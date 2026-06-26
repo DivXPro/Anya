@@ -66,6 +66,10 @@ export function ListAuthorizedDevices(): $CancellablePromise<store$0.AuthorizedD
     return $Call.ByID(1577096867);
 }
 
+export function ListMessages(limit: number, offset: number): $CancellablePromise<store$0.Message[] | null> {
+    return $Call.ByID(2939394281, limit, offset);
+}
+
 export function ListPendingDevices(): $CancellablePromise<gateway$0.PendingDevice[] | null> {
     return $Call.ByID(4263251995);
 }
@@ -89,8 +93,12 @@ export function ScanDevices(): $CancellablePromise<discovery$0.DiscoveredDevice[
     return $Call.ByID(752654171);
 }
 
+export function SearchMessages(query: string, limit: number): $CancellablePromise<store$0.Message[] | null> {
+    return $Call.ByID(3203246577, query, limit);
+}
+
 /**
- * SelectAgent enables only the chosen agent and disables all others.
+ * SelectAgent marks the chosen agent as selected and clears selection from all others.
  */
 export function SelectAgent(agentID: string): $CancellablePromise<void> {
     return $Call.ByID(1605882214, agentID);
@@ -110,6 +118,14 @@ export function SetTrayAgentMenu(menu: application$0.Menu | null): $CancellableP
 
 export function SetTrayDeviceItem(item: application$0.MenuItem | null): $CancellablePromise<void> {
     return $Call.ByID(3133036894, item);
+}
+
+export function SetTrayOpenItem(item: application$0.MenuItem | null): $CancellablePromise<void> {
+    return $Call.ByID(2312067580, item);
+}
+
+export function SetTrayQuitItem(item: application$0.MenuItem | null): $CancellablePromise<void> {
+    return $Call.ByID(3681134623, item);
 }
 
 export function UpdateAgent(agent: store$0.Agent): $CancellablePromise<void> {

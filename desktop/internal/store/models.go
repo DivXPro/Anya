@@ -1,11 +1,13 @@
 package store
 
 type Session struct {
-	ID        string  `json:"id"`
-	DeviceID  string  `json:"device_id"`
-	AgentID   string  `json:"agent_id"`
-	CreatedAt string  `json:"created_at"`
-	ClosedAt  *string `json:"closed_at"`
+	ID           string  `json:"id"`
+	DeviceID     string  `json:"device_id"`
+	AgentID      string  `json:"agent_id"`
+	ACPSessionID *string `json:"acp_session_id"`
+	ACPAgentID   *string `json:"acp_agent_id"`
+	CreatedAt    string  `json:"created_at"`
+	ClosedAt     *string `json:"closed_at"`
 }
 
 type Message struct {
@@ -19,10 +21,11 @@ type Message struct {
 }
 
 type Agent struct {
-	ID      string  `json:"id"`
-	Name    string  `json:"name"`
-	Command string  `json:"command"`
-	Enabled bool    `json:"enabled"`
-	Version *string `json:"version"`
-	Config  *string `json:"config"`
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Command  string  `json:"command"`
+	Enabled  bool    `json:"enabled"`
+	Selected bool    `json:"selected"`
+	Version  *string `json:"version"`
+	Config   *string `json:"config"`
 }

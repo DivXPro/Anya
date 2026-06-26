@@ -44,6 +44,29 @@ func (r *Router) Route(agentID, prompt string, history []Message) (<-chan Stream
 	return adapter.Send(prompt, history)
 }
 
+func (r *Router) LoadSession(agentID, acpSessionID string, history []Message) error {
+	r.mu.RLock()
+	adapter, ok := r.adapters[agentID]
+	r.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("unknown agent: %s", agentID)
+	}
+	r.mu.Lock()
+	r.lastUsed[agentID] = time.Now()
+	r.mu.Unlock()
+	return adapter.LoadSession(acpSessionID, history)
+}
+
+func (r *Router) CurrentSessionID(agentID string) (string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	adapter, ok := r.adapters[agentID]
+	if !ok {
+		return "", fmt.Errorf("unknown agent: %s", agentID)
+	}
+	return adapter.CurrentSessionID(), nil
+}
+
 func (r *Router) ListAgents() []AgentInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

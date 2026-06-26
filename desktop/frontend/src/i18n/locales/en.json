@@ -1,0 +1,90 @@
+{
+  "appName": "Elf",
+  "app": {
+    "tagline": "Hardware Agent"
+  },
+  "tabs": {
+    "device": "Device",
+    "agent": "Agent",
+    "history": "History",
+    "settings": "Settings"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Configure appearance and voice services",
+    "appearance": {
+      "title": "Appearance",
+      "theme": "Theme",
+      "themeLight": "Light",
+      "themeDark": "Dark",
+      "themeSystem": "System",
+      "language": "Language",
+      "languageZh": "中文",
+      "languageEn": "English"
+    },
+    "voice": {
+      "title": "Speech Recognition",
+      "language": "Recognition Language",
+      "languageZh": "中文",
+      "languageEn": "English",
+      "model": "Voice Model",
+      "modelReady": "Ready",
+      "modelLoading": "Loading",
+      "modelDownloading": "Downloading"
+    },
+    "tts": {
+      "title": "Voice Announcement",
+      "enabled": "Enable TTS voice announcement",
+      "enabledDesc": "Convert Agent text replies to speech and play them on the device",
+      "speed": "Speech Speed",
+      "speedSlow": "Slow",
+      "speedNormal": "Normal",
+      "speedFast": "Fast"
+    }
+  },
+  "device": {
+    "subtitle": "Search and connect nearby Elf devices",
+    "myDevices": "My Devices",
+    "nearbyDevices": "Nearby Devices",
+    "scanning": "Scanning...",
+    "noNearbyDevices": "No nearby devices found",
+    "connect": "Connect",
+    "rename": "Rename",
+    "renameTitle": "Rename Device",
+    "renameDescription": "Set an alias for {{name}}.",
+    "renamePlaceholder": "Enter device name",
+    "authorize": "Authorize",
+    "pendingLabel": "New device requests to connect: ",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete"
+  },
+  "agent": {
+    "title": "Agent",
+    "subtitle": "Choose the active AI Agent",
+    "enabled": "Enabled",
+    "available": "Available",
+    "notInstalled": "Not Installed"
+  },
+  "history": {
+    "title": "History",
+    "subtitle": "View conversation history with devices",
+    "search": "Search conversations...",
+    "empty": "No history yet",
+    "roleUser": "Me",
+    "roleAssistant": "Agent",
+    "noContent": "(no content)"
+  },
+  "status": {
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "listening": "Listening",
+    "processing": "Processing"
+  },
+  "tray": {
+    "noDevice": "No device connected",
+    "open": "Open Elf",
+    "quit": "Quit",
+    "agent": "Agent"
+  }
+}

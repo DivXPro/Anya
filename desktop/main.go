@@ -62,7 +62,7 @@ func main() {
 
 	// Tray menu
 	menu := wailsApp.NewMenu()
-	deviceItem := menu.Add("未连接设备")
+	deviceItem := menu.Add("")
 	deviceItem.SetEnabled(false)
 	menu.AddSeparator()
 
@@ -70,12 +70,14 @@ func main() {
 	agentMenu := menu.AddSubmenu("Agent")
 	menu.AddSeparator()
 
-	menu.Add("打开 Elf").OnClick(func(_ *application.Context) {
+	openItem := menu.Add("")
+	openItem.OnClick(func(_ *application.Context) {
 		mainWindow.Show()
 		mainWindow.Focus()
 	})
 	menu.AddSeparator()
-	menu.Add("退出").OnClick(func(_ *application.Context) {
+	quitItem := menu.Add("")
+	quitItem.OnClick(func(_ *application.Context) {
 		mainWindow.Close()
 		wailsApp.Quit()
 	})
@@ -85,6 +87,8 @@ func main() {
 	// Give App access to update tray menus
 	elfApp.SetTrayDeviceItem(deviceItem)
 	elfApp.SetTrayAgentMenu(agentMenu)
+	elfApp.SetTrayOpenItem(openItem)
+	elfApp.SetTrayQuitItem(quitItem)
 
 	// Left-click → show menu
 	systemTray.OnClick(func() {

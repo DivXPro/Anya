@@ -6,6 +6,7 @@ export interface Agent {
     "name": string;
     "command": string;
     "enabled": boolean;
+    "selected": boolean;
     "version": string | null;
     "config": string | null;
 }
@@ -34,6 +35,8 @@ export interface Session {
     "id": string;
     "device_id": string;
     "agent_id": string;
+    "acp_session_id": string | null;
+    "acp_agent_id": string | null;
     "created_at": string;
     "closed_at": string | null;
 }

@@ -2,6 +2,7 @@ package acp
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,6 +16,13 @@ import (
 	"time"
 )
 
+type Framing int
+
+const (
+	LSPFraming Framing = iota
+	NDJSONFraming
+)
+
 type ProcessManager struct {
 	mu      sync.Mutex
 	cmd     *exec.Cmd
@@ -25,13 +33,19 @@ type ProcessManager struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	command string
+	framing Framing
 	running bool
 	exited  chan struct{}
 }
 
 func NewProcessManager(command string) *ProcessManager {
+	return NewProcessManagerWithFraming(command, LSPFraming)
+}
+
+func NewProcessManagerWithFraming(command string, framing Framing) *ProcessManager {
 	return &ProcessManager{
 		command: command,
+		framing: framing,
 		events:  make(chan []byte, 256),
 		done:    make(chan struct{}),
 	}
@@ -67,14 +81,19 @@ func (pm *ProcessManager) Start() error {
 	}
 	pm.running = true
 
-	go pm.readLoop()
+	switch pm.framing {
+	case NDJSONFraming:
+		go pm.readLoopNDJSON()
+	default:
+		go pm.readLoopLSP()
+	}
 	go pm.waitLoop()
 
 	log.Printf("[stdio] process started: %s (pid=%d)", pm.command, pm.cmd.Process.Pid)
 	return nil
 }
 
-func (pm *ProcessManager) readLoop() {
+func (pm *ProcessManager) readLoopLSP() {
 	defer close(pm.done)
 	reader := bufio.NewReader(pm.stdout)
 	for {
@@ -106,6 +125,30 @@ func (pm *ProcessManager) readLoop() {
 
 		select {
 		case pm.events <- body:
+		case <-pm.ctx.Done():
+			return
+		}
+	}
+}
+
+func (pm *ProcessManager) readLoopNDJSON() {
+	defer close(pm.done)
+	reader := bufio.NewReader(pm.stdout)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err != io.EOF && pm.ctx.Err() == nil {
+				log.Printf("[stdio] read line error: %v", err)
+			}
+			return
+		}
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+
+		select {
+		case pm.events <- line:
 		case <-pm.ctx.Done():
 			return
 		}
@@ -166,11 +209,17 @@ func (pm *ProcessManager) Send(data []byte) error {
 	if !pm.running {
 		return fmt.Errorf("process not running")
 	}
-	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(data))
-	if _, err := pm.stdin.Write([]byte(header)); err != nil {
-		return err
+
+	var frame []byte
+	switch pm.framing {
+	case NDJSONFraming:
+		frame = append(data, '\n')
+	default:
+		header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(data))
+		frame = append([]byte(header), data...)
 	}
-	_, err := pm.stdin.Write(data)
+
+	_, err := pm.stdin.Write(frame)
 	return err
 }
 

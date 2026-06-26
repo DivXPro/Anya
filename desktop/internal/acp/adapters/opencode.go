@@ -16,12 +16,13 @@ type OpenCodeAdapter struct {
 	mu              sync.Mutex
 	dispatchMu      sync.Mutex
 	dispatchRunning bool
-	streamMu        sync.RWMutex
 	reqID           int
 	pending         map[string]chan acp.StreamEvent
 	activeStream    chan acp.StreamEvent
+	streamMu        sync.RWMutex
 	sessionID       string
 	initDone        bool
+	lastPromptReqID int
 }
 
 func NewOpenCodeAdapter() *OpenCodeAdapter {
@@ -31,7 +32,7 @@ func NewOpenCodeAdapter() *OpenCodeAdapter {
 			Name:    "OpenCode",
 			Command: "opencode acp",
 		},
-		pm:      acp.NewProcessManager("opencode acp"),
+		pm:      acp.NewProcessManagerWithFraming("opencode acp", acp.NDJSONFraming),
 		pending: make(map[string]chan acp.StreamEvent),
 	}
 }
@@ -65,6 +66,13 @@ func (a *OpenCodeAdapter) ensureInit() error {
 		return fmt.Errorf("acp initialize: %w", err)
 	}
 	log.Printf("[opencode] initialized: %v", initResp)
+	a.initDone = true
+
+	// If a session was already loaded via LoadSession, skip creating a new one.
+	if a.sessionID != "" {
+		log.Printf("[opencode] using loaded session: %s", a.sessionID)
+		return nil
+	}
 
 	sessResp, err := a.sendRequest("session/new", map[string]any{
 		"cwd":        ".",
@@ -74,12 +82,11 @@ func (a *OpenCodeAdapter) ensureInit() error {
 		return fmt.Errorf("acp session/new: %w", err)
 	}
 
-	if result, ok := sessResp["result"].(map[string]any); ok {
-		if sid, ok := result["sessionId"].(string); ok {
-			a.sessionID = sid
-		}
+	if sid, ok := sessResp["sessionId"].(string); ok {
+		a.sessionID = sid
+	} else {
+		log.Printf("[opencode] session/new unexpected response: %+v", sessResp)
 	}
-	a.initDone = true
 	log.Printf("[opencode] session created: %s", a.sessionID)
 	return nil
 }
@@ -91,12 +98,17 @@ func (a *OpenCodeAdapter) Send(prompt string, history []acp.Message) (<-chan acp
 
 	a.mu.Lock()
 	a.reqID++
+	id := a.reqID
+	a.lastPromptReqID = id
 	ch := make(chan acp.StreamEvent, 256)
+	a.streamMu.Lock()
+	a.activeStream = ch
+	a.streamMu.Unlock()
 	a.mu.Unlock()
 
 	req := map[string]any{
 		"jsonrpc": "2.0",
-		"id":      a.reqID,
+		"id":      id,
 		"method":  "session/prompt",
 		"params": map[string]any{
 			"sessionId": a.sessionID,
@@ -105,18 +117,45 @@ func (a *OpenCodeAdapter) Send(prompt string, history []acp.Message) (<-chan acp
 	}
 
 	if err := a.pm.SendJSON(req); err != nil {
-		a.mu.Lock()
-		delete(a.pending, fmt.Sprintf("resp-%d", a.reqID))
-		a.mu.Unlock()
 		return nil, fmt.Errorf("send request: %w", err)
 	}
 
-	a.streamMu.Lock()
-	a.activeStream = ch
-	a.streamMu.Unlock()
-
 	return ch, nil
 }
+
+func (a *OpenCodeAdapter) LoadSession(acpSessionID string, history []acp.Message) error {
+	if err := a.ensureInit(); err != nil {
+		return err
+	}
+	if a.sessionID == acpSessionID {
+		return nil
+	}
+
+	resp, err := a.sendRequest("session/load", map[string]any{
+		"sessionId": acpSessionID,
+	})
+	if err != nil {
+		return fmt.Errorf("acp session/load: %w", err)
+	}
+	if sid, ok := resp["sessionId"].(string); ok && sid != "" {
+		a.sessionID = sid
+	} else {
+		a.sessionID = acpSessionID
+	}
+	log.Printf("[opencode] session loaded: %s", a.sessionID)
+	return nil
+}
+
+func (a *OpenCodeAdapter) CurrentSessionID() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.sessionID
+}
+
+func (a *OpenCodeAdapter) Info() acp.AgentInfo { return a.info }
+
+func (a *OpenCodeAdapter) IsRunning() bool { return a.pm.IsRunning() }
+func (a *OpenCodeAdapter) Stop() error     { return a.pm.Stop() }
 
 func (a *OpenCodeAdapter) dispatchLoop(pm *acp.ProcessManager) {
 	defer func() {
@@ -140,8 +179,12 @@ func (a *OpenCodeAdapter) dispatchLoop(pm *acp.ProcessManager) {
 				Params struct {
 					SessionID string `json:"sessionId"`
 					Update    struct {
-						Type string `json:"type"`
-						Text string `json:"text,omitempty"`
+						SessionUpdate string `json:"sessionUpdate"`
+						MessageID     string `json:"messageId"`
+						Content       struct {
+							Type string `json:"type"`
+							Text string `json:"text"`
+						} `json:"content"`
 					} `json:"update"`
 				} `json:"params"`
 			}
@@ -150,57 +193,83 @@ func (a *OpenCodeAdapter) dispatchLoop(pm *acp.ProcessManager) {
 				continue
 			}
 
+			// JSON-RPC response: route to pending waiter if one exists, or treat
+			// it as the completion signal for the current prompt.
 			if msg.ID != 0 || msg.Result != nil || msg.Error != nil {
 				a.mu.Lock()
 				key := fmt.Sprintf("resp-%d", msg.ID)
-				ch, ok := a.pending[key]
-				a.mu.Unlock()
-				if !ok {
+				waiter, ok := a.pending[key]
+				if ok {
+					if msg.Error != nil {
+						waiter <- acp.StreamEvent{Type: "error", Error: fmt.Errorf("%s", msg.Error.Message)}
+					} else {
+						resultJSON, err := json.Marshal(msg.Result)
+						if err != nil {
+							waiter <- acp.StreamEvent{Type: "error", Error: err}
+						} else {
+							waiter <- acp.StreamEvent{Type: "text_delta", Content: string(resultJSON)}
+						}
+					}
+					close(waiter)
+					delete(a.pending, key)
+					a.mu.Unlock()
 					continue
 				}
 
-				if msg.Error != nil {
-					ch <- acp.StreamEvent{Type: "error", Error: fmt.Errorf("%s", msg.Error.Message)}
-				} else {
-					resultJSON, err := json.Marshal(msg.Result)
-					if err != nil {
-						ch <- acp.StreamEvent{Type: "error", Error: err}
-					} else {
-						ch <- acp.StreamEvent{Type: "text_delta", Content: string(resultJSON)}
-						ch <- acp.StreamEvent{Type: "done"}
+				if msg.ID == a.lastPromptReqID {
+					a.streamMu.RLock()
+					active := a.activeStream
+					a.streamMu.RUnlock()
+					if active != nil {
+						if msg.Error != nil {
+							select {
+							case active <- acp.StreamEvent{Type: "error", Error: fmt.Errorf("%s", msg.Error.Message)}:
+							default:
+							}
+						}
+						select {
+						case active <- acp.StreamEvent{Type: "done"}:
+						default:
+						}
+						a.streamMu.Lock()
+						if a.activeStream == active {
+							close(a.activeStream)
+							a.activeStream = nil
+						}
+						a.streamMu.Unlock()
 					}
 				}
-				close(ch)
-				a.mu.Lock()
-				delete(a.pending, key)
 				a.mu.Unlock()
 				continue
 			}
 
 			if msg.Method == "session/update" && msg.Params.SessionID == a.sessionID {
 				evt := acp.StreamEvent{}
-				switch msg.Params.Update.Type {
+				switch msg.Params.Update.SessionUpdate {
 				case "agent_message_chunk":
 					evt.Type = "text_delta"
-					evt.Content = msg.Params.Update.Text
-				case "tool_call":
+					evt.Content = msg.Params.Update.Content.Text
+				case "agent_thought_chunk":
+					// Surface thinking chunks as text so callers can see progress.
+					evt.Type = "text_delta"
+					evt.Content = msg.Params.Update.Content.Text
+				case "tool_call_update":
 					evt.Type = "tool_use"
-					evt.Content = msg.Params.Update.Text
-				case "turn_end":
-					evt.Type = "done"
+					evt.Content = msg.Params.Update.Content.Text
 				default:
 					continue
 				}
-				a.mu.Lock()
+
 				a.streamMu.RLock()
-				if a.activeStream != nil {
-					select {
-					case a.activeStream <- evt:
-					default:
-					}
-				}
+				active := a.activeStream
 				a.streamMu.RUnlock()
-				a.mu.Unlock()
+				if active == nil {
+					continue
+				}
+				select {
+				case active <- evt:
+				default:
+				}
 			}
 
 		case <-done:
@@ -249,7 +318,3 @@ func (a *OpenCodeAdapter) sendRequest(method string, params map[string]any) (map
 		return nil, fmt.Errorf("timeout waiting for %s", method)
 	}
 }
-
-func (a *OpenCodeAdapter) Info() acp.AgentInfo { return a.info }
-func (a *OpenCodeAdapter) IsRunning() bool      { return a.pm.IsRunning() }
-func (a *OpenCodeAdapter) Stop() error          { return a.pm.Stop() }

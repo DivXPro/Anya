@@ -1,61 +1,63 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App } from '../../bindings/desktop';
-import type { Session, Message } from '../../bindings/desktop/internal/store/models';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { Message } from '../../bindings/desktop/internal/store/models';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { Search, ChatBubble, Calendar, User, BrainResearch } from 'iconoir-react';
+import { Search, Calendar, User, BrainResearch } from 'iconoir-react';
 
 function HistoryTab() {
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    App.ListSessions(50, 0).then((v) => setSessions(v || [])).catch(() => {});
+    loadMessages();
   }, []);
 
-  const expandSession = async (sessionId: string) => {
-    if (expandedSession === sessionId) {
-      setExpandedSession(null);
-      setMessages([]);
-      return;
-    }
-    setExpandedSession(sessionId);
+  const loadMessages = async () => {
     try {
-      const result = await App.GetSessionMessages(sessionId);
+      const result = search.trim()
+        ? await App.SearchMessages(search.trim(), 100)
+        : await App.ListMessages(100, 0);
       setMessages(result || []);
     } catch (e) {
       console.error(e);
     }
   };
 
+  // Reload when search changes (debounced by the user typing).
+  useEffect(() => {
+    const timer = window.setTimeout(loadMessages, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   const grouped = useMemo(() => {
-    const groups: Record<string, Session[]> = {};
-    for (const s of sessions) {
-      if (search && !s.agent_id.toLowerCase().includes(search.toLowerCase())) {
-        continue;
-      }
-      const date = s.created_at.split('T')[0];
-      (groups[date] ||= []).push(s);
+    const groups: Record<string, Message[]> = {};
+    for (const m of messages) {
+      const date = m.created_at.split('T')[0];
+      (groups[date] ||= []).push(m);
     }
     return groups;
-  }, [sessions, search]);
+  }, [messages]);
+
+  const displayText = (m: Message) => {
+    if (m.summary && m.summary.trim()) return m.summary;
+    return m.content || t('history.noContent');
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">历史</h1>
-          <p className="text-sm text-muted-foreground">查看与设备的对话记录</p>
+          <h1 className="text-2xl font-semibold">{t('tabs.history')}</h1>
+          <p className="text-sm text-muted-foreground">{t('history.subtitle')}</p>
         </div>
         <div className="relative w-64">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="搜索 Agent..."
+            placeholder={t('history.search')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -68,7 +70,7 @@ function HistoryTab() {
           {Object.entries(grouped).length === 0 && (
             <Card>
               <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                暂无历史记录
+                {t('history.empty')}
               </CardContent>
             </Card>
           )}
@@ -79,51 +81,33 @@ function HistoryTab() {
                 {date}
               </div>
               <div className="space-y-3">
-                {group.map((s) => (
-                  <Card
-                    key={s.id}
-                    className="cursor-pointer transition-colors hover:bg-accent"
-                    onClick={() => expandSession(s.id)}
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <ChatBubble className="h-4 w-4 text-muted-foreground" />
-                          <CardTitle className="text-sm font-medium">
-                            {s.created_at.slice(11, 16)}
-                          </CardTitle>
+                {group.map((m) => (
+                  <Card key={m.id}>
+                    <CardContent className="py-3">
+                      <div className="flex gap-3">
+                        <div className="mt-0.5">
+                          {m.role === 'user' ? (
+                            <User className="h-4 w-4 text-primary" />
+                          ) : (
+                            <BrainResearch className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          )}
                         </div>
-                        <Badge variant="secondary">
-                          {s.agent_id}
-                        </Badge>
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {m.role === 'user' ? t('history.roleUser') : t('history.roleAssistant')}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {m.created_at.slice(11, 16)}
+                            </span>
+                          </div>
+                          <p className="text-sm">{displayText(m)}</p>
+                          {m.summary && m.summary !== m.content && (
+                            <p className="text-xs text-muted-foreground">{m.content}</p>
+                          )}
+                        </div>
                       </div>
-                    </CardHeader>
-                    {expandedSession === s.id && messages.length > 0 && (
-                      <CardContent className="pt-0">
-                        <Separator className="mb-3" />
-                        <div className="space-y-3">
-                          {messages.map((m) => (
-                            <div key={m.id} className="flex gap-3">
-                              <div className="mt-0.5">
-                                {m.role === 'user' ? (
-                                  <User className="h-4 w-4 text-primary" />
-                                ) : (
-                                  <BrainResearch className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                )}
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-sm">
-                                  {m.summary || m.content}
-                                </p>
-                                {m.summary && m.summary !== m.content && (
-                                  <p className="mt-1 text-xs text-muted-foreground">{m.content}</p>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    )}
+                    </CardContent>
                   </Card>
                 ))}
               </div>

@@ -72,3 +72,25 @@ func DeleteOldMessages(db *sql.DB, beforeDays int) (int64, error) {
 func GetSessionMessages(db *sql.DB, sessionID string) ([]Message, error) {
 	return GetMessagesBySession(db, sessionID, 1000, 0)
 }
+
+// ListMessages returns recent messages across all sessions, newest first.
+func ListMessages(db *sql.DB, limit, offset int) ([]Message, error) {
+	rows, err := db.Query(
+		`SELECT id, session_id, role, content, audio_url, summary, created_at
+		 FROM messages ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		limit, offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var msgs []Message
+	for rows.Next() {
+		var m Message
+		if err := rows.Scan(&m.ID, &m.SessionID, &m.Role, &m.Content, &m.AudioURL, &m.Summary, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, m)
+	}
+	return msgs, nil
+}
