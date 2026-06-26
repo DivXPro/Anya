@@ -36,24 +36,31 @@ void btn_loop() {
     bool rawB = digitalRead(BTN_B_PIN) == LOW;
 
     // Edge detection for direct GPIO buttons.
-    bool pressedDirect = (rawA && !lastRawA) || (rawB && !lastRawB);
-    bool releasedDirect = (!rawA && lastRawA) || (!rawB && lastRawB);
+    bool pttPressedDirect = rawA && !lastRawA;
+    bool pttReleasedDirect = !rawA && lastRawA;
+    bool confirmPressedDirect = rawB && !lastRawB;
     lastRawA = rawA;
     lastRawB = rawB;
 
     // Also keep M5Unified button detection in case the board is ever recognized.
-    bool pressed = pressedDirect || M5.BtnA.wasPressed() || M5.BtnB.wasPressed();
-    bool released = releasedDirect || M5.BtnA.wasReleased() || M5.BtnB.wasReleased();
+    // Only BtnA (front big button) is used for PTT speak; BtnB is reserved.
+    bool pttPressed = pttPressedDirect || M5.BtnA.wasPressed();
+    bool pttReleased = pttReleasedDirect || M5.BtnA.wasReleased();
+    bool confirmPressed = confirmPressedDirect || M5.BtnB.wasPressed();
 
-    if (pressed && pttPressCb) {
-        ESP_LOGI("btn", "PTT pressed (A=%d B=%d)", rawA, rawB);
+    if (pttPressed && pttPressCb) {
+        ESP_LOGI("btn", "PTT pressed");
         pttHeld = true;
         pttPressCb();
     }
-    if (released && pttReleaseCb && pttHeld) {
-        ESP_LOGI("btn", "PTT released (A=%d B=%d)", rawA, rawB);
+    if (pttReleased && pttReleaseCb && pttHeld) {
+        ESP_LOGI("btn", "PTT released");
         pttHeld = false;
         pttReleaseCb();
+    }
+    if (confirmPressed && confirmCb) {
+        ESP_LOGI("btn", "confirm/next pressed");
+        confirmCb();
     }
 }
 
