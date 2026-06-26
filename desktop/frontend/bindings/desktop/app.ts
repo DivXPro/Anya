@@ -36,6 +36,10 @@ export function ConnectToDevice(deviceIP: string, devicePort: number, deviceID: 
     return $Call.ByID(1376679050, deviceIP, devicePort, deviceID, deviceName);
 }
 
+export function GetDeviceAlias(deviceID: string): $CancellablePromise<string> {
+    return $Call.ByID(1475520567, deviceID);
+}
+
 export function GetSessionMessages(sessionID: string): $CancellablePromise<store$0.Message[] | null> {
     return $Call.ByID(988970873, sessionID);
 }
@@ -73,6 +77,10 @@ export function ScanDevices(): $CancellablePromise<discovery$0.DiscoveredDevice[
  */
 export function SelectAgent(agentID: string): $CancellablePromise<void> {
     return $Call.ByID(1605882214, agentID);
+}
+
+export function SetDeviceAlias(deviceID: string, alias: string): $CancellablePromise<void> {
+    return $Call.ByID(4066166771, deviceID, alias);
 }
 
 export function SetSetting(key: string, value: string): $CancellablePromise<void> {

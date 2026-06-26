@@ -110,8 +110,12 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	a.wsServer.OnDeviceDisconnect(a.handleDeviceDisconnect)
 	a.wsServer.OnPendingDevice(func(deviceID, deviceName string) {
 		log.Printf("[elf] pending device authorization: %s (%s)", deviceID, deviceName)
-		if err := a.AuthorizeDevice(deviceID); err != nil {
+		if err := store.AuthorizeDevice(a.db, deviceID, deviceName); err != nil {
 			log.Printf("[elf] auto-authorize device %s error: %v", deviceID, err)
+			return
+		}
+		if err := a.wsServer.AuthorizePendingDevice(deviceID); err != nil {
+			log.Printf("[elf] authorize pending device %s error: %v", deviceID, err)
 		} else {
 			log.Printf("[elf] auto-authorized device %s", deviceID)
 		}
@@ -164,13 +168,18 @@ func (a *App) handleDeviceConnect(dev gateway.DeviceAdapter) {
 	info := dev.Info()
 	log.Printf("[elf] device connected: %s (%s)", info.ID, info.Model)
 
+	// Use the user's alias if one is set, otherwise fall back to the device name.
+	displayName := info.Name
+	if alias, err := store.GetDeviceAlias(a.db, info.ID); err == nil && alias != "" {
+		displayName = alias
+	}
+
 	// Update tray menu
 	if a.trayDeviceItem != nil {
-		name := info.Name
-		if len(name) > 16 {
-			name = name[:16]
+		if len(displayName) > 16 {
+			displayName = displayName[:16]
 		}
-		a.trayDeviceItem.SetLabel(name + "  ● 已连接")
+		a.trayDeviceItem.SetLabel(displayName + "  ● 已连接")
 	}
 
 	agents, err := store.ListAgents(a.db)
@@ -439,6 +448,14 @@ func (a *App) AuthorizeDevice(deviceID string) error {
 
 func (a *App) RevokeDevice(deviceID string) error {
 	return store.RevokeDevice(a.db, deviceID)
+}
+
+func (a *App) SetDeviceAlias(deviceID, alias string) error {
+	return store.SetDeviceAlias(a.db, deviceID, alias)
+}
+
+func (a *App) GetDeviceAlias(deviceID string) (string, error) {
+	return store.GetDeviceAlias(a.db, deviceID)
 }
 
 func (a *App) ListAuthorizedDevices() ([]store.AuthorizedDevice, error) {

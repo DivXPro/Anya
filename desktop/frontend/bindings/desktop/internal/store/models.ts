@@ -12,6 +12,7 @@ export interface Agent {
 export interface AuthorizedDevice {
     "device_id": string;
     "name": string;
+    "alias": string;
     "authorized_at": string;
     "last_seen_ip": string;
     "last_seen_at": string;
