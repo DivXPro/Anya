@@ -71,7 +71,7 @@ void setup() {
         ESP_LOGI("main", "bound reconnect to %s:%d", boundIP.c_str(), boundPort);
         ws_set_hello_data(deviceID, deviceName, boundID.c_str(), "");
         ws_connect(boundIP.c_str(), boundPort);
-        state_transition(State::PAIRING);
+        state_transition(State::IDLE);
     } else {
         mdns_start_advertise(deviceID, deviceName);
         advertising = true;
@@ -120,18 +120,25 @@ void loop() {
     }
 
     // WebSocket lifecycle: hello is sent from the onEvent(CONNECTED) callback.
-    // When the connection drops, go back to advertising so the desktop can find us again.
     // When connected, stop advertising to avoid showing up in the desktop scan list.
+    // When disconnected, keep advertising so a desktop can find us, but show:
+    //   - "Ready to pair" if this device has never been paired,
+    //   - "Disconnected" if it has a bound desktop but cannot reach it.
     if (ws_connected()) {
         if (advertising) {
             mdns_stop_advertise();
             advertising = false;
         }
-    } else {
-        if (!advertising && wifi_connected()) {
+    } else if (wifi_connected()) {
+        if (!advertising) {
             mdns_start_advertise(deviceID, deviceName);
             advertising = true;
+        }
+        String boundID = wifi_get_bound_desktop_id();
+        if (boundID.length() == 0) {
             state_transition(State::PAIR_READY);
+        } else if (state_current() != State::IDLE) {
+            state_transition(State::IDLE);
         }
     }
 
