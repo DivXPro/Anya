@@ -210,7 +210,8 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 				audioBuffer = nil
 				dev.SendText(gateway.StatusMessage("listening"))
 			case "audio_end":
-				dev.SendText(gateway.StatusMessage("processing"))
+				// Don't switch to processing immediately; let the device show
+				// "Sending..." until we actually start processing.
 				go a.processVoiceRequest(dev, sessionID, audioBuffer)
 			case "button":
 				log.Printf("[elf] button: %s", evt.Action)
@@ -232,6 +233,8 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 }
 
 func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, audioData []byte) {
+	dev.SendText(gateway.StatusMessage("processing"))
+
 	// 1. STT
 	text, err := a.stt.Transcribe(audioData, "pcm")
 	if err != nil {

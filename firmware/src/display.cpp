@@ -91,13 +91,17 @@ static void drawMascot() {
     }
 
     int x = (M5.Display.width() - MASCOT_IMG_W) / 2;
-    M5.Display.pushImage(x, MASCOT_Y, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[mascotFrame]);
+    // M5StickC S3 ST7789 expects RGB565 big-endian; ESP32 is little-endian,
+    // so swap bytes when pushing the embedded image data.
+    M5.Display.pushImage(x, MASCOT_Y, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[mascotFrame], true);
 }
 
 // ── Prompt ───────────────────────────────────────────────────
 static const int PROMPT_Y = MASCOT_Y + MASCOT_IMG_H + MASCOT_GAP;
 
 static void centerPrint(const char* s, int y) {
+    // Reset datum to top-left so setCursor positions the text top-left corner.
+    M5.Display.setTextDatum(textdatum_t::top_left);
     int w = (int)strlen(s) * 6;
     M5.Display.setCursor((M5.Display.width() - w) / 2, y);
     M5.Display.print(s);
