@@ -103,6 +103,11 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	a.wsServer.OnDeviceDisconnect(a.handleDeviceDisconnect)
 	a.wsServer.OnPendingDevice(func(deviceID, deviceName string) {
 		log.Printf("[elf] pending device authorization: %s (%s)", deviceID, deviceName)
+		if err := a.AuthorizeDevice(deviceID); err != nil {
+			log.Printf("[elf] auto-authorize device %s error: %v", deviceID, err)
+		} else {
+			log.Printf("[elf] auto-authorized device %s", deviceID)
+		}
 	})
 	if err := a.wsServer.Start(); err != nil {
 		return fmt.Errorf("start ws server: %w", err)
