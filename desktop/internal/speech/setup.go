@@ -2,6 +2,7 @@ package speech
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -39,9 +40,11 @@ func EnsureAssets(dataDir string) (libDir, modelPath string, err error) {
 
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 		url := fmt.Sprintf("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/%s", DefaultModelName)
-		if err := download.GetModel(url, modelPath); err != nil {
+		log.Printf("[speech] downloading model %s...", DefaultModelName)
+		if err := downloadFile(url, modelPath); err != nil {
 			return "", "", fmt.Errorf("download model %s: %w", DefaultModelName, err)
 		}
+		log.Printf("[speech] model downloaded to %s", modelPath)
 	}
 
 	return libDir, modelPath, nil
