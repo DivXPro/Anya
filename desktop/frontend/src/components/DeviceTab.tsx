@@ -40,7 +40,7 @@ function DeviceTab() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>附近设备</CardTitle>
+              <CardTitle className="text-base">附近设备</CardTitle>
               <CardDescription>扫描并连接同一网络下的 StickC 设备</CardDescription>
             </div>
             <Button size="sm" onClick={scan} disabled={scanning} className="gap-2">

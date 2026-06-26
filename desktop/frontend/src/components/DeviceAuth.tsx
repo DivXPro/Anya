@@ -61,7 +61,7 @@ function DeviceAuth() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>授权设备</CardTitle>
+            <CardTitle className="text-base">授权设备</CardTitle>
             <CardDescription>管理已配对设备和别名</CardDescription>
           </div>
           {activeDevices.length > 0 && (
