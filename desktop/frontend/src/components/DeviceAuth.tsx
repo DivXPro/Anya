@@ -117,14 +117,14 @@ function DeviceAuth() {
               className="flex items-center justify-between border-b p-3 last:border-b-0"
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="group flex items-center gap-2">
                   <Wifi className="h-4 w-4 text-primary" />
                   <button
                     onClick={() => startEdit(d)}
-                    className="flex items-center gap-1 text-sm font-medium hover:text-muted-foreground"
+                    className="flex items-center gap-1.5 text-sm font-medium hover:text-muted-foreground"
                   >
                     {displayName(d)}
-                    <EditPencil className="h-3 w-3 text-muted-foreground" />
+                    <EditPencil className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                   </button>
                 </div>
                 <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">

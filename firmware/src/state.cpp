@@ -60,6 +60,7 @@ void state_transition(State s) {
         case State::PLAYING:
             break;
         case State::MENU:
+            disp_menu(agentName, 0, nullptr, 0, lastRssi, lastWifiConnected, lastWsConnected);
             break;
     }
     disp_status_bar(lastRssi, lastWifiConnected, lastWsConnected, agentName, status_ssid());

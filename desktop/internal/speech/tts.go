@@ -1,8 +1,10 @@
 package speech
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 )
@@ -29,6 +31,8 @@ func (e *EdgeTTS) Synthesize(text string) (<-chan []byte, error) {
 	)
 
 	ffmpeg := exec.Command("ffmpeg",
+		"-hide_banner",
+		"-loglevel", "error",
 		"-i", "pipe:0",
 		"-f", "s16le",
 		"-ar", "16000",
@@ -40,6 +44,11 @@ func (e *EdgeTTS) Synthesize(text string) (<-chan []byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tts stdout pipe: %w", err)
 	}
+	ttsStderr, err := tts.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("tts stderr pipe: %w", err)
+	}
+
 	ffmpeg.Stdin = ttsOut
 	ffmpegOut, err := ffmpeg.StdoutPipe()
 	if err != nil {
@@ -56,10 +65,24 @@ func (e *EdgeTTS) Synthesize(text string) (<-chan []byte, error) {
 	}
 
 	ch := make(chan []byte, 64)
+
+	var stderrBuf bytes.Buffer
+	go func() {
+		if _, err := io.Copy(&stderrBuf, ttsStderr); err != nil {
+			log.Printf("[edge-tts] stderr copy error: %v", err)
+		}
+	}()
+
 	go func() {
 		defer close(ch)
-		defer tts.Wait()
-		defer ffmpeg.Wait()
+		defer func() {
+			if err := tts.Wait(); err != nil {
+				log.Printf("[edge-tts] failed: %v: %s", err, stderrBuf.String())
+			}
+			if err := ffmpeg.Wait(); err != nil {
+				log.Printf("[ffmpeg] failed: %v", err)
+			}
+		}()
 
 		buf := make([]byte, 4096)
 		for {

@@ -16,8 +16,8 @@ static char deviceID[37];
 static char deviceName[32];
 static bool advertising = false;
 
-static const char* menuItems[] = {"Choose WiFi", "Repair"};
-static const int menuCount = 2;
+static const char* menuItems[] = {"Choose WiFi", "Repair", "Test Speaker", "Back"};
+static const int menuCount = 4;
 static int menuSelected = 0;
 static bool inMenu = false;
 
@@ -113,6 +113,18 @@ void setup() {
                     mdns_start_advertise(deviceID, deviceName);
                     advertising = true;
                 }
+            } else if (menuSelected == 2) {
+                // Test Speaker: play a 1kHz tone for 1 second
+                ESP_LOGI("main", "menu: test speaker");
+                audio_play_test_tone();
+                disp_playing("Playing test tone...", deviceName);
+                delay(1200);
+                state_transition(State::MENU);
+                disp_menu(deviceName, menuSelected, menuItems, menuCount, wifi_rssi(), wifi_connected(), ws_connected());
+            } else if (menuSelected == 3) {
+                // Back: return to normal idle screen
+                inMenu = false;
+                state_transition(State::IDLE);
             }
             return;
         }
@@ -147,7 +159,7 @@ void setup() {
         } else {
             menuSelected = (menuSelected + 1) % menuCount;
             ESP_LOGI("main", "menu next -> %d", menuSelected);
-            disp_menu(deviceName, menuSelected, menuItems, menuCount);
+            disp_menu(deviceName, menuSelected, menuItems, menuCount, wifi_rssi(), wifi_connected(), ws_connected());
         }
     });
 }
