@@ -39,39 +39,34 @@ function DeviceTab() {
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold">附近设备</h2>
-            <p className="text-xs text-muted-foreground">扫描并连接同一网络下的 StickC 设备</p>
-          </div>
+          <h2 className="text-base font-semibold">附近设备</h2>
           <Button size="sm" onClick={scan} disabled={scanning} className="gap-2">
             <Refresh className={`h-4 w-4 ${scanning ? 'animate-spin' : ''}`} />
             {scanning ? '扫描中...' : '扫描'}
           </Button>
         </div>
 
-        <div className="rounded-lg border bg-card p-2">
-          <div className="space-y-1">
-            {devices.length === 0 && !scanning && (
-              <div className="min-h-[80px]" />
-            )}
-            {devices.map((d) => (
-              <div
-                key={d.DeviceID}
-                className="flex items-center justify-between rounded-md border p-3"
-              >
-                <div className="flex items-center gap-3">
-                  <AntennaSignal className="h-4 w-4 text-primary" />
-                  <div>
-                    <p className="text-sm font-medium">{d.Name}</p>
-                    <p className="text-xs text-muted-foreground">{d.DeviceID.slice(-8)}</p>
-                  </div>
+        <div className="rounded-lg border bg-card">
+          {devices.length === 0 && !scanning && (
+            <div className="h-12" />
+          )}
+          {devices.map((d, idx) => (
+            <div
+              key={d.DeviceID}
+              className="flex items-center justify-between border-b p-3 last:border-b-0"
+            >
+              <div className="flex items-center gap-3">
+                <AntennaSignal className="h-4 w-4 text-primary" />
+                <div>
+                  <p className="text-sm font-medium">{d.Name}</p>
+                  <p className="text-xs text-muted-foreground">{d.DeviceID.slice(-8)}</p>
                 </div>
-                <Button size="sm" onClick={() => connect(d)}>
-                  连接
-                </Button>
               </div>
-            ))}
-          </div>
+              <Button size="sm" onClick={() => connect(d)}>
+                连接
+              </Button>
+            </div>
+          ))}
         </div>
       </div>
     </div>
