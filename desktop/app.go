@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"desktop/internal/acp"
@@ -34,6 +35,7 @@ type App struct {
 	router         *acp.Router
 	wsServer       *gateway.Server
 	stt            speech.STTEngine
+	sttMu          sync.RWMutex
 	tts            speech.TTSEngine
 	trayDeviceItem *application.MenuItem
 	trayAgentMenu  *application.Menu
@@ -80,26 +82,20 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	a.router.Register(adapters.NewClaudeAdapter())
 	a.router.Register(adapters.NewOpenCodeAdapter())
 
-	// 3. Init speech engines
-	sttLang, _ := store.GetSetting(a.db, "stt_language")
-	if sttLang == "" {
-		sttLang = "zh"
-	}
-	libDir, modelPath, err := speech.EnsureAssets(dataDir)
-	if err != nil {
-		return fmt.Errorf("ensure stt assets: %w", err)
-	}
-	a.stt, err = speech.NewBuckySTT(libDir, modelPath, sttLang)
-	if err != nil {
-		return fmt.Errorf("init stt: %w", err)
-	}
-
+	// 3. Init TTS immediately; load STT assets in the background so the UI
+	// can open before the large whisper model finishes downloading.
 	ttsVoice := "zh-CN-XiaoxiaoNeural"
 	ttsSpeed, _ := store.GetSetting(a.db, "tts_speed")
 	if ttsSpeed == "" {
 		ttsSpeed = "+0%"
 	}
 	a.tts = speech.NewEdgeTTS(ttsVoice, ttsSpeed)
+
+	sttLang, _ := store.GetSetting(a.db, "stt_language")
+	if sttLang == "" {
+		sttLang = "zh"
+	}
+	go a.loadSTTAssets(dataDir, sttLang)
 
 	// 4. Start WebSocket server with authorization
 	a.wsServer = gateway.NewServer(9876, a.db, a.desktopID)
@@ -149,6 +145,34 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 
 func (a *App) ScanDevices() ([]discovery.DiscoveredDevice, error) {
 	return discovery.ScanDevices()
+}
+
+// loadSTTAssets downloads the whisper.cpp library and model if needed, then
+// initializes the STT engine. It runs in the background so application startup
+// is not blocked by large downloads.
+func (a *App) loadSTTAssets(dataDir, lang string) {
+	log.Println("[elf] loading STT assets in background...")
+	libDir, modelPath, err := speech.EnsureAssets(dataDir)
+	if err != nil {
+		log.Printf("[elf] ensure stt assets error: %v", err)
+		return
+	}
+	stt, err := speech.NewBuckySTT(libDir, modelPath, lang)
+	if err != nil {
+		log.Printf("[elf] init stt error: %v", err)
+		return
+	}
+	a.sttMu.Lock()
+	a.stt = stt
+	a.sttMu.Unlock()
+	log.Println("[elf] STT ready")
+}
+
+// sttReady returns true if the STT engine has finished initializing.
+func (a *App) sttReady() bool {
+	a.sttMu.RLock()
+	defer a.sttMu.RUnlock()
+	return a.stt != nil
 }
 
 // ServiceShutdown is called by Wails v3 when the service is shutting down.
@@ -265,7 +289,17 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 	dev.SendText(gateway.StatusMessage("processing"))
 
 	// 1. STT
-	text, err := a.stt.Transcribe(audioData, "pcm")
+	if !a.sttReady() {
+		dev.SendText(gateway.SummaryMessage("语音模型加载中，请稍候"))
+		dev.SendText(gateway.StatusMessage("connected"))
+		return
+	}
+
+	a.sttMu.RLock()
+	stt := a.stt
+	a.sttMu.RUnlock()
+
+	text, err := stt.Transcribe(audioData, "pcm")
 	if err != nil {
 		dev.SendText(gateway.SummaryMessage("语音识别失败"))
 		return
