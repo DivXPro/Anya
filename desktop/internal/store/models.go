@@ -23,5 +23,6 @@ type Agent struct {
 	Name    string  `json:"name"`
 	Command string  `json:"command"`
 	Enabled bool    `json:"enabled"`
+	Version *string `json:"version"`
 	Config  *string `json:"config"`
 }

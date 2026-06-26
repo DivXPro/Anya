@@ -170,6 +170,15 @@ func (a *App) refreshAgentAvailability() error {
 	for _, ag := range agents {
 		available := isCommandAvailable(ag.Command)
 		availability[ag.ID] = available
+
+		version := getCommandVersion(ag.Command)
+		if version == "" {
+			version = ag.ID
+		}
+		if err := store.UpdateAgentVersion(a.db, ag.ID, version); err != nil {
+			return fmt.Errorf("update agent version %s: %w", ag.ID, err)
+		}
+
 		if ag.Enabled {
 			currentEnabled = ag.ID
 		}
@@ -206,6 +215,27 @@ func isCommandAvailable(command string) bool {
 		return false
 	}
 	return true
+}
+
+// getCommandVersion runs `<exe> --version` and returns the first non-empty line
+// of output. If the command fails or produces no output, it returns an empty string.
+func getCommandVersion(command string) string {
+	name := strings.Fields(command)[0]
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, "--version")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	for _, line := range lines {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 // loadSTTAssets downloads the whisper.cpp library and model if needed, then

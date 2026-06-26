@@ -53,7 +53,7 @@ function AgentTab() {
               </div>
               <div>
                 <p className="text-sm font-medium">{agent.name}</p>
-                <p className="text-xs text-muted-foreground">{agent.id}</p>
+                <p className="text-xs text-muted-foreground">{agent.version || agent.id}</p>
               </div>
             </div>
             {agent.enabled ? (

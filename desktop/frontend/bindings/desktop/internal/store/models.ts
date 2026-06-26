@@ -6,6 +6,7 @@ export interface Agent {
     "name": string;
     "command": string;
     "enabled": boolean;
+    "version": string | null;
     "config": string | null;
 }
 

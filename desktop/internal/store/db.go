@@ -110,6 +110,10 @@ func backfillMigrations(db *sql.DB) error {
 			name: "003_device_alias.sql",
 			done: func(db *sql.DB) bool { return columnExists(db, "authorized_devices", "alias") },
 		},
+		{
+			name: "004_agent_version.sql",
+			done: func(db *sql.DB) bool { return columnExists(db, "agents", "version") },
+		},
 	}
 	for _, c := range checks {
 		var alreadyApplied int
