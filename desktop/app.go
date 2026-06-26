@@ -47,6 +47,7 @@ type App struct {
 	trayQuitItem    *application.MenuItem
 	trayDeviceName  string
 	trayUILanguage  string
+	kimiModel       string
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
@@ -163,6 +164,13 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	a.router.Register(adapters.NewClaudeAdapter())
 	a.router.Register(adapters.NewOpenCodeAdapter())
 
+	kimiAPIKey, _ := store.GetSetting(a.db, "kimi_api_key")
+	a.kimiModel, _ = store.GetSetting(a.db, "kimi_model")
+	if a.kimiModel == "" {
+		a.kimiModel = "moonshot-v1-8k"
+	}
+	a.router.Register(adapters.NewKimiAdapter(kimiAPIKey, a.kimiModel))
+
 	// 2.1 Scan which agent commands are installed and enable the first available one.
 	// This also ensures only one agent is marked as enabled at startup.
 	if err := a.refreshAgentAvailability(); err != nil {
@@ -264,7 +272,13 @@ func (a *App) refreshAgentAvailability() error {
 			}
 		}
 
-		available := isCommandAvailable(command)
+		var available bool
+		if ag.ID == "kimi" {
+			key, _ := store.GetSetting(a.db, "kimi_api_key")
+			available = key != ""
+		} else {
+			available = isCommandAvailable(command)
+		}
 		if ag.Enabled != available {
 			if err := store.UpdateAgentEnabled(a.db, ag.ID, available); err != nil {
 				return fmt.Errorf("update agent availability %s: %w", ag.ID, err)
@@ -272,6 +286,9 @@ func (a *App) refreshAgentAvailability() error {
 		}
 
 		version := getCommandVersion(command)
+		if ag.ID == "kimi" {
+			version = a.kimiModel
+		}
 		if version == "" {
 			version = ag.ID
 		}

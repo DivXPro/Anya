@@ -40,6 +40,14 @@
       "speedSlow": "慢速",
       "speedNormal": "正常",
       "speedFast": "快速"
+    },
+    "agent": {
+      "title": "AI Agent",
+      "kimiApiKey": "Kimi API Key",
+      "kimiModel": "Kimi 模型",
+      "model8k": "moonshot-v1-8k",
+      "model32k": "moonshot-v1-32k",
+      "model128k": "moonshot-v1-128k"
     }
   },
   "device": {

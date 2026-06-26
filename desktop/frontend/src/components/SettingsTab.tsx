@@ -4,6 +4,7 @@ import { App } from '../../bindings/desktop';
 import type { DownloadProgress } from '../../bindings/desktop/internal/speech/models';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -189,6 +190,36 @@ function SettingsTab() {
                 <SelectItem value="-20%">{t('settings.tts.speedSlow')}</SelectItem>
                 <SelectItem value="+0%">{t('settings.tts.speedNormal')}</SelectItem>
                 <SelectItem value="+20%">{t('settings.tts.speedFast')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold">{t('settings.agent.title')}</h2>
+        <div className="rounded-lg border bg-card">
+          <div className="space-y-2 border-b p-3">
+            <Label htmlFor="kimi-api-key">{t('settings.agent.kimiApiKey')}</Label>
+            <Input
+              id="kimi-api-key"
+              type="password"
+              value={settings.kimi_api_key || ''}
+              placeholder="sk-..."
+              onChange={(e) => updateSetting('kimi_api_key', e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-3">
+            <Label>{t('settings.agent.kimiModel')}</Label>
+            <Select value={settings.kimi_model || 'moonshot-v1-8k'} onValueChange={(v) => updateSetting('kimi_model', v)}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="moonshot-v1-8k">{t('settings.agent.model8k')}</SelectItem>
+                <SelectItem value="moonshot-v1-32k">{t('settings.agent.model32k')}</SelectItem>
+                <SelectItem value="moonshot-v1-128k">{t('settings.agent.model128k')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
