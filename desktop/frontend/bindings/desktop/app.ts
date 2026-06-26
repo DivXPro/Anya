@@ -39,6 +39,14 @@ export function ConnectToDevice(deviceIP: string, devicePort: number, deviceID: 
     return $Call.ByID(1376679050, deviceIP, devicePort, deviceID, deviceName);
 }
 
+/**
+ * GetActiveAgent returns the currently enabled agent. If no agent is enabled,
+ * it falls back to the first configured agent.
+ */
+export function GetActiveAgent(): $CancellablePromise<store$0.Agent> {
+    return $Call.ByID(2970561674);
+}
+
 export function GetDeviceAlias(deviceID: string): $CancellablePromise<string> {
     return $Call.ByID(1475520567, deviceID);
 }

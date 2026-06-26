@@ -522,6 +522,24 @@ func (a *App) ListAgents() ([]store.Agent, error) {
 	return store.ListAgents(a.db)
 }
 
+// GetActiveAgent returns the currently enabled agent. If no agent is enabled,
+// it falls back to the first configured agent.
+func (a *App) GetActiveAgent() (store.Agent, error) {
+	agents, err := store.ListAgents(a.db)
+	if err != nil {
+		return store.Agent{}, err
+	}
+	for _, ag := range agents {
+		if ag.Enabled {
+			return ag, nil
+		}
+	}
+	if len(agents) > 0 {
+		return agents[0], nil
+	}
+	return store.Agent{}, fmt.Errorf("no agents configured")
+}
+
 func (a *App) UpdateAgent(agent store.Agent) error {
 	if err := store.UpdateAgent(a.db, &agent); err != nil {
 		return err
