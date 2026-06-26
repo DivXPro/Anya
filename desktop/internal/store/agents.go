@@ -45,3 +45,20 @@ func InsertAgent(db *sql.DB, a *Agent) error {
 	)
 	return err
 }
+
+func UpdateAgentEnabled(db *sql.DB, id string, enabled bool) error {
+	_, err := db.Exec("UPDATE agents SET enabled = ? WHERE id = ?", boolToInt(enabled), id)
+	return err
+}
+
+func DisableAllAgents(db *sql.DB) error {
+	_, err := db.Exec("UPDATE agents SET enabled = 0")
+	return err
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}

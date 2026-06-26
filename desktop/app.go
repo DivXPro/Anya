@@ -9,7 +9,9 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -82,6 +84,12 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	a.router.Register(adapters.NewClaudeAdapter())
 	a.router.Register(adapters.NewOpenCodeAdapter())
 
+	// 2.1 Scan which agent commands are installed and enable the first available one.
+	// This also ensures only one agent is marked as enabled at startup.
+	if err := a.refreshAgentAvailability(); err != nil {
+		log.Printf("[elf] refresh agent availability error: %v", err)
+	}
+
 	// 3. Init TTS immediately; load STT assets in the background so the UI
 	// can open before the large whisper model finishes downloading.
 	ttsVoice := "zh-CN-XiaoxiaoNeural"
@@ -145,6 +153,59 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 
 func (a *App) ScanDevices() ([]discovery.DiscoveredDevice, error) {
 	return discovery.ScanDevices()
+}
+
+// refreshAgentAvailability checks which agent commands are installed on this
+// machine. It keeps the currently enabled agent if it is still available,
+// otherwise it selects the first available one. If no agent is available,
+// all agents are disabled.
+func (a *App) refreshAgentAvailability() error {
+	agents, err := store.ListAgents(a.db)
+	if err != nil {
+		return fmt.Errorf("list agents: %w", err)
+	}
+
+	availability := make(map[string]bool, len(agents))
+	var currentEnabled, firstAvailable string
+	for _, ag := range agents {
+		available := isCommandAvailable(ag.Command)
+		availability[ag.ID] = available
+		if ag.Enabled {
+			currentEnabled = ag.ID
+		}
+		if available && firstAvailable == "" {
+			firstAvailable = ag.ID
+		}
+	}
+
+	switch {
+	case currentEnabled != "" && availability[currentEnabled]:
+		// Keep the user's current choice.
+		log.Printf("[elf] keeping active agent: %s", currentEnabled)
+	case firstAvailable != "":
+		if err := a.SelectAgent(firstAvailable); err != nil {
+			return fmt.Errorf("select first available agent: %w", err)
+		}
+		log.Printf("[elf] active agent: %s", firstAvailable)
+	default:
+		if err := store.DisableAllAgents(a.db); err != nil {
+			return fmt.Errorf("disable all agents: %w", err)
+		}
+		log.Println("[elf] no agent command found; agents disabled")
+	}
+
+	a.refreshTrayAgentMenu()
+	return nil
+}
+
+// isCommandAvailable reports whether the executable referenced by command
+// (the first whitespace-separated token) exists in PATH.
+func isCommandAvailable(command string) bool {
+	name := strings.Fields(command)[0]
+	if _, err := exec.LookPath(name); err != nil {
+		return false
+	}
+	return true
 }
 
 // loadSTTAssets downloads the whisper.cpp library and model if needed, then

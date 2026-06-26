@@ -33,8 +33,8 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 INSERT OR IGNORE INTO agents (id, name, command, enabled) VALUES
-    ('claude-code', 'Claude Code', 'claude --acp', 1),
-    ('opencode', 'OpenCode', 'opencode acp', 1);
+    ('claude-code', 'Claude Code', 'claude --acp', 0),
+    ('opencode', 'OpenCode', 'opencode acp', 0);
 
 INSERT OR IGNORE INTO settings (key, value) VALUES
     ('stt_engine', 'whisper'),
