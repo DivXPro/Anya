@@ -80,6 +80,7 @@ void state_force_idle() {
     connected = false;
     lastWifiConnected = false;
     lastWsConnected = false;
+    audio_stop_recording();
     current = State::IDLE;
     disp_idle(agentName, false);
     disp_status_bar(lastRssi, false, false, agentName, status_ssid());

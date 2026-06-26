@@ -79,6 +79,10 @@ void setup() {
     }
 
     btn_on_ptt_press([]() {
+        if (!ws_connected()) {
+            ESP_LOGI("main", "PTT press ignored: not connected");
+            return;
+        }
         ESP_LOGI("main", "PTT press -> LISTENING");
         state_transition(State::LISTENING);
         audio_start_recording();
@@ -86,6 +90,10 @@ void setup() {
     });
 
     btn_on_ptt_release([]() {
+        if (!ws_connected()) {
+            ESP_LOGI("main", "PTT release ignored: not connected");
+            return;
+        }
         ESP_LOGI("main", "PTT release -> SENDING");
         audio_stop_recording();
         protocol_send_audio_end();

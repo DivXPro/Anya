@@ -149,7 +149,7 @@ void disp_idle(const char* agent, bool connected) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, connected, agent);
     drawMascot();
-    drawPrompt("Click to speak", nullptr);
+    drawPrompt(connected ? "Click to speak" : "Disconnect", nullptr);
 }
 
 void disp_listening(const char* agent) {
