@@ -10,6 +10,7 @@ type DeviceInfo struct {
 type DeviceAdapter interface {
 	Info() DeviceInfo
 	SetDeviceID(id string)
+	SetDeviceName(name string)
 	SendText(msg DeviceMessage) error
 	SendBinary(data []byte) error
 	ReceiveEvent() (<-chan DeviceEvent, error)

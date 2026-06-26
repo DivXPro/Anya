@@ -42,8 +42,9 @@ func newLoopbackAdapter(ws *websocket.Conn) DeviceAdapter {
 	return a
 }
 
-func (a *loopbackAdapter) SetDeviceID(id string) {}
-func (a *loopbackAdapter) Info() DeviceInfo       { return DeviceInfo{ID: "loopback", Model: "test"} }
+func (a *loopbackAdapter) SetDeviceID(id string)     {}
+func (a *loopbackAdapter) SetDeviceName(name string) {}
+func (a *loopbackAdapter) Info() DeviceInfo          { return DeviceInfo{ID: "loopback", Model: "test"} }
 func (a *loopbackAdapter) SendText(msg DeviceMessage) error {
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -51,11 +52,11 @@ func (a *loopbackAdapter) SendText(msg DeviceMessage) error {
 	}
 	return a.conn.WriteMessage(websocket.TextMessage, data)
 }
-func (a *loopbackAdapter) SendBinary(data []byte) error { return nil }
+func (a *loopbackAdapter) SendBinary(data []byte) error              { return nil }
 func (a *loopbackAdapter) ReceiveEvent() (<-chan DeviceEvent, error) { return a.textIn, nil }
-func (a *loopbackAdapter) ReceiveBinary() (<-chan []byte, error)    { return nil, nil }
-func (a *loopbackAdapter) OnDisconnect() <-chan struct{}     { return a.disconnect }
-func (a *loopbackAdapter) Close() error                      { return a.conn.Close() }
+func (a *loopbackAdapter) ReceiveBinary() (<-chan []byte, error)     { return nil, nil }
+func (a *loopbackAdapter) OnDisconnect() <-chan struct{}             { return a.disconnect }
+func (a *loopbackAdapter) Close() error                              { return a.conn.Close() }
 
 func TestServerHelloHandshake(t *testing.T) {
 	dir := t.TempDir()

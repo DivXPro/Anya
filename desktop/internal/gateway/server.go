@@ -50,9 +50,9 @@ func NewServer(port int, db *sql.DB, desktopID string) *Server {
 		pendingNames:  make(map[string]string),
 		pendingTokens: make(map[string]string),
 		upgrader: websocket.Upgrader{
-			CheckOrigin:      func(r *http.Request) bool { return true },
-			ReadBufferSize:   4096,
-			WriteBufferSize:  4096,
+			CheckOrigin:       func(r *http.Request) bool { return true },
+			ReadBufferSize:    4096,
+			WriteBufferSize:   4096,
 			EnableCompression: false,
 		},
 	}
@@ -174,6 +174,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		deviceName, _ := evt.Payload["name"].(string)
 		boundDesktopID, _ := evt.Payload["bound_desktop_id"].(string)
 		adapter.SetDeviceID(deviceID)
+		adapter.SetDeviceName(deviceName)
 
 		if boundDesktopID != "" && boundDesktopID != s.desktopID {
 			log.Printf("[gateway] device %s is bound to another desktop %s", deviceID, boundDesktopID)

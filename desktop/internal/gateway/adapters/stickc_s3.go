@@ -30,6 +30,14 @@ func (a *StickCS3Adapter) SetDeviceID(id string) {
 	a.info.ID = id
 }
 
+func (a *StickCS3Adapter) SetDeviceName(name string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if name != "" {
+		a.info.Name = name
+	}
+}
+
 func NewStickCS3Adapter(ws *websocket.Conn) gateway.DeviceAdapter {
 	a := &StickCS3Adapter{
 		conn: ws,
