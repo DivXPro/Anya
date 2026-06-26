@@ -79,12 +79,14 @@ void setup() {
     }
 
     btn_on_ptt_press([]() {
+        ESP_LOGI("main", "PTT press -> LISTENING");
         state_transition(State::LISTENING);
         audio_start_recording();
         protocol_send_audio_start();
     });
 
     btn_on_ptt_release([]() {
+        ESP_LOGI("main", "PTT release -> SENDING");
         audio_stop_recording();
         protocol_send_audio_end();
         state_transition(State::SENDING);

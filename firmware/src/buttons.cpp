@@ -1,5 +1,6 @@
 #include "buttons.h"
 #include <M5Unified.h>
+#include <esp_log.h>
 
 static ButtonCallback pttPressCb = nullptr;
 static ButtonCallback pttReleaseCb = nullptr;
@@ -14,11 +15,16 @@ void btn_init() {
 void btn_loop() {
     M5.update();
 
-    if (M5.BtnA.wasPressed() && pttPressCb) {
+    bool pressed = M5.BtnA.wasPressed() || M5.BtnB.wasPressed();
+    bool released = M5.BtnA.wasReleased() || M5.BtnB.wasReleased();
+
+    if (pressed && pttPressCb) {
+        ESP_LOGI("btn", "PTT pressed");
         pttHeld = true;
         pttPressCb();
     }
-    if (M5.BtnA.wasReleased() && pttReleaseCb && pttHeld) {
+    if (released && pttReleaseCb && pttHeld) {
+        ESP_LOGI("btn", "PTT released");
         pttHeld = false;
         pttReleaseCb();
     }
