@@ -11,9 +11,6 @@ var firmwareBin []byte
 //go:embed assets/version.txt
 var firmwareVersionText string
 
-//go:embed assets/esptool.py
-var esptoolScript []byte
-
 // EmbeddedFirmwareSize returns the size of the embedded firmware binary.
 func EmbeddedFirmwareSize() int {
 	return len(firmwareBin)
@@ -36,14 +33,4 @@ func EmbeddedFirmwareVersion() string {
 		return "0.0.0-dev"
 	}
 	return v
-}
-
-// EsptoolScript returns the embedded esptool.py script bytes.
-func EsptoolScript() []byte {
-	return esptoolScript
-}
-
-// HasEsptoolScript reports whether a non-empty esptool.py script is embedded.
-func HasEsptoolScript() bool {
-	return len(esptoolScript) > 0
 }

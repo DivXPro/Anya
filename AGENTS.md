@@ -20,7 +20,7 @@ No root build system exists yet. Use module commands once paths exist:
 - `cd firmware && pio run`: compile firmware with PlatformIO.
 - `sqlite3 ~/.elf/elf.db "SELECT count(*) FROM messages"`: inspect smoke-test data.
 
-The desktop app can flash the embedded firmware to an M5StickC S3 via Settings > Device Firmware. It requires `esptool.py` (`pip install esptool`) and a USB-connected device.
+The desktop app can flash the embedded firmware to an M5StickC S3 via Settings > Device Firmware using the built-in pure-Go flasher. Only a USB-connected device is required.
 
 If you add a package manager or Makefile, document root commands here.
 

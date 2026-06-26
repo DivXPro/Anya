@@ -1,19 +1,12 @@
 package firmware
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
-	"strconv"
-	"strings"
 	"sync"
-	"syscall"
 	"time"
+
+	"tinygo.org/x/espflasher/pkg/espflasher"
 )
 
 // Manager handles a single firmware flash operation.
@@ -55,8 +48,8 @@ func (m *Manager) setProgress(stage FlashStage, percent int, message string) {
 	}
 }
 
-// Flash writes the embedded firmware to the given serial port using esptool.
-// It blocks until the operation completes or is cancelled.
+// Flash writes the embedded firmware to the given serial port using the pure-Go
+// espflasher library. It blocks until the operation completes or is cancelled.
 func (m *Manager) Flash(port string) error {
 	m.mu.Lock()
 	if m.running {
@@ -68,7 +61,7 @@ func (m *Manager) Flash(port string) error {
 		return fmt.Errorf("no firmware binary embedded")
 	}
 	m.running = true
-	m.progress = FlashProgress{Running: true, Stage: StageDetecting, Percent: 0, Message: "starting"}
+	m.progress = FlashProgress{Running: true, Stage: StageDetecting, Percent: 0, Message: "connecting"}
 	m.mu.Unlock()
 
 	defer func() {
@@ -78,76 +71,75 @@ func (m *Manager) Flash(port string) error {
 		m.mu.Unlock()
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), flashTimeout)
 	m.cancel = cancel
 	defer func() { m.cancel = nil }()
 
-	// Prepare a temporary directory containing the firmware binary and the
-	// embedded esptool.py script so the user does not need to install esptool.
-	tmpDir, err := os.MkdirTemp("", "elf-firmware-*")
+	opts := espflasher.DefaultOptions()
+	opts.ChipType = espflasher.ChipESP32S3
+	opts.BaudRate = 115200
+	opts.FlashBaudRate = 460800
+	opts.ConnectAttempts = 7
+	opts.Compress = true
+	opts.FlashMode = "dio"
+	opts.FlashFreq = "80m"
+	opts.FlashSize = "8MB"
+	opts.Logger = &progressLogger{m: m}
+
+	m.setProgress(StageDetecting, 0, fmt.Sprintf("opening %s", port))
+	flasher, err := espflasher.New(port, opts)
 	if err != nil {
-		m.setProgress(StageError, 0, fmt.Sprintf("create temp dir: %v", err))
-		return fmt.Errorf("create temp dir: %w", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	binPath := filepath.Join(tmpDir, "firmware.bin")
-	if err := os.WriteFile(binPath, EmbeddedFirmware(), 0644); err != nil {
-		m.setProgress(StageError, 0, fmt.Sprintf("write firmware file: %v", err))
-		return fmt.Errorf("write firmware file: %w", err)
-	}
-
-	esptool, args, err := buildEsptoolCommand(ctx, tmpDir, port)
-	if err != nil {
-		m.setProgress(StageError, 0, err.Error())
-		return err
-	}
-
-	fullArgs := append(args, binPath)
-	cmd := exec.CommandContext(ctx, esptool, fullArgs...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		m.setProgress(StageError, 0, fmt.Sprintf("stdout pipe: %v", err))
-		return fmt.Errorf("stdout pipe: %w", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		m.setProgress(StageError, 0, fmt.Sprintf("stderr pipe: %v", err))
-		return fmt.Errorf("stderr pipe: %w", err)
-	}
-
-	m.setProgress(StageDetecting, 0, fmt.Sprintf("connecting to %s", port))
-
-	if err := cmd.Start(); err != nil {
-		m.setProgress(StageError, 0, fmt.Sprintf("start esptool: %v", err))
-		return fmt.Errorf("start esptool: %w", err)
-	}
-
-	output := &limitedBuffer{limit: 4096}
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		m.scanOutput(stdout, output)
-	}()
-	go func() {
-		defer wg.Done()
-		m.scanOutput(stderr, output)
-	}()
-
-	if err := cmd.Wait(); err != nil {
-		wg.Wait()
 		if ctx.Err() == context.Canceled {
-			m.setProgress(StageCancelled, m.Progress().Percent, "cancelled by user")
+			m.setProgress(StageCancelled, 0, "cancelled by user")
 			return fmt.Errorf("cancelled")
 		}
-		msg := fmt.Sprintf("esptool failed: %v\n%s", err, output.String())
-		m.setProgress(StageError, m.Progress().Percent, msg)
-		return fmt.Errorf("esptool failed: %w\n%s", err, output.String())
+		m.setProgress(StageError, 0, fmt.Sprintf("open port: %v", err))
+		return fmt.Errorf("open port: %w", err)
 	}
-	wg.Wait()
+	defer flasher.Close()
+
+	m.setProgress(StageDetecting, 5, fmt.Sprintf("connected to %s", flasher.ChipName()))
+
+	// PlatformIO produces an app image that belongs at offset 0x10000 in the
+	// default partition table.
+	const appOffset = 0x10000
+	fw := EmbeddedFirmware()
+	m.setProgress(StageWriting, 10, fmt.Sprintf("flashing %d bytes", len(fw)))
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- flasher.FlashImage(fw, appOffset, func(current, total int) {
+			if total <= 0 {
+				return
+			}
+			pct := int(float64(current) / float64(total) * 80)
+			if pct > 80 {
+				pct = 80
+			}
+			m.setProgress(StageWriting, 10+pct, fmt.Sprintf("writing %d / %d bytes", current, total))
+		})
+	}()
+
+	select {
+	case err := <-errChan:
+		if err != nil {
+			if ctx.Err() == context.Canceled {
+				m.setProgress(StageCancelled, m.Progress().Percent, "cancelled by user")
+				return fmt.Errorf("cancelled")
+			}
+			m.setProgress(StageError, m.Progress().Percent, fmt.Sprintf("flash failed: %v", err))
+			return fmt.Errorf("flash failed: %w", err)
+		}
+	case <-ctx.Done():
+		m.setProgress(StageCancelled, m.Progress().Percent, "cancelled by user")
+		return fmt.Errorf("cancelled")
+	}
+
+	m.setProgress(StageVerifying, 95, "verifying")
+	// espflasher.FlashImage already verifies written data via MD5; we just
+	// report the final reset step.
+	m.setProgress(StageDone, 100, "resetting device")
+	flasher.Reset()
 
 	m.setProgress(StageDone, 100, "flash complete")
 	return nil
@@ -173,153 +165,19 @@ func (m *Manager) IsRunning() bool {
 	return m.running
 }
 
-func buildEsptoolCommand(ctx context.Context, tmpDir, port string) (string, []string, error) {
-	chip := "esp32s3"
-	baud := "460800"
-	args := []string{
-		"--chip", chip,
-		"--port", port,
-		"--baud", baud,
-		"--before", "default_reset",
-		"--after", "hard_reset",
-		"write_flash", "-z",
-		"--flash_mode", "dio",
-		"--flash_freq", "80m",
-		"--flash_size", "8MB",
-		"0x0",
-	}
-
-	python, err := findPython()
-	if err != nil {
-		return "", nil, err
-	}
-
-	// Prefer an embedded esptool.py copy so the user does not need to install it.
-	if HasEsptoolScript() {
-		esptoolPath := filepath.Join(tmpDir, "esptool.py")
-		if err := os.WriteFile(esptoolPath, EsptoolScript(), 0755); err != nil {
-			return "", nil, fmt.Errorf("write esptool.py: %w", err)
-		}
-		return python, append([]string{esptoolPath}, args...), nil
-	}
-
-	// Fall back to a system-installed esptool.py.
-	if _, err := exec.LookPath("esptool.py"); err == nil {
-		return "esptool.py", args, nil
-	}
-
-	// Last resort: python -m esptool.
-	if err := checkPythonModule(ctx, python, "esptool"); err == nil {
-		return python, append([]string{"-m", "esptool"}, args...), nil
-	}
-
-	return "", nil, fmt.Errorf("esptool not found. Install with: pip install esptool")
-}
-
-func findPython() (string, error) {
-	for _, name := range []string{"python3", "python", "py"} {
-		if path, err := exec.LookPath(name); err == nil {
-			return path, nil
-		}
-	}
-	return "", fmt.Errorf("python not found. Install Python to flash firmware")
-}
-
-func checkPythonModule(ctx context.Context, python, module string) error {
-	cmd := exec.CommandContext(ctx, python, "-c", fmt.Sprintf("import %s", module))
-	return cmd.Run()
-}
-
-var (
-	eraseRe   = regexp.MustCompile(`(?i)erasing flash|` + "`" + `erase` + "`" + `|Chip Erase`)
-	writeRe   = regexp.MustCompile(`(?i)writing @|Writing at|Compressed.*bytes to`)
-	verifyRe  = regexp.MustCompile(`(?i)verifying|Hash of data verified`)
-	percentRe = regexp.MustCompile(`\((\d+)\s*%\)`)
-	writePctRe = regexp.MustCompile(`Writing at\s+0x[0-9a-f]+\.\.\.\s*\((\d+)\s*%\)`)
-)
-
-func (m *Manager) scanOutput(r io.Reader, output *limitedBuffer) {
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		line := scanner.Text()
-		output.WriteString(line + "\n")
-		m.parseLine(line)
-	}
-}
-
-func (m *Manager) parseLine(line string) {
-	lower := strings.ToLower(line)
-
-	switch {
-	case strings.Contains(lower, "connecting"):
-		m.setProgress(StageDetecting, 0, line)
-	case strings.Contains(lower, "chip is"):
-		m.setProgress(StageDetecting, 0, line)
-	case eraseRe.MatchString(line):
-		m.setProgress(StageErasing, 5, line)
-	case writeRe.MatchString(line):
-		pct := extractPercent(line)
-		if pct >= 0 {
-			// Map writing progress from 5% to 90%.
-			mapped := 5 + int(float64(pct)*0.85)
-			if mapped > 90 {
-				mapped = 90
-			}
-			m.setProgress(StageWriting, mapped, line)
-		} else {
-			m.setProgress(StageWriting, m.Progress().Percent, line)
-		}
-	case verifyRe.MatchString(line):
-		m.setProgress(StageVerifying, 95, line)
-	case strings.Contains(lower, "hard resetting"):
-		m.setProgress(StageDone, 100, line)
-	case strings.Contains(lower, "failed") || strings.Contains(lower, "error"):
-		// Don't set stage to error here; let the command exit handle that.
-		m.setProgress(m.Progress().Stage, m.Progress().Percent, line)
-	}
-}
-
-func extractPercent(line string) int {
-	if m := writePctRe.FindStringSubmatch(line); len(m) > 1 {
-		if n, err := strconv.Atoi(m[1]); err == nil {
-			return n
-		}
-	}
-	if m := percentRe.FindStringSubmatch(line); len(m) > 1 {
-		if n, err := strconv.Atoi(m[1]); err == nil {
-			return n
-		}
-	}
-	return -1
-}
-
-// limitedBuffer keeps the last N bytes of output for error reports.
-type limitedBuffer struct {
-	buf   []byte
-	limit int
-	mu    sync.Mutex
-}
-
-func (b *limitedBuffer) WriteString(s string) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.buf = append(b.buf, []byte(s)...)
-	if len(b.buf) > b.limit {
-		b.buf = b.buf[len(b.buf)-b.limit:]
-	}
-}
-
-func (b *limitedBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return string(b.buf)
-}
-
-// FindEsptool returns the resolved python executable path, or an error if python is not installed.
-// When an embedded esptool.py is present, no external esptool installation is required.
+// FindEsptool always returns nil error now because the flasher is pure Go.
+// The method is kept for frontend compatibility.
 func FindEsptool() (string, error) {
-	return findPython()
+	return "built-in", nil
 }
 
-// ShortFlashTimeout is the max duration for a flash operation.
-const ShortFlashTimeout = 5 * time.Minute
+// flashTimeout is the maximum duration for a flash operation.
+const flashTimeout = 5 * time.Minute
+
+type progressLogger struct {
+	m *Manager
+}
+
+func (l *progressLogger) Logf(format string, args ...interface{}) {
+	l.m.setProgress(l.m.Progress().Stage, l.m.Progress().Percent, fmt.Sprintf(format, args...))
+}
