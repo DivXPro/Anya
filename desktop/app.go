@@ -36,10 +36,15 @@ type App struct {
 	stt            speech.STTEngine
 	tts            speech.TTSEngine
 	trayDeviceItem *application.MenuItem
+	trayAgentMenu  *application.Menu
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
 	a.trayDeviceItem = item
+}
+
+func (a *App) SetTrayAgentMenu(menu *application.Menu) {
+	a.trayAgentMenu = menu
 }
 
 func NewApp() *App {
@@ -102,6 +107,9 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	if err := a.wsServer.Start(); err != nil {
 		return fmt.Errorf("start ws server: %w", err)
 	}
+
+	// Populate tray Agent submenu
+	a.refreshTrayAgentMenu()
 
 	// Background IP self-healing: auto-reconnect known devices
 	go a.autoReconnectKnownDevices(ctx)
@@ -442,7 +450,59 @@ func (a *App) ListAgents() ([]store.Agent, error) {
 }
 
 func (a *App) UpdateAgent(agent store.Agent) error {
-	return store.UpdateAgent(a.db, &agent)
+	if err := store.UpdateAgent(a.db, &agent); err != nil {
+		return err
+	}
+	a.refreshTrayAgentMenu()
+	return nil
+}
+
+// SelectAgent enables only the chosen agent and disables all others.
+func (a *App) SelectAgent(agentID string) error {
+	agents, err := store.ListAgents(a.db)
+	if err != nil {
+		return err
+	}
+	for _, ag := range agents {
+		enabled := ag.ID == agentID
+		if ag.Enabled != enabled {
+			ag.Enabled = enabled
+			if err := store.UpdateAgent(a.db, &ag); err != nil {
+				return err
+			}
+		}
+	}
+	a.refreshTrayAgentMenu()
+	return nil
+}
+
+// refreshTrayAgentMenu rebuilds the tray Agent submenu from the database.
+func (a *App) refreshTrayAgentMenu() {
+	if a.trayAgentMenu == nil || a.db == nil {
+		return
+	}
+	a.trayAgentMenu.Clear()
+
+	agents, err := store.ListAgents(a.db)
+	if err != nil {
+		log.Printf("[elf] list agents for tray error: %v", err)
+		return
+	}
+
+	for _, ag := range agents {
+		id := ag.ID
+		name := ag.Name
+		if name == "" {
+			name = id
+		}
+		item := a.trayAgentMenu.AddRadio(name, ag.Enabled)
+		item.OnClick(func(_ *application.Context) {
+			if err := a.SelectAgent(id); err != nil {
+				log.Printf("[elf] select agent %s error: %v", id, err)
+			}
+		})
+	}
+	a.trayAgentMenu.Update()
 }
 
 func (a *App) ListSessions(limit, offset int) ([]store.Session, error) {

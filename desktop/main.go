@@ -65,6 +65,11 @@ func main() {
 	deviceItem := menu.Add("未连接设备")
 	deviceItem.SetEnabled(false)
 	menu.AddSeparator()
+
+	// Agent submenu: shows available agents and lets the user pick the active one.
+	agentMenu := menu.AddSubmenu("Agent")
+	menu.AddSeparator()
+
 	menu.Add("打开 Elf").OnClick(func(_ *application.Context) {
 		mainWindow.Show()
 		mainWindow.Focus()
@@ -77,8 +82,9 @@ func main() {
 
 	systemTray.SetMenu(menu)
 
-	// Give App access to update device status
+	// Give App access to update tray menus
 	elfApp.SetTrayDeviceItem(deviceItem)
+	elfApp.SetTrayAgentMenu(agentMenu)
 
 	// Left-click → show menu
 	systemTray.OnClick(func() {

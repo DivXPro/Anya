@@ -68,8 +68,19 @@ export function ScanDevices(): $CancellablePromise<discovery$0.DiscoveredDevice[
     return $Call.ByID(752654171);
 }
 
+/**
+ * SelectAgent enables only the chosen agent and disables all others.
+ */
+export function SelectAgent(agentID: string): $CancellablePromise<void> {
+    return $Call.ByID(1605882214, agentID);
+}
+
 export function SetSetting(key: string, value: string): $CancellablePromise<void> {
     return $Call.ByID(4214292049, key, value);
+}
+
+export function SetTrayAgentMenu(menu: application$0.Menu | null): $CancellablePromise<void> {
+    return $Call.ByID(2881811, menu);
 }
 
 export function SetTrayDeviceItem(item: application$0.MenuItem | null): $CancellablePromise<void> {
