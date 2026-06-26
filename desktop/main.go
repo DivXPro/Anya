@@ -31,11 +31,11 @@ func main() {
 	// Main window — hidden initially, opened via menu
 	mainWindow := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:           "Elf",
-		Width:           420,
-		Height:          620,
+		Width:           960,
+		Height:          680,
 		URL:             "/",
-		MinWidth:        360,
-		MinHeight:       480,
+		MinWidth:        820,
+		MinHeight:       520,
 		Hidden:          true,
 		HideOnEscape:    true,
 		HideOnFocusLost: false,
