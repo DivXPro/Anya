@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ShieldCheck, ShieldX, Pencil, Check, X, Clock, Wifi } from 'lucide-react';
+import { ShieldCheck, ShieldXmark, EditPencil, Check, Xmark, Clock, Wifi } from 'iconoir-react';
 
 function DeviceAuth() {
   const [devices, setDevices] = useState<AuthorizedDevice[]>([]);
@@ -114,7 +114,7 @@ function DeviceAuth() {
                       <Check className="h-4 w-4" />
                     </Button>
                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={cancelEdit}>
-                      <X className="h-4 w-4" />
+                      <Xmark className="h-4 w-4" />
                     </Button>
                   </div>
                 ) : (
@@ -127,7 +127,7 @@ function DeviceAuth() {
                           className="flex items-center gap-1 text-sm font-medium hover:text-muted-foreground"
                         >
                           {displayName(d)}
-                          <Pencil className="h-3 w-3 text-muted-foreground" />
+                          <EditPencil className="h-3 w-3 text-muted-foreground" />
                         </button>
                       </div>
                       <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
@@ -144,7 +144,7 @@ function DeviceAuth() {
                       className="h-8 w-8 text-muted-foreground hover:text-destructive"
                       onClick={() => revoke(d.device_id)}
                     >
-                      <ShieldX className="h-4 w-4" />
+                      <ShieldXmark className="h-4 w-4" />
                     </Button>
                   </>
                 )}

@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { RefreshCw, Radio } from 'lucide-react';
+import { Refresh, AntennaSignal } from 'iconoir-react';
 import DeviceAuth from './DeviceAuth';
 
 function DeviceTab() {
@@ -68,7 +68,7 @@ function DeviceTab() {
               <CardDescription>扫描并连接同一网络下的 StickC 设备</CardDescription>
             </div>
             <Button size="sm" onClick={scan} disabled={scanning} className="gap-2">
-              <RefreshCw className={`h-4 w-4 ${scanning ? 'animate-spin' : ''}`} />
+              <Refresh className={`h-4 w-4 ${scanning ? 'animate-spin' : ''}`} />
               {scanning ? '扫描中...' : '扫描'}
             </Button>
           </div>
@@ -84,7 +84,7 @@ function DeviceTab() {
                 className="flex items-center justify-between rounded-lg border bg-card p-3"
               >
                 <div className="flex items-center gap-3">
-                  <Radio className="h-4 w-4 text-primary" />
+                  <AntennaSignal className="h-4 w-4 text-primary" />
                   <div>
                     <p className="text-sm font-medium">{d.Name}</p>
                     <p className="text-xs text-muted-foreground">{d.DeviceID.slice(-8)}</p>

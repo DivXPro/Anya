@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Search, MessageSquare, Calendar, User, Bot } from 'lucide-react';
+import { Search, ChatBubble, Calendar, User, BrainResearch } from 'iconoir-react';
 
 function HistoryTab() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -88,7 +88,7 @@ function HistoryTab() {
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                          <ChatBubble className="h-4 w-4 text-muted-foreground" />
                           <CardTitle className="text-sm font-medium">
                             {s.created_at.slice(11, 16)}
                           </CardTitle>
@@ -108,7 +108,7 @@ function HistoryTab() {
                                 {m.role === 'user' ? (
                                   <User className="h-4 w-4 text-primary" />
                                 ) : (
-                                  <Bot className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                  <BrainResearch className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                                 )}
                               </div>
                               <div className="flex-1">

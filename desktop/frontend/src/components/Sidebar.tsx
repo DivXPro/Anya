@@ -1,16 +1,16 @@
 import { cn } from '@/lib/utils';
 import type { Tab } from '@/App';
-import { Smartphone, Bot, History } from 'lucide-react';
+import { SmartphoneDevice, BrainResearch, ClockRotateRight } from 'iconoir-react';
 
 interface SidebarProps {
   active: Tab;
   onChange: (tab: Tab) => void;
 }
 
-const ITEMS: { key: Tab; label: string; icon: typeof Smartphone }[] = [
-  { key: 'device', label: '设备', icon: Smartphone },
-  { key: 'agent', label: 'Agent', icon: Bot },
-  { key: 'history', label: '历史', icon: History },
+const ITEMS: { key: Tab; label: string; icon: typeof SmartphoneDevice }[] = [
+  { key: 'device', label: '设备', icon: SmartphoneDevice },
+  { key: 'agent', label: 'Agent', icon: BrainResearch },
+  { key: 'history', label: '历史', icon: ClockRotateRight },
 ];
 
 export function Sidebar({ active, onChange }: SidebarProps) {
