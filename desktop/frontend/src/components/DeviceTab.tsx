@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { App } from '../../bindings/desktop';
 import type { DiscoveredDevice } from '../../bindings/desktop/internal/discovery/models';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Refresh, AntennaSignal } from 'iconoir-react';
 import DeviceAuth from './DeviceAuth';
@@ -38,25 +37,27 @@ function DeviceTab() {
 
       <DeviceAuth />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-base">附近设备</CardTitle>
-              <CardDescription>扫描并连接同一网络下的 StickC 设备</CardDescription>
-            </div>
-            <Button size="sm" onClick={scan} disabled={scanning} className="gap-2">
-              <Refresh className={`h-4 w-4 ${scanning ? 'animate-spin' : ''}`} />
-              {scanning ? '扫描中...' : '扫描'}
-            </Button>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold">附近设备</h2>
+            <p className="text-xs text-muted-foreground">扫描并连接同一网络下的 StickC 设备</p>
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
+          <Button size="sm" onClick={scan} disabled={scanning} className="gap-2">
+            <Refresh className={`h-4 w-4 ${scanning ? 'animate-spin' : ''}`} />
+            {scanning ? '扫描中...' : '扫描'}
+          </Button>
+        </div>
+
+        <div className="rounded-lg border bg-card p-2">
+          <div className="space-y-1">
+            {devices.length === 0 && !scanning && (
+              <div className="min-h-[80px]" />
+            )}
             {devices.map((d) => (
               <div
                 key={d.DeviceID}
-                className="flex items-center justify-between rounded-lg border bg-card p-3"
+                className="flex items-center justify-between rounded-md border p-3"
               >
                 <div className="flex items-center gap-3">
                   <AntennaSignal className="h-4 w-4 text-primary" />
@@ -71,8 +72,8 @@ function DeviceTab() {
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

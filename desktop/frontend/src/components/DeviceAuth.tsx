@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { App } from '../../bindings/desktop';
 import type { AuthorizedDevice } from '../../bindings/desktop/internal/store/models';
 import type { PendingDevice } from '../../bindings/desktop/internal/gateway/models';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -55,49 +54,48 @@ function DeviceAuth() {
   const displayName = (d: AuthorizedDevice) => d.alias || d.name || d.device_id.slice(-8);
 
   const activeDevices = devices.filter((d) => !d.revoked);
+  const showEmpty = activeDevices.length === 0 && pending.length === 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-base">授权设备</CardTitle>
-            <CardDescription>管理已配对设备和别名</CardDescription>
-          </div>
-          {activeDevices.length > 0 && (
-            <Badge variant="secondary">
-              {activeDevices.length} 台
-            </Badge>
-          )}
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold">授权设备</h2>
+          <p className="text-xs text-muted-foreground">管理已配对设备和别名</p>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {pending.map((p) => (
-          <div
-            key={p.device_id}
-            className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 p-3"
-          >
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <span className="text-sm">
-                新设备请求连接: <span className="font-medium">{p.name || p.device_id.slice(-8)}</span>
-              </span>
-            </div>
-            <Button size="sm" onClick={() => authorize(p.device_id)}>
-              授权
-            </Button>
-          </div>
-        ))}
+        {activeDevices.length > 0 && (
+          <Badge variant="secondary">{activeDevices.length} 台</Badge>
+        )}
+      </div>
 
-        <ScrollArea className="max-h-[260px] pr-2">
-          <div className="space-y-2">
-            {activeDevices.length === 0 && pending.length === 0 && (
-              <p className="text-sm text-muted-foreground">暂无授权设备</p>
+      <div className="rounded-lg border bg-card">
+        <ScrollArea className="h-[260px]">
+          <div className="space-y-1 p-2">
+            {pending.map((p) => (
+              <div
+                key={p.device_id}
+                className="flex items-center justify-between rounded-md border border-amber-500/30 bg-amber-500/10 p-3"
+              >
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <span className="text-sm">
+                    新设备请求连接: <span className="font-medium">{p.name || p.device_id.slice(-8)}</span>
+                  </span>
+                </div>
+                <Button size="sm" onClick={() => authorize(p.device_id)}>
+                  授权
+                </Button>
+              </div>
+            ))}
+
+            {showEmpty && (
+              <div className="h-full min-h-[80px]" />
             )}
+
             {activeDevices.map((d) => (
               <div
                 key={d.device_id}
-                className="flex items-center justify-between rounded-lg border bg-card p-3"
+                className="flex items-center justify-between rounded-md border p-3"
               >
                 {editing === d.device_id ? (
                   <div className="flex flex-1 items-center gap-2">
@@ -152,8 +150,8 @@ function DeviceAuth() {
             ))}
           </div>
         </ScrollArea>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
