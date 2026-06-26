@@ -199,3 +199,33 @@ void disp_error(const char* msg, const char* agent) {
     M5.Display.setCursor(4, PROMPT_Y);
     M5.Display.print(msg);
 }
+
+// ── Menu ──────────────────────────────────────────────────────
+void disp_menu(const char* agent, int selected, const char* const* items, int count) {
+    M5.Display.fillScreen(TFT_BLACK);
+    disp_status_bar(-1, true, false, agent);
+
+    // Mascot on the left
+    int mascotX = 8;
+    int mascotY = MASCOT_Y;
+    M5.Display.pushImage(mascotX, mascotY, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[mascotFrame], true);
+
+    // Menu on the right
+    int menuX = mascotX + MASCOT_IMG_W + 12;
+    int startY = STATUS_BAR_H + 24;
+    int lineH = 22;
+    M5.Display.setTextSize(1);
+
+    for (int i = 0; i < count; i++) {
+        int y = startY + i * lineH;
+        bool sel = (i == selected);
+        if (sel) {
+            M5.Display.fillRect(menuX - 2, y - 2, M5.Display.width() - menuX - 4, lineH, TFT_WHITE);
+            M5.Display.setTextColor(TFT_BLACK);
+        } else {
+            M5.Display.setTextColor(TFT_WHITE);
+        }
+        M5.Display.setTextDatum(textdatum_t::middle_left);
+        M5.Display.drawString(items[i], menuX, y + lineH / 2);
+    }
+}

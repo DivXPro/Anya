@@ -16,6 +16,11 @@ static char deviceID[37];
 static char deviceName[32];
 static bool advertising = false;
 
+static const char* menuItems[] = {"Choose WiFi", "Repair"};
+static const int menuCount = 2;
+static int menuSelected = 0;
+static bool inMenu = false;
+
 void init_device_identity() {
     Preferences prefs;
     prefs.begin("elf-device", false);
@@ -79,6 +84,38 @@ void setup() {
     }
 
     btn_on_ptt_press([]() {
+        if (inMenu) {
+            ESP_LOGI("main", "menu confirm: %s", menuItems[menuSelected]);
+            if (menuSelected == 0) {
+                // Choose WiFi: open captive portal to reconfigure network
+                inMenu = false;
+                state_transition(State::WIFI_SETUP);
+                if (wifi_portal_begin()) {
+                    state_transition(State::IDLE);
+                    // Reconnect to the bound desktop if available
+                    String boundID = wifi_get_bound_desktop_id();
+                    String boundIP = wifi_get_bound_desktop_ip();
+                    uint16_t boundPort = wifi_get_bound_desktop_port();
+                    if (boundIP.length() > 0) {
+                        ws_set_hello_data(deviceID, deviceName, boundID.c_str(), "");
+                        ws_connect(boundIP.c_str(), boundPort);
+                    }
+                } else {
+                    disp_error("WiFi setup failed", "Elf");
+                }
+            } else if (menuSelected == 1) {
+                // Repair: clear binding and start fresh advertising
+                inMenu = false;
+                wifi_clear_bound_desktop();
+                ws_disconnect();
+                state_transition(State::PAIR_READY);
+                if (!advertising) {
+                    mdns_start_advertise(deviceID, deviceName);
+                    advertising = true;
+                }
+            }
+            return;
+        }
         if (!ws_connected()) {
             ESP_LOGI("main", "PTT press ignored: not connected");
             return;
@@ -90,6 +127,7 @@ void setup() {
     });
 
     btn_on_ptt_release([]() {
+        if (inMenu) return;
         if (!ws_connected()) {
             ESP_LOGI("main", "PTT release ignored: not connected");
             return;
@@ -99,6 +137,19 @@ void setup() {
         protocol_send_audio_end();
         state_transition(State::SENDING);
     });
+
+    btn_on_next([]() {
+        if (!inMenu) {
+            ESP_LOGI("main", "enter menu");
+            inMenu = true;
+            menuSelected = 0;
+            state_transition(State::MENU);
+        } else {
+            menuSelected = (menuSelected + 1) % menuCount;
+            ESP_LOGI("main", "menu next -> %d", menuSelected);
+            disp_menu(deviceName, menuSelected, menuItems, menuCount);
+        }
+    });
 }
 
 void loop() {
@@ -106,6 +157,11 @@ void loop() {
     btn_loop();
     ws_loop();
     http_loop();
+
+    // Keep menu flag consistent if something else (e.g. disconnect) changed the state.
+    if (inMenu && state_current() != State::MENU) {
+        inMenu = false;
+    }
 
     // Update status bar with live WiFi RSSI + WS connection (every ~1s)
     {
@@ -124,21 +180,24 @@ void loop() {
     // When disconnected, keep advertising so a desktop can find us, but show:
     //   - "Ready to pair" if this device has never been paired,
     //   - "Disconnected" if it has a bound desktop but cannot reach it.
-    if (ws_connected()) {
-        if (advertising) {
-            mdns_stop_advertise();
-            advertising = false;
-        }
-    } else if (wifi_connected()) {
-        if (!advertising) {
-            mdns_start_advertise(deviceID, deviceName);
-            advertising = true;
-        }
-        String boundID = wifi_get_bound_desktop_id();
-        if (boundID.length() == 0) {
-            state_transition(State::PAIR_READY);
-        } else if (state_current() != State::IDLE) {
-            state_transition(State::IDLE);
+    // Menu mode overrides automatic state transitions.
+    if (!inMenu) {
+        if (ws_connected()) {
+            if (advertising) {
+                mdns_stop_advertise();
+                advertising = false;
+            }
+        } else if (wifi_connected()) {
+            if (!advertising) {
+                mdns_start_advertise(deviceID, deviceName);
+                advertising = true;
+            }
+            String boundID = wifi_get_bound_desktop_id();
+            if (boundID.length() == 0) {
+                state_transition(State::PAIR_READY);
+            } else if (state_current() != State::IDLE) {
+                state_transition(State::IDLE);
+            }
         }
     }
 

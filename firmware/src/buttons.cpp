@@ -58,9 +58,10 @@ void btn_loop() {
         pttHeld = false;
         pttReleaseCb();
     }
-    if (confirmPressed && confirmCb) {
+    if (confirmPressed) {
         ESP_LOGI("btn", "confirm/next pressed");
-        confirmCb();
+        if (confirmCb) confirmCb();
+        else if (nextCb) nextCb();
     }
 }
 

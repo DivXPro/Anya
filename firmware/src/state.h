@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <cstddef>
 
-enum class State { WIFI_SETUP, WIFI_CONNECTING, PAIR_READY, PAIRING, IDLE, LISTENING, SENDING, PROCESSING, PLAYING };
+enum class State { WIFI_SETUP, WIFI_CONNECTING, PAIR_READY, PAIRING, IDLE, LISTENING, SENDING, PROCESSING, PLAYING, MENU };
 
 void state_init();
 void state_transition(State s);

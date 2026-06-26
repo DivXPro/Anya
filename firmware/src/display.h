@@ -14,3 +14,4 @@ void disp_sending(const char* agent);
 void disp_processing(const char* agent);
 void disp_playing(const char* summary, const char* agent);
 void disp_error(const char* msg, const char* agent);
+void disp_menu(const char* agent, int selected, const char* const* items, int count);
