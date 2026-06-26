@@ -47,7 +47,6 @@ type App struct {
 	trayQuitItem    *application.MenuItem
 	trayDeviceName  string
 	trayUILanguage  string
-	kimiModel       string
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
@@ -163,13 +162,9 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	a.router = acp.NewRouter()
 	a.router.Register(adapters.NewClaudeAdapter())
 	a.router.Register(adapters.NewOpenCodeAdapter())
-
-	kimiAPIKey, _ := store.GetSetting(a.db, "kimi_api_key")
-	a.kimiModel, _ = store.GetSetting(a.db, "kimi_model")
-	if a.kimiModel == "" {
-		a.kimiModel = "moonshot-v1-8k"
-	}
-	a.router.Register(adapters.NewKimiAdapter(kimiAPIKey, a.kimiModel))
+	a.router.Register(adapters.NewKimiAdapter())
+	a.router.Register(adapters.NewPiAdapter())
+	a.router.Register(adapters.NewHermesAdapter())
 
 	// 2.1 Scan which agent commands are installed and enable the first available one.
 	// This also ensures only one agent is marked as enabled at startup.
@@ -258,27 +253,29 @@ func (a *App) refreshAgentAvailability() error {
 		return fmt.Errorf("list agents: %w", err)
 	}
 
+	// Canonical commands for agents. These are normalized at startup so that
+	// historical database rows with old/wrong command strings still work.
+	expectedCommands := map[string]string{
+		"claude-code": "claude",
+		"opencode":    "opencode acp",
+		"kimi":        "kimi acp",
+		"hermes":      "hermes acp",
+		"pi":          "pi --mode rpc --no-session",
+	}
+
 	var currentSelected, firstAvailable string
 	selectedAvailable := false
 	for _, ag := range agents {
 		command := ag.Command
-		if ag.ID == "claude-code" {
-			command = "claude"
-			if command != ag.Command {
-				ag.Command = command
-				if err := store.UpdateAgent(a.db, &ag); err != nil {
-					return fmt.Errorf("update claude command: %w", err)
-				}
+		if expected, ok := expectedCommands[ag.ID]; ok && command != expected {
+			command = expected
+			ag.Command = command
+			if err := store.UpdateAgent(a.db, &ag); err != nil {
+				return fmt.Errorf("update %s command: %w", ag.ID, err)
 			}
 		}
 
-		var available bool
-		if ag.ID == "kimi" {
-			key, _ := store.GetSetting(a.db, "kimi_api_key")
-			available = key != ""
-		} else {
-			available = isCommandAvailable(command)
-		}
+		available := isCommandAvailable(command)
 		if ag.Enabled != available {
 			if err := store.UpdateAgentEnabled(a.db, ag.ID, available); err != nil {
 				return fmt.Errorf("update agent availability %s: %w", ag.ID, err)
@@ -286,9 +283,6 @@ func (a *App) refreshAgentAvailability() error {
 		}
 
 		version := getCommandVersion(command)
-		if ag.ID == "kimi" {
-			version = a.kimiModel
-		}
 		if version == "" {
 			version = ag.ID
 		}

@@ -10,12 +10,12 @@ import (
 	"desktop/internal/acp"
 )
 
-func TestKimiAdapterSendAndReceive(t *testing.T) {
-	if _, err := exec.LookPath("kimi"); err != nil {
-		t.Skip("kimi not installed")
+func TestPiAdapterSendAndReceive(t *testing.T) {
+	if _, err := exec.LookPath("pi"); err != nil {
+		t.Skip("pi not installed")
 	}
 
-	adapter := NewKimiAdapter()
+	adapter := NewPiAdapter()
 	defer adapter.Stop()
 
 	ch, err := adapter.Send("say hi", nil)
@@ -55,17 +55,17 @@ loop:
 	}
 
 	info := adapter.Info()
-	if info.ID != "kimi" {
+	if info.ID != "pi" {
 		t.Fatalf("unexpected adapter id: %s", info.ID)
 	}
 }
 
-func TestKimiAdapterLoadSession(t *testing.T) {
-	if _, err := exec.LookPath("kimi"); err != nil {
-		t.Skip("kimi not installed")
+func TestPiAdapterLoadSession(t *testing.T) {
+	if _, err := exec.LookPath("pi"); err != nil {
+		t.Skip("pi not installed")
 	}
 
-	adapter := NewKimiAdapter()
+	adapter := NewPiAdapter()
 	defer adapter.Stop()
 
 	ch1, err := adapter.Send("say hi", nil)
@@ -76,16 +76,13 @@ func TestKimiAdapterLoadSession(t *testing.T) {
 		t.Fatalf("first send stream: %v", err)
 	}
 
-	acpSessionID := adapter.CurrentSessionID()
-	if acpSessionID == "" {
-		t.Fatal("expected non-empty acp session id")
-	}
-
-	if err := adapter.LoadSession(acpSessionID, nil); err != nil {
+	// Pi --no-session mode does not persist sessions, so LoadSession just keeps
+	// the id locally for compatibility with the ACP session layer.
+	if err := adapter.LoadSession("session-pi-test", nil); err != nil {
 		t.Fatalf("load session: %v", err)
 	}
-	if adapter.CurrentSessionID() != acpSessionID {
-		t.Fatalf("expected session %s, got %s", acpSessionID, adapter.CurrentSessionID())
+	if adapter.CurrentSessionID() != "session-pi-test" {
+		t.Fatalf("expected session session-pi-test, got %s", adapter.CurrentSessionID())
 	}
 
 	ch, err := adapter.Send("say hi again", nil)
@@ -118,4 +115,4 @@ loop:
 	}
 }
 
-var _ acp.ACPAdapter = (*KimiAdapter)(nil)
+var _ acp.ACPAdapter = (*PiAdapter)(nil)

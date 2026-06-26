@@ -11,7 +11,7 @@ import (
 	"desktop/internal/acp"
 )
 
-type KimiAdapter struct {
+type HermesAdapter struct {
 	pm              *acp.ProcessManager
 	info            acp.AgentInfo
 	mu              sync.Mutex
@@ -26,25 +26,25 @@ type KimiAdapter struct {
 	lastPromptReqID int
 }
 
-func NewKimiAdapter() *KimiAdapter {
-	return &KimiAdapter{
+func NewHermesAdapter() *HermesAdapter {
+	return &HermesAdapter{
 		info: acp.AgentInfo{
-			ID:      "kimi",
-			Name:    "Kimi Code",
-			Command: "kimi acp",
+			ID:      "hermes",
+			Name:    "Hermes",
+			Command: "hermes acp",
 		},
-		pm:      acp.NewProcessManagerWithFraming("kimi acp", acp.NDJSONFraming),
+		pm:      acp.NewProcessManagerWithFraming("hermes acp", acp.NDJSONFraming),
 		pending: make(map[string]chan acp.StreamEvent),
 	}
 }
 
-func (a *KimiAdapter) ensureInit() error {
+func (a *HermesAdapter) ensureInit() error {
 	if a.initDone && a.sessionID != "" {
 		return nil
 	}
 	if !a.pm.IsRunning() {
 		if err := a.pm.Start(); err != nil {
-			return fmt.Errorf("start kimi: %w", err)
+			return fmt.Errorf("start hermes: %w", err)
 		}
 	}
 
@@ -66,11 +66,11 @@ func (a *KimiAdapter) ensureInit() error {
 	if err != nil {
 		return fmt.Errorf("acp initialize: %w", err)
 	}
-	log.Printf("[kimi] initialized: %v", initResp)
+	log.Printf("[hermes] initialized: %v", initResp)
 	a.initDone = true
 
 	if a.sessionID != "" {
-		log.Printf("[kimi] using loaded session: %s", a.sessionID)
+		log.Printf("[hermes] using loaded session: %s", a.sessionID)
 		return nil
 	}
 
@@ -85,13 +85,13 @@ func (a *KimiAdapter) ensureInit() error {
 	if sid, ok := sessResp["sessionId"].(string); ok {
 		a.sessionID = sid
 	} else {
-		log.Printf("[kimi] session/new unexpected response: %+v", sessResp)
+		log.Printf("[hermes] session/new unexpected response: %+v", sessResp)
 	}
-	log.Printf("[kimi] session created: %s", a.sessionID)
+	log.Printf("[hermes] session created: %s", a.sessionID)
 	return nil
 }
 
-func (a *KimiAdapter) Send(prompt string, history []acp.Message) (<-chan acp.StreamEvent, error) {
+func (a *HermesAdapter) Send(prompt string, history []acp.Message) (<-chan acp.StreamEvent, error) {
 	if err := a.ensureInit(); err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (a *KimiAdapter) Send(prompt string, history []acp.Message) (<-chan acp.Str
 	return ch, nil
 }
 
-func (a *KimiAdapter) LoadSession(acpSessionID string, history []acp.Message) error {
+func (a *HermesAdapter) LoadSession(acpSessionID string, history []acp.Message) error {
 	if err := a.ensureInit(); err != nil {
 		return err
 	}
@@ -142,22 +142,22 @@ func (a *KimiAdapter) LoadSession(acpSessionID string, history []acp.Message) er
 	} else {
 		a.sessionID = acpSessionID
 	}
-	log.Printf("[kimi] session loaded: %s", a.sessionID)
+	log.Printf("[hermes] session loaded: %s", a.sessionID)
 	return nil
 }
 
-func (a *KimiAdapter) CurrentSessionID() string {
+func (a *HermesAdapter) CurrentSessionID() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.sessionID
 }
 
-func (a *KimiAdapter) Info() acp.AgentInfo { return a.info }
+func (a *HermesAdapter) Info() acp.AgentInfo { return a.info }
 
-func (a *KimiAdapter) IsRunning() bool { return a.pm.IsRunning() }
-func (a *KimiAdapter) Stop() error     { return a.pm.Stop() }
+func (a *HermesAdapter) IsRunning() bool { return a.pm.IsRunning() }
+func (a *HermesAdapter) Stop() error     { return a.pm.Stop() }
 
-func (a *KimiAdapter) dispatchLoop(pm *acp.ProcessManager) {
+func (a *HermesAdapter) dispatchLoop(pm *acp.ProcessManager) {
 	defer func() {
 		a.dispatchMu.Lock()
 		a.dispatchRunning = false
@@ -275,7 +275,7 @@ func (a *KimiAdapter) dispatchLoop(pm *acp.ProcessManager) {
 	}
 }
 
-func (a *KimiAdapter) sendRequest(method string, params map[string]any) (map[string]any, error) {
+func (a *HermesAdapter) sendRequest(method string, params map[string]any) (map[string]any, error) {
 	a.mu.Lock()
 	a.reqID++
 	reqID := a.reqID
@@ -316,10 +316,10 @@ func (a *KimiAdapter) sendRequest(method string, params map[string]any) (map[str
 	}
 }
 
-var _ acp.ACPAdapter = (*KimiAdapter)(nil)
+var _ acp.ACPAdapter = (*HermesAdapter)(nil)
 
-// IsKimiCliInstalled reports whether the Kimi Code CLI is available on PATH.
-func IsKimiCliInstalled() bool {
-	_, err := exec.LookPath("kimi")
+// IsHermesCliInstalled reports whether the Hermes CLI is available on PATH.
+func IsHermesCliInstalled() bool {
+	_, err := exec.LookPath("hermes")
 	return err == nil
 }

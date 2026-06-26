@@ -11,6 +11,9 @@ var logosFS embed.FS
 var logoNames = map[string]string{
 	"claude-code": "claude.icns",
 	"opencode":    "opencode.icns",
+	"kimi":        "kimi.icns",
+	"pi":          "pi.icns",
+	"hermes":      "hermes.icns",
 }
 
 // AgentLogo returns the embedded logo bytes for the given agent id.

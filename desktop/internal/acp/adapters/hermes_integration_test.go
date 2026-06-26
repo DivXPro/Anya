@@ -10,12 +10,12 @@ import (
 	"desktop/internal/acp"
 )
 
-func TestKimiAdapterSendAndReceive(t *testing.T) {
-	if _, err := exec.LookPath("kimi"); err != nil {
-		t.Skip("kimi not installed")
+func TestHermesAdapterSendAndReceive(t *testing.T) {
+	if _, err := exec.LookPath("hermes"); err != nil {
+		t.Skip("hermes not installed")
 	}
 
-	adapter := NewKimiAdapter()
+	adapter := NewHermesAdapter()
 	defer adapter.Stop()
 
 	ch, err := adapter.Send("say hi", nil)
@@ -55,17 +55,17 @@ loop:
 	}
 
 	info := adapter.Info()
-	if info.ID != "kimi" {
+	if info.ID != "hermes" {
 		t.Fatalf("unexpected adapter id: %s", info.ID)
 	}
 }
 
-func TestKimiAdapterLoadSession(t *testing.T) {
-	if _, err := exec.LookPath("kimi"); err != nil {
-		t.Skip("kimi not installed")
+func TestHermesAdapterLoadSession(t *testing.T) {
+	if _, err := exec.LookPath("hermes"); err != nil {
+		t.Skip("hermes not installed")
 	}
 
-	adapter := NewKimiAdapter()
+	adapter := NewHermesAdapter()
 	defer adapter.Stop()
 
 	ch1, err := adapter.Send("say hi", nil)
@@ -118,4 +118,4 @@ loop:
 	}
 }
 
-var _ acp.ACPAdapter = (*KimiAdapter)(nil)
+var _ acp.ACPAdapter = (*HermesAdapter)(nil)
