@@ -52,6 +52,19 @@ if command -v pio &>/dev/null; then
         err "Firmware binary not found at $FIRMWARE_BIN"
         exit 1
     fi
+
+    # Download a standalone esptool.py so users do not need to install it.
+    ESPTOOL_URL="https://raw.githubusercontent.com/espressif/esptool/v3.3.3/esptool.py"
+    log "Downloading esptool.py..."
+    if command -v curl &>/dev/null; then
+        curl -fsSL "$ESPTOOL_URL" -o "$ASSETS_DIR/esptool.py"
+    elif command -v wget &>/dev/null; then
+        wget -q "$ESPTOOL_URL" -O "$ASSETS_DIR/esptool.py"
+    else
+        err "curl or wget required to download esptool.py"
+        exit 1
+    fi
+    log "esptool.py embedded ($(du -sh "$ASSETS_DIR/esptool.py" | cut -f1))"
 else
     warn "PlatformIO not found. Skipping firmware build; embedded firmware will be empty."
     warn "To include firmware, install PlatformIO: pip install platformio"

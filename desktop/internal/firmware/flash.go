@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -83,13 +82,8 @@ func (m *Manager) Flash(port string) error {
 	m.cancel = cancel
 	defer func() { m.cancel = nil }()
 
-	esptool, args, err := buildEsptoolCommand(port)
-	if err != nil {
-		m.setProgress(StageError, 0, err.Error())
-		return err
-	}
-
-	// Write the embedded firmware to a temporary file. esptool needs a file path.
+	// Prepare a temporary directory containing the firmware binary and the
+	// embedded esptool.py script so the user does not need to install esptool.
 	tmpDir, err := os.MkdirTemp("", "elf-firmware-*")
 	if err != nil {
 		m.setProgress(StageError, 0, fmt.Sprintf("create temp dir: %v", err))
@@ -101,6 +95,12 @@ func (m *Manager) Flash(port string) error {
 	if err := os.WriteFile(binPath, EmbeddedFirmware(), 0644); err != nil {
 		m.setProgress(StageError, 0, fmt.Sprintf("write firmware file: %v", err))
 		return fmt.Errorf("write firmware file: %w", err)
+	}
+
+	esptool, args, err := buildEsptoolCommand(ctx, tmpDir, port)
+	if err != nil {
+		m.setProgress(StageError, 0, err.Error())
+		return err
 	}
 
 	fullArgs := append(args, binPath)
@@ -173,7 +173,7 @@ func (m *Manager) IsRunning() bool {
 	return m.running
 }
 
-func buildEsptoolCommand(port string) (string, []string, error) {
+func buildEsptoolCommand(ctx context.Context, tmpDir, port string) (string, []string, error) {
 	chip := "esp32s3"
 	baud := "460800"
 	args := []string{
@@ -189,32 +189,45 @@ func buildEsptoolCommand(port string) (string, []string, error) {
 		"0x0",
 	}
 
-	if runtime.GOOS == "windows" {
-		// On Windows, esptool.py may be invoked via python -m esptool.
-		if _, err := exec.LookPath("esptool.py"); err == nil {
-			return "esptool.py", args, nil
-		}
-		if _, err := exec.LookPath("python"); err == nil {
-			return "python", append([]string{"-m", "esptool"}, args...), nil
-		}
-		if _, err := exec.LookPath("python3"); err == nil {
-			return "python3", append([]string{"-m", "esptool"}, args...), nil
-		}
-		return "", nil, fmt.Errorf("esptool not found. Install with: pip install esptool")
+	python, err := findPython()
+	if err != nil {
+		return "", nil, err
 	}
 
-	// macOS / Linux: prefer esptool.py, fall back to python -m esptool.
+	// Prefer an embedded esptool.py copy so the user does not need to install it.
+	if HasEsptoolScript() {
+		esptoolPath := filepath.Join(tmpDir, "esptool.py")
+		if err := os.WriteFile(esptoolPath, EsptoolScript(), 0755); err != nil {
+			return "", nil, fmt.Errorf("write esptool.py: %w", err)
+		}
+		return python, append([]string{esptoolPath}, args...), nil
+	}
+
+	// Fall back to a system-installed esptool.py.
 	if _, err := exec.LookPath("esptool.py"); err == nil {
 		return "esptool.py", args, nil
 	}
-	python := "python3"
-	if _, err := exec.LookPath("python3"); err != nil {
-		python = "python"
-		if _, err := exec.LookPath("python"); err != nil {
-			return "", nil, fmt.Errorf("esptool not found. Install with: pip install esptool")
+
+	// Last resort: python -m esptool.
+	if err := checkPythonModule(ctx, python, "esptool"); err == nil {
+		return python, append([]string{"-m", "esptool"}, args...), nil
+	}
+
+	return "", nil, fmt.Errorf("esptool not found. Install with: pip install esptool")
+}
+
+func findPython() (string, error) {
+	for _, name := range []string{"python3", "python", "py"} {
+		if path, err := exec.LookPath(name); err == nil {
+			return path, nil
 		}
 	}
-	return python, append([]string{"-m", "esptool"}, args...), nil
+	return "", fmt.Errorf("python not found. Install Python to flash firmware")
+}
+
+func checkPythonModule(ctx context.Context, python, module string) error {
+	cmd := exec.CommandContext(ctx, python, "-c", fmt.Sprintf("import %s", module))
+	return cmd.Run()
 }
 
 var (
@@ -302,10 +315,10 @@ func (b *limitedBuffer) String() string {
 	return string(b.buf)
 }
 
-// FindEsptool returns the resolved esptool command, or an error if not installed.
+// FindEsptool returns the resolved python executable path, or an error if python is not installed.
+// When an embedded esptool.py is present, no external esptool installation is required.
 func FindEsptool() (string, error) {
-	cmd, _, err := buildEsptoolCommand("/dev/null")
-	return cmd, err
+	return findPython()
 }
 
 // ShortFlashTimeout is the max duration for a flash operation.

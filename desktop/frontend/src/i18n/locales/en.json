@@ -55,7 +55,7 @@
       "confirmDesc": "This will overwrite the existing firmware on the device. Do not disconnect USB during flashing.",
       "success": "Flash successful",
       "failed": "Flash failed",
-      "esptoolNotFound": "esptool not found. Install with: pip install esptool",
+      "pythonNotFound": "Python not found. Please install Python to use firmware flashing.",
       "hintBoot": "If the device cannot connect, hold the BOOT button while plugging in USB."
     }
   },

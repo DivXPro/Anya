@@ -29,7 +29,7 @@ function SettingsTab() {
   const [selectedPort, setSelectedPort] = useState('');
   const [hasFirmware, setHasFirmware] = useState(false);
   const [firmwareVersion, setFirmwareVersion] = useState('');
-  const [esptoolFound, setEsptoolFound] = useState(true);
+  const [pythonFound, setPythonFound] = useState(true);
   const [flashProgress, setFlashProgress] = useState<FlashProgress>({
     running: false,
     stage: 'idle',
@@ -60,8 +60,8 @@ function SettingsTab() {
       .catch(() => {});
 
     App.FindEsptool()
-      .then(() => setEsptoolFound(true))
-      .catch(() => setEsptoolFound(false));
+      .then(() => setPythonFound(true))
+      .catch(() => setPythonFound(false));
 
     refreshPorts();
 
@@ -266,9 +266,9 @@ function SettingsTab() {
             </Badge>
           </div>
 
-          {!esptoolFound && (
+          {!pythonFound && (
             <div className="border-b p-3 text-sm text-amber-700 dark:text-amber-400">
-              {t('settings.firmware.esptoolNotFound')}
+              {t('settings.firmware.pythonNotFound')}
             </div>
           )}
 
@@ -313,7 +313,7 @@ function SettingsTab() {
                 <Button
                   size="sm"
                   onClick={startFlash}
-                  disabled={!hasFirmware || !selectedPort || !esptoolFound}
+                  disabled={!hasFirmware || !selectedPort || !pythonFound}
                 >
                   {t('settings.firmware.flash')}
                 </Button>
