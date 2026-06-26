@@ -59,7 +59,7 @@ function DeviceAuth() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">我们的设备</h2>
+        <h2 className="text-base font-semibold">我的设备</h2>
         {activeDevices.length > 0 && (
           <Badge variant="secondary">{activeDevices.length} 台</Badge>
         )}
