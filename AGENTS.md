@@ -14,10 +14,13 @@ Keep design decisions in specs and delivery steps in plans. Mirror the documente
 
 No root build system exists yet. Use module commands once paths exist:
 
-- `cd desktop && wails build`: build the desktop app.
+- `./build.sh`: build the desktop app and embed the latest firmware binary (requires PlatformIO for firmware).
+- `cd desktop && wails3 build`: build the desktop app only.
 - `cd desktop && go test ./... -count=1`: run Go tests.
 - `cd firmware && pio run`: compile firmware with PlatformIO.
 - `sqlite3 ~/.elf/elf.db "SELECT count(*) FROM messages"`: inspect smoke-test data.
+
+The desktop app can flash the embedded firmware to an M5StickC S3 via Settings > Device Firmware. It requires `esptool.py` (`pip install esptool`) and a USB-connected device.
 
 If you add a package manager or Makefile, document root commands here.
 

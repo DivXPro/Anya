@@ -12,6 +12,10 @@
 #include "protocol.h"
 #include "state.h"
 
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION "0.0.0-dev"
+#endif
+
 static char deviceID[37];
 static char deviceName[32];
 static bool advertising = false;
@@ -47,7 +51,7 @@ void init_device_identity() {
 void setup() {
     auto cfg = M5.config();
     M5.begin(cfg);
-    ESP_LOGI("elf", "firmware setup start");
+    ESP_LOGI("elf", "firmware setup start, version=%s", FIRMWARE_VERSION);
     init_device_identity();
 
     state_init();

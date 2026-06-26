@@ -40,6 +40,23 @@
       "speedSlow": "慢速",
       "speedNormal": "正常",
       "speedFast": "快速"
+    },
+    "firmware": {
+      "title": "设备固件",
+      "currentVersion": "当前版本",
+      "noFirmware": "未嵌入固件",
+      "selectPort": "选择串口",
+      "refreshPorts": "刷新",
+      "noPorts": "未检测到串口",
+      "flash": "烧录固件",
+      "flashing": "正在烧录...",
+      "cancel": "取消",
+      "confirmTitle": "确认烧录固件？",
+      "confirmDesc": "这将覆盖设备上的现有固件。烧录过程中请勿断开 USB 连接。",
+      "success": "烧录成功",
+      "failed": "烧录失败",
+      "esptoolNotFound": "未找到 esptool，请先安装：pip install esptool",
+      "hintBoot": "如果设备无法连接，请按住 BOOT 键再插入 USB。"
     }
   },
   "device": {

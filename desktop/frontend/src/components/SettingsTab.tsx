@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App } from '../../bindings/desktop';
 import type { DownloadProgress } from '../../bindings/desktop/internal/speech/models';
+import type { SerialPortInfo, FlashProgress } from '../../bindings/desktop/internal/firmware/models';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Language, DashboardSpeed, MicrophoneCheck, SunLight, HalfMoon } from 'iconoir-react';
+import { Language, DashboardSpeed, MicrophoneCheck, SunLight, HalfMoon, Usb } from 'iconoir-react';
 import { useAppSettings, type Theme } from '@/hooks/useAppSettings';
 
 function formatBytes(n: number): string {
@@ -23,6 +25,18 @@ function SettingsTab() {
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [sttReady, setSttReady] = useState(false);
   const [progress, setProgress] = useState<DownloadProgress>({ downloading: false, total: 0, downloaded: 0 });
+  const [ports, setPorts] = useState<SerialPortInfo[]>([]);
+  const [selectedPort, setSelectedPort] = useState('');
+  const [hasFirmware, setHasFirmware] = useState(false);
+  const [firmwareVersion, setFirmwareVersion] = useState('');
+  const [esptoolFound, setEsptoolFound] = useState(true);
+  const [flashProgress, setFlashProgress] = useState<FlashProgress>({
+    running: false,
+    stage: 'idle',
+    percent: 0,
+    message: '',
+    error: '',
+  });
 
   useEffect(() => {
     App.GetSettings()
@@ -37,6 +51,20 @@ function SettingsTab() {
       })
       .catch(() => {});
 
+    App.HasEmbeddedFirmware()
+      .then((v) => setHasFirmware(v))
+      .catch(() => {});
+
+    App.CurrentFirmwareVersion()
+      .then((v) => setFirmwareVersion(v))
+      .catch(() => {});
+
+    App.FindEsptool()
+      .then(() => setEsptoolFound(true))
+      .catch(() => setEsptoolFound(false));
+
+    refreshPorts();
+
     const poll = () => {
       App.STTReady()
         .then((ready) => setSttReady(ready))
@@ -44,11 +72,41 @@ function SettingsTab() {
       App.GetSTTDownloadProgress()
         .then((p) => setProgress(p))
         .catch(() => {});
+      App.GetFlashProgress()
+        .then((p) => setFlashProgress(p))
+        .catch(() => {});
     };
     poll();
     const timer = window.setInterval(poll, 500);
     return () => window.clearInterval(timer);
   }, []);
+
+  const refreshPorts = () => {
+    App.ListSerialPorts()
+      .then((list) => {
+        setPorts(list || []);
+        if (selectedPort === '' && list && list.length > 0) {
+          setSelectedPort(list[0].path);
+        }
+      })
+      .catch(() => {
+        setPorts([]);
+      });
+  };
+
+  const startFlash = async () => {
+    if (!selectedPort) return;
+    if (!window.confirm(t('settings.firmware.confirmDesc') || undefined)) return;
+    try {
+      await App.FlashFirmware(selectedPort);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const cancelFlash = () => {
+    App.CancelFlash().catch(console.error);
+  };
 
   const updateSetting = (key: string, value: string) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -195,7 +253,98 @@ function SettingsTab() {
         </div>
       </div>
 
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold">{t('settings.firmware.title')}</h2>
+        <div className="rounded-lg border bg-card">
+          <div className="flex items-center justify-between border-b p-3">
+            <Label className="flex items-center gap-2">
+              <Usb className="h-4 w-4 text-muted-foreground" />
+              {t('settings.firmware.currentVersion')}
+            </Label>
+            <Badge variant="secondary">
+              {hasFirmware ? firmwareVersion || 'unknown' : t('settings.firmware.noFirmware')}
+            </Badge>
+          </div>
 
+          {!esptoolFound && (
+            <div className="border-b p-3 text-sm text-amber-700 dark:text-amber-400">
+              {t('settings.firmware.esptoolNotFound')}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between border-b p-3">
+            <Label>{t('settings.firmware.selectPort')}</Label>
+            <div className="flex items-center gap-2">
+              <Select
+                value={selectedPort}
+                onValueChange={setSelectedPort}
+                disabled={flashProgress.running || ports.length === 0}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder={t('settings.firmware.noPorts')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {ports.map((p) => (
+                    <SelectItem key={p.path} value={p.path}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refreshPorts}
+                disabled={flashProgress.running}
+              >
+                {t('settings.firmware.refreshPorts')}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-3 p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">{t('settings.firmware.hintBoot')}</p>
+              {flashProgress.running ? (
+                <Button variant="secondary" size="sm" onClick={cancelFlash}>
+                  {t('settings.firmware.cancel')}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={startFlash}
+                  disabled={!hasFirmware || !selectedPort || !esptoolFound}
+                >
+                  {t('settings.firmware.flash')}
+                </Button>
+              )}
+            </div>
+
+            {flashProgress.running && (
+              <div className="space-y-1.5">
+                <Progress value={flashProgress.percent} />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{flashProgress.percent}%</span>
+                  <span className="truncate max-w-[280px]">{flashProgress.message}</span>
+                </div>
+              </div>
+            )}
+
+            {!flashProgress.running && flashProgress.stage === 'done' && (
+              <p className="text-sm text-emerald-700 dark:text-emerald-400">{t('settings.firmware.success')}</p>
+            )}
+
+            {!flashProgress.running && flashProgress.error && (
+              <div className="space-y-1">
+                <p className="text-sm text-red-700 dark:text-red-400">{t('settings.firmware.failed')}</p>
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-all">
+                  {flashProgress.error}
+                </pre>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

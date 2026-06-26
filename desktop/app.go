@@ -19,6 +19,7 @@ import (
 	"desktop/internal/acp/adapters"
 	logoassets "desktop/internal/assets"
 	"desktop/internal/discovery"
+	"desktop/internal/firmware"
 	"desktop/internal/gateway"
 	gatewayadapters "desktop/internal/gateway/adapters"
 	"desktop/internal/processor"
@@ -47,6 +48,7 @@ type App struct {
 	trayQuitItem    *application.MenuItem
 	trayDeviceName  string
 	trayUILanguage  string
+	flashMgr        *firmware.Manager
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
@@ -165,6 +167,9 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	a.router.Register(adapters.NewKimiAdapter())
 	a.router.Register(adapters.NewPiAdapter())
 	a.router.Register(adapters.NewHermesAdapter())
+
+	// 2.0 Init firmware flash manager
+	a.flashMgr = firmware.NewManager()
 
 	// 2.1 Scan which agent commands are installed and enable the first available one.
 	// This also ensures only one agent is marked as enabled at startup.
@@ -807,6 +812,51 @@ func (a *App) SetSetting(key, value string) error {
 
 func (a *App) ListAgents() ([]store.Agent, error) {
 	return store.ListAgents(a.db)
+}
+
+func (a *App) ListSerialPorts() ([]firmware.SerialPortInfo, error) {
+	return firmware.ListSerialPorts()
+}
+
+func (a *App) FlashFirmware(port string) error {
+	if a.flashMgr == nil {
+		return fmt.Errorf("firmware manager not initialized")
+	}
+	if a.flashMgr.IsRunning() {
+		return fmt.Errorf("flash already in progress")
+	}
+	go func() {
+		if err := a.flashMgr.Flash(port); err != nil {
+			log.Printf("[elf] flash firmware to %s error: %v", port, err)
+		}
+	}()
+	return nil
+}
+
+func (a *App) GetFlashProgress() firmware.FlashProgress {
+	if a.flashMgr == nil {
+		return firmware.FlashProgress{Stage: firmware.StageIdle}
+	}
+	return a.flashMgr.Progress()
+}
+
+func (a *App) CancelFlash() error {
+	if a.flashMgr == nil {
+		return nil
+	}
+	return a.flashMgr.Cancel()
+}
+
+func (a *App) HasEmbeddedFirmware() bool {
+	return firmware.HasEmbeddedFirmware()
+}
+
+func (a *App) CurrentFirmwareVersion() string {
+	return firmware.EmbeddedFirmwareVersion()
+}
+
+func (a *App) FindEsptool() (string, error) {
+	return firmware.FindEsptool()
 }
 
 func (a *App) UpdateAgent(agent store.Agent) error {

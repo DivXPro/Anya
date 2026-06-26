@@ -6,3 +6,6 @@ desktop/frontend/dist/
 .DS_Store
 firmware/.pio/
 firmware/.vscode/
+# Embedded firmware binary is rebuilt by build.sh; keep the placeholder only.
+desktop/internal/firmware/assets/firmware.bin
+desktop/internal/firmware/assets/version.txt

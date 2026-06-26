@@ -40,6 +40,23 @@
       "speedSlow": "Slow",
       "speedNormal": "Normal",
       "speedFast": "Fast"
+    },
+    "firmware": {
+      "title": "Device Firmware",
+      "currentVersion": "Current Version",
+      "noFirmware": "No firmware embedded",
+      "selectPort": "Select Serial Port",
+      "refreshPorts": "Refresh",
+      "noPorts": "No serial port detected",
+      "flash": "Flash Firmware",
+      "flashing": "Flashing...",
+      "cancel": "Cancel",
+      "confirmTitle": "Confirm Flash Firmware?",
+      "confirmDesc": "This will overwrite the existing firmware on the device. Do not disconnect USB during flashing.",
+      "success": "Flash successful",
+      "failed": "Flash failed",
+      "esptoolNotFound": "esptool not found. Install with: pip install esptool",
+      "hintBoot": "If the device cannot connect, hold the BOOT button while plugging in USB."
     }
   },
   "device": {
