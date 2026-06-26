@@ -78,7 +78,7 @@ function DeviceAuth() {
         <h2 className="text-base font-semibold">我的设备</h2>
       </div>
 
-      <ScrollArea className="h-[260px] rounded-lg border bg-card">
+      <ScrollArea className="min-h-[120px] max-h-[260px] rounded-lg border bg-card">
         <div>
           {totalRows === 0 && <div className="h-12" />}
 
