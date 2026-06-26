@@ -68,6 +68,13 @@ export function RevokeDevice(deviceID: string): $CancellablePromise<void> {
     return $Call.ByID(2622980785, deviceID);
 }
 
+/**
+ * STTReady exposes the STT initialization status to the frontend.
+ */
+export function STTReady(): $CancellablePromise<boolean> {
+    return $Call.ByID(664123937);
+}
+
 export function ScanDevices(): $CancellablePromise<discovery$0.DiscoveredDevice[] | null> {
     return $Call.ByID(752654171);
 }

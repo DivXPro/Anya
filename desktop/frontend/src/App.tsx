@@ -3,8 +3,9 @@ import { Sidebar } from '@/components/Sidebar';
 import DeviceTab from '@/components/DeviceTab';
 import AgentTab from '@/components/AgentTab';
 import HistoryTab from '@/components/HistoryTab';
+import SettingsTab from '@/components/SettingsTab';
 
-export type Tab = 'device' | 'agent' | 'history';
+export type Tab = 'device' | 'agent' | 'history' | 'settings';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('device');
@@ -17,6 +18,7 @@ function App() {
           {activeTab === 'device' && <DeviceTab />}
           {activeTab === 'agent' && <AgentTab />}
           {activeTab === 'history' && <HistoryTab />}
+          {activeTab === 'settings' && <SettingsTab />}
         </div>
       </main>
     </div>

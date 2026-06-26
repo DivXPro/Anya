@@ -175,6 +175,11 @@ func (a *App) sttReady() bool {
 	return a.stt != nil
 }
 
+// STTReady exposes the STT initialization status to the frontend.
+func (a *App) STTReady() bool {
+	return a.sttReady()
+}
+
 // ServiceShutdown is called by Wails v3 when the service is shutting down.
 func (a *App) ServiceShutdown() error {
 	log.Println("[elf] shutting down...")
