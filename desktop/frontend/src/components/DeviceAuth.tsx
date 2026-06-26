@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react';
 import { App } from '../../bindings/desktop';
 import type { AuthorizedDevice } from '../../bindings/desktop/internal/store/models';
 import type { PendingDevice } from '../../bindings/desktop/internal/gateway/models';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { ShieldCheck, ShieldX, Pencil, Check, X, Clock, Wifi } from 'lucide-react';
 
 function DeviceAuth() {
   const [devices, setDevices] = useState<AuthorizedDevice[]>([]);
@@ -10,8 +16,8 @@ function DeviceAuth() {
   const [editValue, setEditValue] = useState('');
 
   const refresh = () => {
-    App.ListAuthorizedDevices().then(v => setDevices(v || [])).catch(() => {});
-    App.ListPendingDevices().then(v => setPending(v || [])).catch(() => {});
+    App.ListAuthorizedDevices().then((v) => setDevices(v || [])).catch(() => {});
+    App.ListPendingDevices().then((v) => setPending(v || [])).catch(() => {});
   };
 
   useEffect(() => {
@@ -28,7 +34,7 @@ function DeviceAuth() {
   const saveAlias = async (deviceID: string) => {
     await App.SetDeviceAlias(deviceID, editValue.trim());
     setEditing(null);
-    App.ListAuthorizedDevices().then(v => setDevices(v || [])).catch(() => {});
+    App.ListAuthorizedDevices().then((v) => setDevices(v || [])).catch(() => {});
   };
 
   const cancelEdit = () => {
@@ -38,50 +44,117 @@ function DeviceAuth() {
 
   const authorize = async (id: string) => {
     await App.AuthorizeDevice(id);
-    App.ListPendingDevices().then(v => setPending(v || [])).catch(() => {});
-    App.ListAuthorizedDevices().then(v => setDevices(v || [])).catch(() => {});
+    refresh();
+  };
+
+  const revoke = async (id: string) => {
+    await App.RevokeDevice(id);
+    App.ListAuthorizedDevices().then((v) => setDevices(v || [])).catch(() => {});
   };
 
   const displayName = (d: AuthorizedDevice) => d.alias || d.name || d.device_id.slice(-8);
 
+  const activeDevices = devices.filter((d) => !d.revoked);
+
   return (
-    <section className="card">
-      <h3>授权设备</h3>
-      {pending.map(p => (
-        <div className="pending-alert" key={p.device_id}>
-          新设备请求连接: <code>{p.name || p.device_id.slice(-8)}</code>
-          <button onClick={() => authorize(p.device_id)}>授权</button>
-        </div>
-      ))}
-      {devices.filter(d => !d.revoked).map(d => (
-        <div key={d.device_id} className="device-row">
-          {editing === d.device_id ? (
-            <>
-              <input
-                value={editValue}
-                onChange={e => setEditValue(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') saveAlias(d.device_id);
-                  if (e.key === 'Escape') cancelEdit();
-                }}
-                autoFocus
-              />
-              <button onClick={() => saveAlias(d.device_id)}>保存</button>
-              <button onClick={cancelEdit}>取消</button>
-            </>
-          ) : (
-            <>
-              <span onClick={() => startEdit(d)} style={{ cursor: 'pointer' }}>
-                {displayName(d)}
-              </span>
-              <span className="time">{d.authorized_at}</span>
-              <span className="time">{d.last_seen_ip ? `Last seen ${d.last_seen_ip}` : 'Never seen'}</span>
-              <button onClick={() => { App.RevokeDevice(d.device_id); App.ListAuthorizedDevices().then(v => setDevices(v || [])).catch(() => {}); }}>撤销</button>
-            </>
+    <Card className="border-white/10 bg-[#2e2e2e]">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-white">授权设备</CardTitle>
+            <CardDescription className="text-white/50">管理已配对设备和别名</CardDescription>
+          </div>
+          {activeDevices.length > 0 && (
+            <Badge variant="secondary" className="bg-white/10 text-white">
+              {activeDevices.length} 台
+            </Badge>
           )}
         </div>
-      ))}
-    </section>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {pending.map((p) => (
+          <div
+            key={p.device_id}
+            className="flex items-center justify-between rounded-lg border border-amber-500/20 bg-amber-500/10 p-3"
+          >
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="h-4 w-4 text-amber-400" />
+              <span className="text-sm text-white">
+                新设备请求连接: <span className="font-medium">{p.name || p.device_id.slice(-8)}</span>
+              </span>
+            </div>
+            <Button size="sm" onClick={() => authorize(p.device_id)} className="bg-amber-500 text-black hover:bg-amber-400">
+              授权
+            </Button>
+          </div>
+        ))}
+
+        <ScrollArea className="max-h-[260px] pr-2">
+          <div className="space-y-2">
+            {activeDevices.length === 0 && pending.length === 0 && (
+              <p className="text-sm text-white/40">暂无授权设备</p>
+            )}
+            {activeDevices.map((d) => (
+              <div
+                key={d.device_id}
+                className="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 p-3"
+              >
+                {editing === d.device_id ? (
+                  <div className="flex flex-1 items-center gap-2">
+                    <Input
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveAlias(d.device_id);
+                        if (e.key === 'Escape') cancelEdit();
+                      }}
+                      autoFocus
+                      className="h-8 border-white/10 bg-white/10 text-white"
+                    />
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-white hover:bg-white/10" onClick={() => saveAlias(d.device_id)}>
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-white hover:bg-white/10" onClick={cancelEdit}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <Wifi className="h-4 w-4 text-emerald-400" />
+                        <button
+                          onClick={() => startEdit(d)}
+                          className="flex items-center gap-1 text-sm font-medium text-white hover:text-white/80"
+                        >
+                          {displayName(d)}
+                          <Pencil className="h-3 w-3 text-white/40" />
+                        </button>
+                      </div>
+                      <div className="mt-1 flex items-center gap-3 text-xs text-white/40">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {d.authorized_at}
+                        </span>
+                        {d.last_seen_ip && <span>Last seen {d.last_seen_ip}</span>}
+                      </div>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-white/40 hover:bg-red-500/10 hover:text-red-400"
+                      onClick={() => revoke(d.device_id)}
+                    >
+                      <ShieldX className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </CardContent>
+    </Card>
   );
 }
 
