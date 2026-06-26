@@ -17,6 +17,12 @@ func ListSerialPorts() ([]SerialPortInfo, error) {
 		return nil, err
 	}
 
+	// On macOS the same USB device often appears as both /dev/tty.* and /dev/cu.*.
+	// Prefer /dev/cu.* (callout) because /dev/tty.* may wait for carrier detect.
+	if runtime.GOOS == "darwin" {
+		paths = dedupDarwinPorts(paths)
+	}
+
 	var ports []SerialPortInfo
 	seen := map[string]bool{}
 	for _, p := range paths {
@@ -35,6 +41,28 @@ func ListSerialPorts() ([]SerialPortInfo, error) {
 
 	sort.Slice(ports, func(i, j int) bool { return ports[i].Path < ports[j].Path })
 	return ports, nil
+}
+
+// dedupDarwinPorts removes /dev/tty.X entries when a matching /dev/cu.X exists.
+func dedupDarwinPorts(paths []string) []string {
+	cuSet := map[string]bool{}
+	for _, p := range paths {
+		if strings.HasPrefix(p, "/dev/cu.") {
+			cuSet[p] = true
+		}
+	}
+
+	var out []string
+	for _, p := range paths {
+		if strings.HasPrefix(p, "/dev/tty.") {
+			cu := "/dev/cu." + strings.TrimPrefix(p, "/dev/tty.")
+			if cuSet[cu] {
+				continue
+			}
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 func isLikelyESP32Port(path string) bool {
