@@ -1,22 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { App } from '../../bindings/desktop';
 import type { DiscoveredDevice } from '../../bindings/desktop/internal/discovery/models';
-import type { Agent } from '../../bindings/desktop/internal/store/models';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Refresh, AntennaSignal, BrainResearch } from 'iconoir-react';
+import { Refresh, AntennaSignal } from 'iconoir-react';
 import DeviceAuth from './DeviceAuth';
 
 function DeviceTab() {
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
   const [scanning, setScanning] = useState(false);
-  const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
-
-  useEffect(() => {
-    App.GetActiveAgent()
-      .then((agent) => setActiveAgent(agent))
-      .catch(() => {});
-  }, []);
 
   const scan = async () => {
     setScanning(true);
@@ -41,15 +32,7 @@ function DeviceTab() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">设备</h1>
-        <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-          <span>扫描并管理连接的 Elf 设备</span>
-          {activeAgent && (
-            <Badge variant="secondary" className="gap-1 font-normal">
-              <BrainResearch className="h-3 w-3" />
-              {activeAgent.name}
-            </Badge>
-          )}
-        </div>
+        <p className="text-sm text-muted-foreground">扫描并管理连接的 Elf 设备</p>
       </div>
 
       <DeviceAuth />
@@ -67,7 +50,7 @@ function DeviceTab() {
           {devices.length === 0 && !scanning && (
             <div className="h-12" />
           )}
-          {devices.map((d) => (
+          {devices.map((d, idx) => (
             <div
               key={d.DeviceID}
               className="flex items-center justify-between border-b p-3 last:border-b-0"

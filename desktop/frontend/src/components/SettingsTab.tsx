@@ -147,8 +147,8 @@ function SettingsTab() {
         <CardContent className="space-y-5">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label htmlFor="tts-enabled">启用 TTS 语音播报</Label>
-              <p className="text-xs text-muted-foreground">将 Agent 的文本回复转为语音并通过设备播放</p>
+              <Label htmlFor="tts-enabled">启用语音播报</Label>
+              <p className="text-xs text-muted-foreground">Agent 回复时通过扬声器播放</p>
             </div>
             <Switch
               id="tts-enabled"
