@@ -1,22 +1,33 @@
-import { useEffect, useState } from 'react';
-import { App } from '../../bindings/desktop';
-import type { AuthorizedDevice } from '../../bindings/desktop/internal/store/models';
-import type { PendingDevice } from '../../bindings/desktop/internal/gateway/models';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { ShieldCheck, ShieldXmark, EditPencil, Check, Xmark, Clock, Wifi } from 'iconoir-react';
+import { useEffect, useState } from "react";
+import { App } from "../../bindings/desktop";
+import type { AuthorizedDevice } from "../../bindings/desktop/internal/store/models";
+import type { PendingDevice } from "../../bindings/desktop/internal/gateway/models";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  ShieldCheck,
+  Trash,
+  EditPencil,
+  Check,
+  Xmark,
+  Clock,
+  Wifi,
+} from "iconoir-react";
 
 function DeviceAuth() {
   const [devices, setDevices] = useState<AuthorizedDevice[]>([]);
   const [pending, setPending] = useState<PendingDevice[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
+  const [editValue, setEditValue] = useState("");
 
   const refresh = () => {
-    App.ListAuthorizedDevices().then((v) => setDevices(v || [])).catch(() => {});
-    App.ListPendingDevices().then((v) => setPending(v || [])).catch(() => {});
+    App.ListAuthorizedDevices()
+      .then((v) => setDevices(v || []))
+      .catch(() => {});
+    App.ListPendingDevices()
+      .then((v) => setPending(v || []))
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -27,18 +38,20 @@ function DeviceAuth() {
 
   const startEdit = (d: AuthorizedDevice) => {
     setEditing(d.device_id);
-    setEditValue(d.alias || d.name || '');
+    setEditValue(d.alias || d.name || "");
   };
 
   const saveAlias = async (deviceID: string) => {
     await App.SetDeviceAlias(deviceID, editValue.trim());
     setEditing(null);
-    App.ListAuthorizedDevices().then((v) => setDevices(v || [])).catch(() => {});
+    App.ListAuthorizedDevices()
+      .then((v) => setDevices(v || []))
+      .catch(() => {});
   };
 
   const cancelEdit = () => {
     setEditing(null);
-    setEditValue('');
+    setEditValue("");
   };
 
   const authorize = async (id: string) => {
@@ -48,10 +61,13 @@ function DeviceAuth() {
 
   const revoke = async (id: string) => {
     await App.RevokeDevice(id);
-    App.ListAuthorizedDevices().then((v) => setDevices(v || [])).catch(() => {});
+    App.ListAuthorizedDevices()
+      .then((v) => setDevices(v || []))
+      .catch(() => {});
   };
 
-  const displayName = (d: AuthorizedDevice) => d.alias || d.name || d.device_id.slice(-8);
+  const displayName = (d: AuthorizedDevice) =>
+    d.alias || d.name || d.device_id.slice(-8);
 
   const activeDevices = devices.filter((d) => !d.revoked);
   const totalRows = pending.length + activeDevices.length;
@@ -60,16 +76,11 @@ function DeviceAuth() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold">我的设备</h2>
-        {activeDevices.length > 0 && (
-          <Badge variant="secondary">{activeDevices.length} 台</Badge>
-        )}
       </div>
 
       <ScrollArea className="h-[260px] rounded-lg border bg-card">
         <div>
-          {totalRows === 0 && (
-            <div className="h-12" />
-          )}
+          {totalRows === 0 && <div className="h-12" />}
 
           {pending.map((p) => (
             <div
@@ -79,7 +90,10 @@ function DeviceAuth() {
               <div className="flex items-center gap-3">
                 <ShieldCheck className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                 <span className="text-sm">
-                  新设备请求连接: <span className="font-medium">{p.name || p.device_id.slice(-8)}</span>
+                  新设备请求连接:{" "}
+                  <span className="font-medium">
+                    {p.name || p.device_id.slice(-8)}
+                  </span>
                 </span>
               </div>
               <Button size="sm" onClick={() => authorize(p.device_id)}>
@@ -99,15 +113,25 @@ function DeviceAuth() {
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') saveAlias(d.device_id);
-                      if (e.key === 'Escape') cancelEdit();
+                      if (e.key === "Enter") saveAlias(d.device_id);
+                      if (e.key === "Escape") cancelEdit();
                     }}
                     autoFocus
                   />
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => saveAlias(d.device_id)}>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => saveAlias(d.device_id)}
+                  >
                     <Check className="h-4 w-4" />
                   </Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={cancelEdit}>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={cancelEdit}
+                  >
                     <Xmark className="h-4 w-4" />
                   </Button>
                 </div>
@@ -129,7 +153,6 @@ function DeviceAuth() {
                         <Clock className="h-3 w-3" />
                         {d.authorized_at}
                       </span>
-                      {d.last_seen_ip && <span>Last seen {d.last_seen_ip}</span>}
                     </div>
                   </div>
                   <Button
@@ -138,7 +161,7 @@ function DeviceAuth() {
                     className="h-8 w-8 text-muted-foreground hover:text-destructive"
                     onClick={() => revoke(d.device_id)}
                   >
-                    <ShieldXmark className="h-4 w-4" />
+                    <Trash className="h-4 w-4" />
                   </Button>
                 </>
               )}
