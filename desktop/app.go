@@ -85,11 +85,14 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	if sttLang == "" {
 		sttLang = "zh"
 	}
-	sttModelPath, _ := store.GetSetting(a.db, "stt_model_path")
-	if sttModelPath == "" {
-		sttModelPath = filepath.Join(dataDir, "models", "ggml-tiny.bin")
+	libDir, modelPath, err := speech.EnsureAssets(dataDir)
+	if err != nil {
+		return fmt.Errorf("ensure stt assets: %w", err)
 	}
-	a.stt = speech.NewWhisperCppSTT(sttModelPath, sttLang, "")
+	a.stt, err = speech.NewBuckySTT(libDir, modelPath, sttLang)
+	if err != nil {
+		return fmt.Errorf("init stt: %w", err)
+	}
 
 	ttsVoice := "zh-CN-XiaoxiaoNeural"
 	ttsSpeed, _ := store.GetSetting(a.db, "tts_speed")
