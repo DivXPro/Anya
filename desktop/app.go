@@ -85,7 +85,11 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	if sttLang == "" {
 		sttLang = "zh"
 	}
-	a.stt = speech.NewWhisperSTT("small", sttLang)
+	sttModelPath, _ := store.GetSetting(a.db, "stt_model_path")
+	if sttModelPath == "" {
+		sttModelPath = filepath.Join(dataDir, "models", "ggml-tiny.bin")
+	}
+	a.stt = speech.NewWhisperCppSTT(sttModelPath, sttLang, "")
 
 	ttsVoice := "zh-CN-XiaoxiaoNeural"
 	ttsSpeed, _ := store.GetSetting(a.db, "tts_speed")
