@@ -36,6 +36,8 @@ function DeviceTab() {
         <p className="text-sm text-muted-foreground">扫描并管理连接的 Elf 设备</p>
       </div>
 
+      <DeviceAuth />
+
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -50,9 +52,6 @@ function DeviceTab() {
           </div>
         </CardHeader>
         <CardContent>
-          {devices.length === 0 && !scanning && (
-            <p className="text-sm text-muted-foreground">未发现设备，请确保 StickC 已开机并在同一网络</p>
-          )}
           <div className="space-y-2">
             {devices.map((d) => (
               <div
@@ -74,8 +73,6 @@ function DeviceTab() {
           </div>
         </CardContent>
       </Card>
-
-      <DeviceAuth />
     </div>
   );
 }
