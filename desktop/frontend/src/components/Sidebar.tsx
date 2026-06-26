@@ -11,7 +11,7 @@ const ITEMS: { key: Tab; label: string; icon: typeof SmartphoneDevice }[] = [
   { key: 'device', label: '设备', icon: SmartphoneDevice },
   { key: 'agent', label: 'Agent', icon: BrainResearch },
   { key: 'history', label: '历史', icon: ClockRotateRight },
-  { key: 'settings', label: '设置', icon: Settings },
+  { key: 'settings', label: '语音服务', icon: Settings },
 ];
 
 export function Sidebar({ active, onChange }: SidebarProps) {

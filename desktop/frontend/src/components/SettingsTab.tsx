@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
 import { App } from '../../bindings/desktop';
 import type { DownloadProgress } from '../../bindings/desktop/internal/speech/models';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Microphone, Language, MessageText, DashboardSpeed, MicrophoneCheck } from 'iconoir-react';
+import { Language, DashboardSpeed, MicrophoneCheck } from 'iconoir-react';
 
 function formatBytes(n: number): string {
   if (n <= 0) return '0 B';
@@ -55,57 +53,53 @@ function SettingsTab() {
 
   const percent = progress.total > 0 ? Math.round((progress.downloaded / progress.total) * 100) : 0;
 
+  const modelStatusText = sttReady
+    ? '已加载，可识别语音'
+    : progress.downloading
+    ? ''
+    : '等待下载或加载模型...';
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">设置</h1>
-        <p className="text-sm text-muted-foreground">配置语音输入、播报与模型状态</p>
+        <h1 className="text-2xl font-semibold">语音服务</h1>
+        <p className="text-sm text-muted-foreground">配置语音识别与播报参数</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Microphone className="h-5 w-5 text-primary" />
-            <CardTitle>语音识别</CardTitle>
-          </div>
-          <CardDescription>本地 Whisper 语音转文字配置</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Language className="h-4 w-4 text-muted-foreground" />
-              识别语言
-            </Label>
-            <Select value={settings.stt_language || 'zh'} onValueChange={(v) => updateSetting('stt_language', v)}>
-              <SelectTrigger className="w-[240px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="zh">中文</SelectItem>
-                <SelectItem value="en">English</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              更改语言后，下一次启动时生效
-            </p>
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold">语音识别</h2>
+        <div className="rounded-lg border bg-card">
+          <div className="flex items-start justify-between border-b p-3">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Language className="h-4 w-4 text-muted-foreground" />
+                识别语言
+              </Label>
+              <Select value={settings.stt_language || 'zh'} onValueChange={(v) => updateSetting('stt_language', v)}>
+                <SelectTrigger className="w-[240px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="zh">中文</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                更改语言后，下一次启动时生效
+              </p>
+            </div>
           </div>
 
-          <Separator />
-
-          <div className="space-y-3">
+          <div className="space-y-3 p-3">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label className="flex items-center gap-2">
                   <MicrophoneCheck className="h-4 w-4 text-muted-foreground" />
                   语音模型
                 </Label>
-                <p className="text-xs text-muted-foreground">
-                  {sttReady
-                    ? '已加载，可识别语音'
-                    : progress.downloading
-                    ? '正在下载模型...'
-                    : '等待下载或加载模型...'}
-                </p>
+                {modelStatusText && (
+                  <p className="text-xs text-muted-foreground">{modelStatusText}</p>
+                )}
               </div>
               <Badge
                 variant="secondary"
@@ -133,22 +127,16 @@ function SettingsTab() {
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <MessageText className="h-5 w-5 text-primary" />
-            <CardTitle>语音播报</CardTitle>
-          </div>
-          <CardDescription>Edge TTS 文本转语音配置</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="flex items-center justify-between">
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold">语音播报</h2>
+        <div className="rounded-lg border bg-card">
+          <div className="flex items-center justify-between border-b p-3">
             <div className="space-y-0.5">
-              <Label htmlFor="tts-enabled">启用语音播报</Label>
-              <p className="text-xs text-muted-foreground">Agent 回复时通过扬声器播放</p>
+              <Label htmlFor="tts-enabled">启用 TTS 语音播报</Label>
+              <p className="text-xs text-muted-foreground">将 Agent 的文本回复转为语音并通过设备播放</p>
             </div>
             <Switch
               id="tts-enabled"
@@ -157,26 +145,26 @@ function SettingsTab() {
             />
           </div>
 
-          <Separator />
-
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <DashboardSpeed className="h-4 w-4 text-muted-foreground" />
-              播报语速
-            </Label>
-            <Select value={settings.tts_speed || '+0%'} onValueChange={(v) => updateSetting('tts_speed', v)}>
-              <SelectTrigger className="w-[240px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="-20%">慢速</SelectItem>
-                <SelectItem value="+0%">正常</SelectItem>
-                <SelectItem value="+20%">快速</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="p-3">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <DashboardSpeed className="h-4 w-4 text-muted-foreground" />
+                播报语速
+              </Label>
+              <Select value={settings.tts_speed || '+0%'} onValueChange={(v) => updateSetting('tts_speed', v)}>
+                <SelectTrigger className="w-[240px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="-20%">慢速</SelectItem>
+                  <SelectItem value="+0%">正常</SelectItem>
+                  <SelectItem value="+20%">快速</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
