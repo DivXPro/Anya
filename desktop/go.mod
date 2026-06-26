@@ -10,6 +10,7 @@ require (
 	github.com/hashicorp/mdns v1.0.7
 	github.com/wailsapp/wails/v3 v3.0.0-alpha2.106
 	modernc.org/sqlite v1.44.3
+	tinygo.org/x/espflasher v0.6.1
 )
 
 require (
@@ -107,5 +108,4 @@ require (
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	tinygo.org/x/espflasher v0.6.1 // indirect
 )

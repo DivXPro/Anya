@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App } from '../../bindings/desktop';
 import type { DownloadProgress } from '../../bindings/desktop/internal/speech/models';
+import { FlashStage } from '../../bindings/desktop/internal/firmware/models';
 import type { SerialPortInfo, FlashProgress } from '../../bindings/desktop/internal/firmware/models';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -31,7 +32,7 @@ function SettingsTab() {
   const [firmwareVersion, setFirmwareVersion] = useState('');
   const [flashProgress, setFlashProgress] = useState<FlashProgress>({
     running: false,
-    stage: 'idle',
+    stage: FlashStage.StageIdle,
     percent: 0,
     message: '',
     error: '',
@@ -319,7 +320,7 @@ function SettingsTab() {
               </div>
             )}
 
-            {!flashProgress.running && flashProgress.stage === 'done' && (
+            {!flashProgress.running && flashProgress.stage === FlashStage.StageDone && (
               <p className="text-sm text-emerald-700 dark:text-emerald-400">{t('settings.firmware.success')}</p>
             )}
 
