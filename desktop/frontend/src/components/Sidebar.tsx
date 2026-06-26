@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import type { Tab } from '@/App';
-import { SmartphoneDevice, BrainResearch, ClockRotateRight, Settings } from 'iconoir-react';
+import { SmartphoneDevice, BrainResearch, ClockRotateRight, Voice } from 'iconoir-react';
 
 interface SidebarProps {
   active: Tab;
@@ -11,7 +11,7 @@ const ITEMS: { key: Tab; label: string; icon: typeof SmartphoneDevice }[] = [
   { key: 'device', label: '设备', icon: SmartphoneDevice },
   { key: 'agent', label: 'Agent', icon: BrainResearch },
   { key: 'history', label: '历史', icon: ClockRotateRight },
-  { key: 'settings', label: '语音服务', icon: Settings },
+  { key: 'settings', label: '语音服务', icon: Voice },
 ];
 
 export function Sidebar({ active, onChange }: SidebarProps) {
