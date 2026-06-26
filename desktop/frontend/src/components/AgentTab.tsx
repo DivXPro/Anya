@@ -24,22 +24,22 @@ function AgentTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Agent</h1>
-        <p className="text-sm text-white/50">管理可用的 AI Agent 适配器</p>
+        <h1 className="text-2xl font-semibold">Agent</h1>
+        <p className="text-sm text-muted-foreground">管理可用的 AI Agent 适配器</p>
       </div>
 
       <div className="grid gap-4">
         {agents.map((agent) => (
-          <Card key={agent.id} className="border-white/10 bg-[#2e2e2e]">
+          <Card key={agent.id}>
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10">
-                    <Bot className="h-5 w-5 text-white" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary">
+                    <Bot className="h-5 w-5" />
                   </div>
                   <div>
-                    <CardTitle className="text-base text-white">{agent.name}</CardTitle>
-                    <CardDescription className="text-white/50">{agent.id}</CardDescription>
+                    <CardTitle className="text-base">{agent.name}</CardTitle>
+                    <CardDescription>{agent.id}</CardDescription>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -51,8 +51,8 @@ function AgentTab() {
                     variant="secondary"
                     className={
                       agent.enabled
-                        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
-                        : 'border-white/10 bg-white/5 text-white/40'
+                        ? 'bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
+                        : ''
                     }
                   >
                     {agent.enabled ? '已启用' : '已禁用'}
@@ -61,16 +61,16 @@ function AgentTab() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-2 rounded-md bg-black/20 p-3">
-                <Terminal className="h-4 w-4 text-white/40" />
-                <code className="text-xs text-white/70">{agent.command}</code>
+              <div className="flex items-center gap-2 rounded-md bg-muted p-3">
+                <Terminal className="h-4 w-4 text-muted-foreground" />
+                <code className="text-xs">{agent.command}</code>
               </div>
             </CardContent>
           </Card>
         ))}
         {agents.length === 0 && (
-          <Card className="border-white/10 bg-[#2e2e2e]">
-            <CardContent className="py-8 text-center text-sm text-white/40">
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
               暂无 Agent 配置
             </CardContent>
           </Card>

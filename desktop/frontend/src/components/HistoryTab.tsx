@@ -49,16 +49,16 @@ function HistoryTab() {
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white">历史</h1>
-          <p className="text-sm text-white/50">查看与设备的对话记录</p>
+          <h1 className="text-2xl font-semibold">历史</h1>
+          <p className="text-sm text-muted-foreground">查看与设备的对话记录</p>
         </div>
         <div className="relative w-64">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-white/40" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="搜索 Agent..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="border-white/10 bg-white/5 pl-9 text-white placeholder:text-white/30"
+            className="pl-9"
           />
         </div>
       </div>
@@ -66,15 +66,15 @@ function HistoryTab() {
       <ScrollArea className="h-[calc(100vh-180px)] pr-2">
         <div className="space-y-6">
           {Object.entries(grouped).length === 0 && (
-            <Card className="border-white/10 bg-[#2e2e2e]">
-              <CardContent className="py-12 text-center text-sm text-white/40">
+            <Card>
+              <CardContent className="py-12 text-center text-sm text-muted-foreground">
                 暂无历史记录
               </CardContent>
             </Card>
           )}
           {Object.entries(grouped).map(([date, group]) => (
             <div key={date}>
-              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white/60">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <Calendar className="h-4 w-4" />
                 {date}
               </div>
@@ -82,41 +82,41 @@ function HistoryTab() {
                 {group.map((s) => (
                   <Card
                     key={s.id}
-                    className="cursor-pointer border-white/10 bg-[#2e2e2e] transition-colors hover:bg-[#333333]"
+                    className="cursor-pointer transition-colors hover:bg-accent"
                     onClick={() => expandSession(s.id)}
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <MessageSquare className="h-4 w-4 text-white/40" />
-                          <CardTitle className="text-sm font-medium text-white">
+                          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                          <CardTitle className="text-sm font-medium">
                             {s.created_at.slice(11, 16)}
                           </CardTitle>
                         </div>
-                        <Badge variant="secondary" className="bg-white/10 text-white/70">
+                        <Badge variant="secondary">
                           {s.agent_id}
                         </Badge>
                       </div>
                     </CardHeader>
                     {expandedSession === s.id && messages.length > 0 && (
                       <CardContent className="pt-0">
-                        <Separator className="mb-3 bg-white/10" />
+                        <Separator className="mb-3" />
                         <div className="space-y-3">
                           {messages.map((m) => (
                             <div key={m.id} className="flex gap-3">
                               <div className="mt-0.5">
                                 {m.role === 'user' ? (
-                                  <User className="h-4 w-4 text-blue-400" />
+                                  <User className="h-4 w-4 text-primary" />
                                 ) : (
-                                  <Bot className="h-4 w-4 text-emerald-400" />
+                                  <Bot className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                                 )}
                               </div>
                               <div className="flex-1">
-                                <p className="text-sm text-white/90">
+                                <p className="text-sm">
                                   {m.summary || m.content}
                                 </p>
                                 {m.summary && m.summary !== m.content && (
-                                  <p className="mt-1 text-xs text-white/40">{m.content}</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">{m.content}</p>
                                 )}
                               </div>
                             </div>

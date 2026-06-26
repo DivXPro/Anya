@@ -10,9 +10,9 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>('device');
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden rounded-[20px] bg-[#2a2a2a] text-foreground">
+    <div className="flex h-full w-full overflow-hidden bg-background/80 text-foreground backdrop-blur-xl">
       <Sidebar active={activeTab} onChange={setActiveTab} />
-      <main className="relative flex-1 overflow-hidden bg-[#222222]">
+      <main className="relative flex-1 overflow-hidden bg-background/60">
         <div className="absolute inset-0 overflow-y-auto p-6">
           {activeTab === 'device' && <DeviceTab />}
           {activeTab === 'agent' && <AgentTab />}
