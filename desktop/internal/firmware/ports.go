@@ -1,17 +1,18 @@
 package firmware
 
 import (
-	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
+
+	"go.bug.st/serial"
 )
 
 // ListSerialPorts returns candidate serial ports that may host an ESP32-S3 / M5StickC S3.
+// It uses go.bug.st/serial to enumerate real serial devices across platforms.
 func ListSerialPorts() ([]SerialPortInfo, error) {
-	paths, err := enumerateSerialPorts()
+	paths, err := serial.GetPortsList()
 	if err != nil {
 		return nil, err
 	}
@@ -36,49 +37,6 @@ func ListSerialPorts() ([]SerialPortInfo, error) {
 	return ports, nil
 }
 
-func enumerateSerialPorts() ([]string, error) {
-	switch runtime.GOOS {
-	case "darwin":
-		return listDarwinPorts()
-	case "linux":
-		return listLinuxPorts()
-	case "windows":
-		return listWindowsPorts()
-	default:
-		return nil, fmt.Errorf("unsupported platform: %s", runtime.GOOS)
-	}
-}
-
-func listDarwinPorts() ([]string, error) {
-	matches, err := filepath.Glob("/dev/cu.*")
-	if err != nil {
-		return nil, err
-	}
-	return matches, nil
-}
-
-func listLinuxPorts() ([]string, error) {
-	var all []string
-	for _, pat := range []string{"/dev/ttyUSB*", "/dev/ttyACM*"} {
-		m, err := filepath.Glob(pat)
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, m...)
-	}
-	return all, nil
-}
-
-func listWindowsPorts() ([]string, error) {
-	// On Windows, serial ports are COM1..COM256. We cannot easily test existence
-	// without opening them, so enumerate a reasonable range.
-	var ports []string
-	for i := 1; i <= 64; i++ {
-		ports = append(ports, fmt.Sprintf("COM%d", i))
-	}
-	return ports, nil
-}
-
 func isLikelyESP32Port(path string) bool {
 	lower := strings.ToLower(path)
 	switch runtime.GOOS {
@@ -89,11 +47,16 @@ func isLikelyESP32Port(path string) bool {
 			strings.Contains(lower, "slab_usb") ||
 			strings.Contains(lower, "cp210") ||
 			strings.Contains(lower, "ch340") ||
-			strings.Contains(lower, "ftdi")
+			strings.Contains(lower, "ftdi") ||
+			strings.Contains(lower, "usbmodem")
 	case "linux":
-		return true // ttyUSB/ttyACM are already filtered by glob.
+		// go.bug.st/serial only returns real serial ports; keep the common
+		// USB-to-UART prefixes to reduce noise from built-in serial consoles.
+		return strings.Contains(lower, "/dev/ttyusb") ||
+			strings.Contains(lower, "/dev/ttyacm") ||
+			strings.Contains(lower, "/dev/ttych")
 	case "windows":
-		return true // COM list is explicit.
+		return true
 	}
 	return false
 }
@@ -107,20 +70,4 @@ func portDisplayName(path string) string {
 		return path
 	}
 	return base
-}
-
-// IsPortAccessible returns true if the port can be opened for reading.
-// This is a best-effort check; on some platforms opening may require exclusive access.
-func IsPortAccessible(path string) bool {
-	if runtime.GOOS == "windows" {
-		// Opening COM ports on Windows can block or require exclusive access;
-		// skip the accessibility probe and rely on esptool to report errors.
-		return true
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	_ = f.Close()
-	return true
 }
