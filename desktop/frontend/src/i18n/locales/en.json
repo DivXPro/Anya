@@ -94,6 +94,7 @@
     "subtitle": "View conversation history with devices",
     "search": "Search conversations...",
     "empty": "No history yet",
+    "loading": "Loading...",
     "roleUser": "Me",
     "roleAssistant": "Agent",
     "noContent": "(no content)"
