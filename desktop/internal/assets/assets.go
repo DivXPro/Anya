@@ -14,6 +14,7 @@ var logoNames = map[string]string{
 	"kimi":        "kimi.icns",
 	"pi":          "pi.icns",
 	"hermes":      "hermes.icns",
+	"codex":       "codex.icns",
 }
 
 // AgentLogo returns the embedded logo bytes for the given agent id.

@@ -32,23 +32,23 @@ import (
 )
 
 type App struct {
-	ctx             context.Context
-	db              *sql.DB
-	dataDir         string
-	desktopID       string
-	localIP         string
-	router          *acp.Router
-	wsServer        *gateway.Server
-	stt             speech.STTEngine
-	sttMu           sync.RWMutex
-	tts             speech.TTSEngine
-	trayDeviceItem  *application.MenuItem
-	trayAgentMenu   *application.Menu
-	trayOpenItem    *application.MenuItem
-	trayQuitItem    *application.MenuItem
-	trayDeviceName  string
-	trayUILanguage  string
-	flashMgr        *firmware.Manager
+	ctx            context.Context
+	db             *sql.DB
+	dataDir        string
+	desktopID      string
+	localIP        string
+	router         *acp.Router
+	wsServer       *gateway.Server
+	stt            speech.STTEngine
+	sttMu          sync.RWMutex
+	tts            speech.TTSEngine
+	trayDeviceItem *application.MenuItem
+	trayAgentMenu  *application.Menu
+	trayOpenItem   *application.MenuItem
+	trayQuitItem   *application.MenuItem
+	trayDeviceName string
+	trayUILanguage string
+	flashMgr       *firmware.Manager
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
@@ -167,6 +167,7 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	a.router.Register(adapters.NewKimiAdapter())
 	a.router.Register(adapters.NewPiAdapter())
 	a.router.Register(adapters.NewHermesAdapter())
+	a.router.Register(adapters.NewCodexAdapter())
 
 	// 2.0 Init firmware flash manager
 	a.flashMgr = firmware.NewManager()
@@ -266,6 +267,7 @@ func (a *App) refreshAgentAvailability() error {
 		"kimi":        "kimi acp",
 		"hermes":      "hermes acp",
 		"pi":          "pi --mode rpc --no-session",
+		"codex":       "codex app-server --stdio",
 	}
 
 	var currentSelected, firstAvailable string
