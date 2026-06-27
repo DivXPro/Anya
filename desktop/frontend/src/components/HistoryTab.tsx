@@ -1,22 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { App } from '../../bindings/desktop';
-import type { Message, Agent, Session } from '../../bindings/desktop/internal/store/models';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  RiSearchLine,
-  RiUserLine,
-  RiRobot2Line,
-} from '@remixicon/react';
-import { AgentLogo } from './AgentTab';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { App } from "../../bindings/desktop";
+import type {
+  Message,
+  Agent,
+  Session,
+} from "../../bindings/desktop/internal/store/models";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { RiSearchLine, RiUserLine, RiRobot2Line } from "@remixicon/react";
+import { AgentLogo } from "./AgentTab";
 
 const PAGE_SIZE = 25;
 
 function HistoryTab() {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [offset, setOffset] = useState(0);
@@ -75,7 +75,8 @@ function HistoryTab() {
 
   const handleScroll: React.UIEventHandler<HTMLDivElement> = (e) => {
     const target = e.currentTarget;
-    const nearBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 80;
+    const nearBottom =
+      target.scrollTop + target.clientHeight >= target.scrollHeight - 80;
     if (nearBottom && hasMore && !loadingRef.current && !search.trim()) {
       loadMessages(false);
     }
@@ -84,7 +85,7 @@ function HistoryTab() {
   const grouped = useMemo(() => {
     const groups: Record<string, Message[]> = {};
     for (const m of messages) {
-      const date = m.created_at.split('T')[0];
+      const date = m.created_at.split("T")[0];
       (groups[date] ||= []).push(m);
     }
     return groups;
@@ -103,21 +104,20 @@ function HistoryTab() {
   }, [sessions]);
 
   const displayText = (m: Message) => {
-    return m.content || t('history.noContent');
+    return m.content || t("history.noContent");
   };
 
   const renderBubble = (m: Message) => {
-    const isUser = m.role === 'user';
+    const isUser = m.role === "user";
     const agentId = sessionAgentIdById[m.session_id];
     const agent = agentId ? agentById[agentId] : undefined;
     const fullTime = new Date(m.created_at).toLocaleString();
-    const shortTime = new Date(m.created_at).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
 
     return (
-      <div key={m.id} className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
+      <div
+        key={m.id}
+        className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}
+      >
         <div className="flex flex-shrink-0 flex-col items-center gap-1">
           {isUser ? (
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -134,14 +134,17 @@ function HistoryTab() {
           )}
         </div>
 
-        <div className={`flex max-w-[80%] flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-          <span className="mb-1 text-[10px] text-muted-foreground">{shortTime}</span>
+        <div
+          className={`flex max-w-[80%] flex-col ${isUser ? "items-end" : "items-start"}`}
+        >
+          <span className="mb-1 text-[10px] text-muted-foreground">
+            {fullTime}
+          </span>
           <div
-            title={fullTime}
             className={`rounded-2xl px-4 py-2 text-sm shadow-sm ${
               isUser
-                ? 'rounded-br-sm bg-primary text-primary-foreground'
-                : 'rounded-bl-sm bg-muted/80 text-foreground'
+                ? "rounded-br-sm bg-primary text-primary-foreground"
+                : "rounded-bl-sm bg-muted/80 text-foreground"
             }`}
           >
             <p className="whitespace-pre-wrap">{displayText(m)}</p>
@@ -155,13 +158,15 @@ function HistoryTab() {
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">{t('tabs.history')}</h1>
-          <p className="text-sm text-muted-foreground">{t('history.subtitle')}</p>
+          <h1 className="text-2xl font-semibold">{t("tabs.history")}</h1>
+          <p className="text-sm text-muted-foreground">
+            {t("history.subtitle")}
+          </p>
         </div>
         <div className="relative w-64">
           <RiSearchLine className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={t('history.search')}
+            placeholder={t("history.search")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -170,18 +175,18 @@ function HistoryTab() {
       </div>
 
       <div className="rounded-xl border bg-card/50 p-3">
-        <ScrollArea onScroll={handleScroll} className="h-[calc(100vh-156px)] pr-2">
+        <ScrollArea
+          onScroll={handleScroll}
+          className="h-[calc(100vh-156px)] pr-2"
+        >
           <div className="space-y-5">
             {Object.entries(grouped).length === 0 && !loading && (
               <div className="py-12 text-center text-sm text-muted-foreground">
-                {t('history.empty')}
+                {t("history.empty")}
               </div>
             )}
             {Object.entries(grouped).map(([date, group]) => (
               <div key={date}>
-                <div className="mb-3 text-center text-xs font-medium text-muted-foreground">
-                  {date}
-                </div>
                 <div className="space-y-4">
                   {group.map((m) => renderBubble(m))}
                 </div>
@@ -189,7 +194,7 @@ function HistoryTab() {
             ))}
             {loading && (
               <div className="py-3 text-center text-xs text-muted-foreground">
-                {t('history.loading')}
+                {t("history.loading")}
               </div>
             )}
           </div>
