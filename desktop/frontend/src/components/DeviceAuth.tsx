@@ -18,7 +18,6 @@ import {
   ShieldCheck,
   Trash,
   EditPencil,
-  Clock,
   Wifi,
 } from 'iconoir-react';
 
@@ -26,8 +25,10 @@ function DeviceAuth() {
   const { t } = useTranslation();
   const [devices, setDevices] = useState<AuthorizedDevice[]>([]);
   const [pending, setPending] = useState<PendingDevice[]>([]);
+  const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [deleting, setDeleting] = useState<AuthorizedDevice | null>(null);
 
   const refresh = () => {
     App.ListAuthorizedDevices()
@@ -35,6 +36,9 @@ function DeviceAuth() {
       .catch(() => {});
     App.ListPendingDevices()
       .then((v) => setPending(v || []))
+      .catch(() => {});
+    App.ListConnectedDeviceIDs()
+      .then((v) => setConnectedIds(new Set(v || [])))
       .catch(() => {});
   };
 
@@ -67,11 +71,21 @@ function DeviceAuth() {
     refresh();
   };
 
-  const revoke = async (id: string) => {
-    await App.RevokeDevice(id);
+  const confirmDelete = (d: AuthorizedDevice) => {
+    setDeleting(d);
+  };
+
+  const revoke = async () => {
+    if (!deleting) return;
+    await App.RevokeDevice(deleting.device_id);
+    setDeleting(null);
     App.ListAuthorizedDevices()
       .then((v) => setDevices(v || []))
       .catch(() => {});
+  };
+
+  const cancelDelete = () => {
+    setDeleting(null);
   };
 
   const displayName = (d: AuthorizedDevice) =>
@@ -111,39 +125,48 @@ function DeviceAuth() {
             </div>
           ))}
 
-          {activeDevices.map((d) => (
-            <div
-              key={d.device_id}
-              className="flex items-center justify-between border-b p-3 last:border-b-0"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="group flex items-center gap-2">
-                  <Wifi className="h-4 w-4 text-primary" />
-                  <button
-                    onClick={() => startEdit(d)}
-                    className="flex items-center gap-1.5 text-sm font-medium hover:text-muted-foreground"
-                  >
-                    {displayName(d)}
-                    <EditPencil className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                  </button>
-                </div>
-                <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {d.authorized_at}
-                  </span>
-                </div>
-              </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                onClick={() => revoke(d.device_id)}
+          {activeDevices.map((d) => {
+            const isConnected = connectedIds.has(d.device_id);
+            return (
+              <div
+                key={d.device_id}
+                className="flex items-center justify-between border-b p-3 last:border-b-0"
               >
-                <Trash className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
+                <div className="min-w-0 flex-1">
+                  <div className="group flex items-center gap-2">
+                    <Wifi className="h-4 w-4 text-primary" />
+                    <button
+                      onClick={() => startEdit(d)}
+                      className="flex items-center gap-1.5 text-sm font-medium hover:text-muted-foreground"
+                    >
+                      {displayName(d)}
+                      <EditPencil className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </button>
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    {isConnected ? (
+                      <>
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        <span className="text-emerald-700 dark:text-emerald-400">
+                          {t('device.connected')}
+                        </span>
+                      </>
+                    ) : (
+                      <span>{t('device.disconnected')}</span>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => confirmDelete(d)}
+                >
+                  <Trash className="h-4 w-4" />
+                </Button>
+              </div>
+            );
+          })}
         </div>
       </ScrollArea>
 
@@ -171,6 +194,25 @@ function DeviceAuth() {
             </Button>
             <Button onClick={() => editing && saveAlias(editing)}>
               {t('device.save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleting} onOpenChange={(open) => { if (!open) cancelDelete(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('device.deleteTitle')}</DialogTitle>
+            <DialogDescription>
+              {deleting && t('device.deleteDescription', { name: displayName(deleting) })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={cancelDelete}>
+              {t('device.cancel')}
+            </Button>
+            <Button variant="destructive" onClick={revoke}>
+              {t('device.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

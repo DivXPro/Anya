@@ -780,6 +780,13 @@ func (a *App) ListPendingDevices() []gateway.PendingDevice {
 	return a.wsServer.ListPendingDevices()
 }
 
+func (a *App) ListConnectedDeviceIDs() []string {
+	if a.wsServer == nil {
+		return nil
+	}
+	return a.wsServer.ConnectedDeviceIDs()
+}
+
 func (a *App) GetSettings() (map[string]string, error) {
 	return store.GetAllSettings(a.db)
 }

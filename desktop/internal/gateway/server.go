@@ -76,6 +76,16 @@ func (s *Server) IsDeviceConnected(deviceID string) bool {
 	return ok
 }
 
+func (s *Server) ConnectedDeviceIDs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ids := make([]string, 0, len(s.devices))
+	for id := range s.devices {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 func (s *Server) ListPendingDevices() []PendingDevice {
 	s.pendingAuthMu.Lock()
 	defer s.pendingAuthMu.Unlock()

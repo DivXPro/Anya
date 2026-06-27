@@ -80,7 +80,11 @@
     "pendingLabel": "新设备请求连接：",
     "cancel": "取消",
     "save": "保存",
-    "delete": "删除"
+    "delete": "删除",
+    "deleteTitle": "删除设备",
+    "deleteDescription": "确定要删除 {{name}} 吗？删除后需要重新配对。",
+    "connected": "已连接",
+    "disconnected": "未连接"
   },
   "agent": {
     "title": "Agent",
