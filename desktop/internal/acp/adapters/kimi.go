@@ -24,6 +24,7 @@ type KimiAdapter struct {
 	sessionID       string
 	initDone        bool
 	lastPromptReqID int
+	systemPrompt    string
 }
 
 func NewKimiAdapter() *KimiAdapter {
@@ -33,9 +34,16 @@ func NewKimiAdapter() *KimiAdapter {
 			Name:    "Kimi Code",
 			Command: "kimi acp",
 		},
-		pm:      acp.NewProcessManagerWithFraming("kimi acp", acp.NDJSONFraming),
-		pending: make(map[string]chan acp.StreamEvent),
+		pm:           acp.NewProcessManagerWithFraming("kimi acp", acp.NDJSONFraming),
+		pending:      make(map[string]chan acp.StreamEvent),
+		systemPrompt: DefaultSystemPrompt,
 	}
+}
+
+func (a *KimiAdapter) SetSystemPrompt(prompt string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.systemPrompt = prompt
 }
 
 func (a *KimiAdapter) ensureInit() error {
@@ -74,10 +82,14 @@ func (a *KimiAdapter) ensureInit() error {
 		return nil
 	}
 
-	sessResp, err := a.sendRequest("session/new", map[string]any{
+	params := map[string]any{
 		"cwd":        ".",
 		"mcpServers": []any{},
-	})
+	}
+	if a.systemPrompt != "" {
+		params["systemInstructions"] = a.systemPrompt
+	}
+	sessResp, err := a.sendRequest("session/new", params)
 	if err != nil {
 		return fmt.Errorf("acp session/new: %w", err)
 	}

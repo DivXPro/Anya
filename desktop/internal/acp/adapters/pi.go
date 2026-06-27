@@ -23,6 +23,7 @@ type PiAdapter struct {
 	activeStream    chan acp.StreamEvent
 	streamMu        sync.RWMutex
 	sessionID       string
+	systemPrompt    string
 }
 
 func NewPiAdapter() *PiAdapter {
@@ -32,9 +33,16 @@ func NewPiAdapter() *PiAdapter {
 			Name:    "Pi",
 			Command: "pi --mode rpc --no-session",
 		},
-		pm:      acp.NewProcessManagerWithFraming("pi --mode rpc --no-session", acp.NDJSONFraming),
-		pending: make(map[string]chan acp.StreamEvent),
+		pm:           acp.NewProcessManagerWithFraming("pi --mode rpc --no-session", acp.NDJSONFraming),
+		pending:      make(map[string]chan acp.StreamEvent),
+		systemPrompt: DefaultSystemPrompt,
 	}
+}
+
+func (a *PiAdapter) SetSystemPrompt(prompt string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.systemPrompt = prompt
 }
 
 func (a *PiAdapter) ensureInit() error {
@@ -61,12 +69,16 @@ func (a *PiAdapter) Send(prompt string, history []acp.Message) (<-chan acp.Strea
 	a.mu.Lock()
 	a.reqID++
 	id := a.reqID
+	systemPrompt := a.systemPrompt
 	ch := make(chan acp.StreamEvent, 256)
 	a.streamMu.Lock()
 	a.activeStream = ch
 	a.streamMu.Unlock()
 	a.mu.Unlock()
 
+	if systemPrompt != "" {
+		prompt = systemPrompt + "\n\n" + prompt
+	}
 	req := map[string]any{
 		"id":      strconv.Itoa(id),
 		"type":    "prompt",

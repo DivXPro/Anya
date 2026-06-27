@@ -23,6 +23,7 @@ type OpenCodeAdapter struct {
 	sessionID       string
 	initDone        bool
 	lastPromptReqID int
+	systemPrompt    string
 }
 
 func NewOpenCodeAdapter() *OpenCodeAdapter {
@@ -32,9 +33,16 @@ func NewOpenCodeAdapter() *OpenCodeAdapter {
 			Name:    "OpenCode",
 			Command: "opencode acp",
 		},
-		pm:      acp.NewProcessManagerWithFraming("opencode acp", acp.NDJSONFraming),
-		pending: make(map[string]chan acp.StreamEvent),
+		pm:           acp.NewProcessManagerWithFraming("opencode acp", acp.NDJSONFraming),
+		pending:      make(map[string]chan acp.StreamEvent),
+		systemPrompt: DefaultSystemPrompt,
 	}
+}
+
+func (a *OpenCodeAdapter) SetSystemPrompt(prompt string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.systemPrompt = prompt
 }
 
 func (a *OpenCodeAdapter) ensureInit() error {
@@ -74,10 +82,14 @@ func (a *OpenCodeAdapter) ensureInit() error {
 		return nil
 	}
 
-	sessResp, err := a.sendRequest("session/new", map[string]any{
+	params := map[string]any{
 		"cwd":        ".",
 		"mcpServers": []any{},
-	})
+	}
+	if a.systemPrompt != "" {
+		params["systemInstructions"] = a.systemPrompt
+	}
+	sessResp, err := a.sendRequest("session/new", params)
 	if err != nil {
 		return fmt.Errorf("acp session/new: %w", err)
 	}

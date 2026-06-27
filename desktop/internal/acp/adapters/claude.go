@@ -33,6 +33,7 @@ type ClaudeAdapter struct {
 	activeStream chan acp.StreamEvent
 	streamMu     sync.RWMutex
 	stopSub      func()
+	systemPrompt string
 }
 
 func NewClaudeAdapter() *ClaudeAdapter {
@@ -42,7 +43,14 @@ func NewClaudeAdapter() *ClaudeAdapter {
 			Name:    "Claude Code",
 			Command: "claude",
 		},
+		systemPrompt: DefaultSystemPrompt,
 	}
+}
+
+func (a *ClaudeAdapter) SetSystemPrompt(prompt string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.systemPrompt = prompt
 }
 
 func (a *ClaudeAdapter) initRuntime() error {
@@ -94,12 +102,17 @@ func (a *ClaudeAdapter) newSession() error {
 	a.mu.Lock()
 	a.reqID++
 	id := a.reqID
+	systemPrompt := a.systemPrompt
 	a.mu.Unlock()
 
-	sessResp, err := a.clientRequest(id, "session/new", map[string]any{
+	params := map[string]any{
 		"cwd":        ".",
 		"mcpServers": []any{},
-	})
+	}
+	if systemPrompt != "" {
+		params["systemInstructions"] = systemPrompt
+	}
+	sessResp, err := a.clientRequest(id, "session/new", params)
 	if err != nil {
 		return fmt.Errorf("acp session/new: %w", err)
 	}
