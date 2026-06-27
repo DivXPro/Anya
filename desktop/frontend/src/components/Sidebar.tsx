@@ -1,16 +1,18 @@
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import type { Tab } from '@/App';
-import RemoteControlLineIcon from 'remixicon-react/RemoteControlLineIcon';
-import { RiRobot2Line } from '@remixicon/react';
-import HistoryLineIcon from 'remixicon-react/HistoryLineIcon';
-import SettingsLineIcon from 'remixicon-react/SettingsLineIcon';
+import {
+  RiRemoteControlLine,
+  RiRobot2Line,
+  RiHistoryLine,
+  RiSettingsLine,
+} from '@remixicon/react';
 
-const ITEMS: { key: Tab; labelKey: string; icon: typeof RemoteControlLineIcon | typeof RiRobot2Line }[] = [
-  { key: 'device', labelKey: 'tabs.device', icon: RemoteControlLineIcon },
+const ITEMS: { key: Tab; labelKey: string; icon: typeof RiRemoteControlLine }[] = [
+  { key: 'device', labelKey: 'tabs.device', icon: RiRemoteControlLine },
   { key: 'agent', labelKey: 'tabs.agent', icon: RiRobot2Line },
-  { key: 'history', labelKey: 'tabs.history', icon: HistoryLineIcon },
-  { key: 'settings', labelKey: 'tabs.settings', icon: SettingsLineIcon },
+  { key: 'history', labelKey: 'tabs.history', icon: RiHistoryLine },
+  { key: 'settings', labelKey: 'tabs.settings', icon: RiSettingsLine },
 ];
 
 export function Sidebar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {

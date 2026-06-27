@@ -4,10 +4,12 @@ import { App } from '../../bindings/desktop';
 import type { Message, Agent, Session } from '../../bindings/desktop/internal/store/models';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import SearchLineIcon from 'remixicon-react/SearchLineIcon';
-import CalendarLineIcon from 'remixicon-react/CalendarLineIcon';
-import UserLineIcon from 'remixicon-react/UserLineIcon';
-import { RiRobot2Line } from '@remixicon/react';
+import {
+  RiSearchLine,
+  RiCalendarLine,
+  RiUserLine,
+  RiRobot2Line,
+} from '@remixicon/react';
 import { AgentLogo } from './AgentTab';
 
 const PAGE_SIZE = 25;
@@ -116,7 +118,7 @@ function HistoryTab() {
         <div className="flex flex-shrink-0 flex-col items-center gap-1">
           {isUser ? (
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <UserLineIcon className="h-5 w-5" />
+              <RiUserLine className="h-5 w-5" />
             </div>
           ) : (
             <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-muted">
@@ -153,7 +155,7 @@ function HistoryTab() {
           <p className="text-sm text-muted-foreground">{t('history.subtitle')}</p>
         </div>
         <div className="relative w-64">
-          <SearchLineIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <RiSearchLine className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder={t('history.search')}
             value={search}
@@ -174,7 +176,7 @@ function HistoryTab() {
             {Object.entries(grouped).map(([date, group]) => (
               <div key={date}>
                 <div className="mb-3 flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground">
-                  <CalendarLineIcon className="h-3.5 w-3.5" />
+                  <RiCalendarLine className="h-3.5 w-3.5" />
                   {date}
                 </div>
                 <div className="space-y-4">

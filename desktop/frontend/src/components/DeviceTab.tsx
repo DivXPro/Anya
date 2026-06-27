@@ -5,8 +5,7 @@ import type { DiscoveredDevice } from '../../bindings/desktop/internal/discovery
 import type { AuthorizedDevice } from '../../bindings/desktop/internal/store/models';
 import type { PendingDevice } from '../../bindings/desktop/internal/gateway/models';
 import { Button } from '@/components/ui/button';
-import RefreshLineIcon from 'remixicon-react/RefreshLineIcon';
-import SignalTowerLineIcon from 'remixicon-react/SignalTowerLineIcon';
+import { RiRefreshLine, RiSignalTowerLine } from '@remixicon/react';
 import DeviceAuth from './DeviceAuth';
 
 const SCAN_INTERVAL_MS = 15000;
@@ -89,9 +88,9 @@ function DeviceTab() {
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">{t('device.nearbyDevices')}</h2>
           {scanning ? (
-            <RefreshLineIcon className="h-4 w-4 animate-spin text-primary" />
+            <RiRefreshLine className="h-4 w-4 animate-spin text-primary" />
           ) : (
-            <RefreshLineIcon className="h-4 w-4 text-muted-foreground" />
+            <RiRefreshLine className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
 
@@ -112,7 +111,7 @@ function DeviceTab() {
               className="flex items-center justify-between border-b p-3 last:border-b-0"
             >
               <div className="flex items-center gap-3">
-                <SignalTowerLineIcon className="h-4 w-4 text-primary" />
+                <RiSignalTowerLine className="h-4 w-4 text-primary" />
                 <div>
                   <p className="text-sm font-medium">{d.Name}</p>
                   <p className="text-xs text-muted-foreground">{d.DeviceID.slice(-8)}</p>

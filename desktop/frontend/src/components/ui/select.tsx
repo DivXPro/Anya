@@ -1,8 +1,6 @@
 import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
-import CheckLineIcon from 'remixicon-react/CheckLineIcon';
-import ArrowDownSLineIcon from 'remixicon-react/ArrowDownSLineIcon';
-import ArrowUpSLineIcon from 'remixicon-react/ArrowUpSLineIcon';
+import { RiCheckLine, RiArrowDownSLine, RiArrowUpSLine } from '@remixicon/react';
 
 import { cn } from "@/lib/utils"
 
@@ -26,7 +24,7 @@ const SelectTrigger = React.forwardRef<
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ArrowDownSLineIcon className="h-4 w-4 opacity-50" />
+      <RiArrowDownSLine className="h-4 w-4 opacity-50" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ))
@@ -44,7 +42,7 @@ const SelectScrollUpButton = React.forwardRef<
     )}
     {...props}
   >
-    <ArrowUpSLineIcon className="h-4 w-4" />
+    <RiArrowUpSLine className="h-4 w-4" />
   </SelectPrimitive.ScrollUpButton>
 ))
 SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName
@@ -61,7 +59,7 @@ const SelectScrollDownButton = React.forwardRef<
     )}
     {...props}
   >
-    <ArrowDownSLineIcon className="h-4 w-4" />
+    <RiArrowDownSLine className="h-4 w-4" />
   </SelectPrimitive.ScrollDownButton>
 ))
 SelectScrollDownButton.displayName =
@@ -125,7 +123,7 @@ const SelectItem = React.forwardRef<
   >
     <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
       <SelectPrimitive.ItemIndicator>
-        <CheckLineIcon className="h-4 w-4" />
+        <RiCheckLine className="h-4 w-4" />
       </SelectPrimitive.ItemIndicator>
     </span>
 

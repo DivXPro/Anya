@@ -14,10 +14,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import ShieldCheckLineIcon from 'remixicon-react/ShieldCheckLineIcon';
-import DeleteBinLineIcon from 'remixicon-react/DeleteBinLineIcon';
-import EditLineIcon from 'remixicon-react/EditLineIcon';
-import RemoteControlFillIcon from 'remixicon-react/RemoteControlFillIcon';
+import {
+  RiShieldCheckLine,
+  RiDeleteBinLine,
+  RiEditLine,
+  RiRemoteControlFill,
+} from '@remixicon/react';
 
 function DeviceAuth() {
   const { t } = useTranslation();
@@ -109,7 +111,7 @@ function DeviceAuth() {
               className="flex items-center justify-between border-b p-3 last:border-b-0"
             >
               <div className="flex items-center gap-3">
-                <ShieldCheckLineIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <RiShieldCheckLine className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                 <span className="text-sm">
                   {t('device.pendingLabel')}
                   <span className="font-medium">
@@ -132,7 +134,7 @@ function DeviceAuth() {
               >
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
-                    <RemoteControlFillIcon className="h-6 w-6 text-primary" />
+                    <RiRemoteControlFill className="h-6 w-6 text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="group flex items-center gap-1.5">
@@ -142,7 +144,7 @@ function DeviceAuth() {
                       >
                         {displayName(d)}
                       </button>
-                      <EditLineIcon className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                      <RiEditLine className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                       {isConnected ? (
@@ -164,7 +166,7 @@ function DeviceAuth() {
                   className="h-8 w-8 text-muted-foreground hover:text-destructive"
                   onClick={() => confirmDelete(d)}
                 >
-                  <DeleteBinLineIcon className="h-4 w-4" />
+                  <RiDeleteBinLine className="h-4 w-4" />
                 </Button>
               </div>
             );
