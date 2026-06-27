@@ -4,6 +4,7 @@ package adapters
 
 import (
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +25,7 @@ func TestKimiAdapterSendAndReceive(t *testing.T) {
 	}
 
 	var sawDelta, sawDone bool
+	var content strings.Builder
 	timeout := time.After(60 * time.Second)
 loop:
 	for {
@@ -37,6 +39,7 @@ loop:
 			}
 			if evt.IsContent() {
 				sawDelta = true
+				content.WriteString(evt.Content)
 			}
 			if evt.IsDone() {
 				sawDone = true
@@ -52,6 +55,11 @@ loop:
 	}
 	if !sawDone {
 		t.Fatal("expected done event")
+	}
+	for _, marker := range acpLifecycleMarkers {
+		if strings.Contains(content.String(), marker) {
+			t.Fatalf("content contains lifecycle marker %q", marker)
+		}
 	}
 
 	info := adapter.Info()
