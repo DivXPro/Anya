@@ -14,12 +14,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  ShieldCheck,
-  Trash,
-  EditPencil,
-  Wifi,
-} from 'iconoir-react';
+import ShieldCheckLineIcon from 'remixicon-react/ShieldCheckLineIcon';
+import DeleteBinLineIcon from 'remixicon-react/DeleteBinLineIcon';
+import EditLineIcon from 'remixicon-react/EditLineIcon';
+import WifiLineIcon from 'remixicon-react/WifiLineIcon';
 
 function DeviceAuth() {
   const { t } = useTranslation();
@@ -111,7 +109,7 @@ function DeviceAuth() {
               className="flex items-center justify-between border-b p-3 last:border-b-0"
             >
               <div className="flex items-center gap-3">
-                <ShieldCheck className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <ShieldCheckLineIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                 <span className="text-sm">
                   {t('device.pendingLabel')}
                   <span className="font-medium">
@@ -134,13 +132,13 @@ function DeviceAuth() {
               >
                 <div className="min-w-0 flex-1">
                   <div className="group flex items-center gap-2">
-                    <Wifi className="h-4 w-4 text-primary" />
+                    <WifiLineIcon className="h-4 w-4 text-primary" />
                     <button
                       onClick={() => startEdit(d)}
                       className="flex items-center gap-1.5 text-sm font-medium hover:text-muted-foreground"
                     >
                       {displayName(d)}
-                      <EditPencil className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                      <EditLineIcon className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                     </button>
                   </div>
                   <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -162,7 +160,7 @@ function DeviceAuth() {
                   className="h-8 w-8 text-muted-foreground hover:text-destructive"
                   onClick={() => confirmDelete(d)}
                 >
-                  <Trash className="h-4 w-4" />
+                  <DeleteBinLineIcon className="h-4 w-4" />
                 </Button>
               </div>
             );

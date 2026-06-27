@@ -10,7 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Language, DashboardSpeed, MicrophoneCheck, SunLight, HalfMoon, Usb } from 'iconoir-react';
+import TranslateIcon from 'remixicon-react/TranslateIcon';
+import DashboardLineIcon from 'remixicon-react/DashboardLineIcon';
+import MicLineIcon from 'remixicon-react/MicLineIcon';
+import SunLineIcon from 'remixicon-react/SunLineIcon';
+import MoonLineIcon from 'remixicon-react/MoonLineIcon';
+import UsbLineIcon from 'remixicon-react/UsbLineIcon';
 import { useAppSettings, type Theme } from '@/hooks/useAppSettings';
 
 function formatBytes(n: number): string {
@@ -151,7 +156,7 @@ function SettingsTab() {
         <div className="rounded-lg border bg-card">
           <div className="flex items-center justify-between border-b p-3">
             <Label className="flex items-center gap-2">
-              <SunLight className="h-4 w-4 text-muted-foreground" />
+              <SunLineIcon className="h-4 w-4 text-muted-foreground" />
               {t('settings.appearance.theme')}
             </Label>
             <Select value={theme} onValueChange={(v) => updateTheme(v as Theme)}>
@@ -168,7 +173,7 @@ function SettingsTab() {
 
           <div className="flex items-center justify-between p-3">
             <Label className="flex items-center gap-2">
-              <HalfMoon className="h-4 w-4 text-muted-foreground" />
+              <MoonLineIcon className="h-4 w-4 text-muted-foreground" />
               {t('settings.appearance.language')}
             </Label>
             <Select value={language} onValueChange={(v) => updateLanguage(v)}>
@@ -189,7 +194,7 @@ function SettingsTab() {
         <div className="rounded-lg border bg-card">
           <div className="flex items-center justify-between border-b p-3">
             <Label className="flex items-center gap-2">
-              <Language className="h-4 w-4 text-muted-foreground" />
+              <TranslateIcon className="h-4 w-4 text-muted-foreground" />
               {t('settings.voice.language')}
             </Label>
             <Select value={settings.stt_language || 'zh'} onValueChange={(v) => updateSetting('stt_language', v)}>
@@ -206,7 +211,7 @@ function SettingsTab() {
           <div className="space-y-3 p-3">
             <div className="flex items-center justify-between">
               <Label className="flex items-center gap-2">
-                <MicrophoneCheck className="h-4 w-4 text-muted-foreground" />
+                <MicLineIcon className="h-4 w-4 text-muted-foreground" />
                 {t('settings.voice.model')}
               </Label>
               <Badge
@@ -255,7 +260,7 @@ function SettingsTab() {
 
           <div className="flex items-center justify-between p-3">
             <Label className="flex items-center gap-2">
-              <DashboardSpeed className="h-4 w-4 text-muted-foreground" />
+              <DashboardLineIcon className="h-4 w-4 text-muted-foreground" />
               {t('settings.tts.speed')}
             </Label>
             <Select value={settings.tts_speed || '+0%'} onValueChange={(v) => updateSetting('tts_speed', v)}>
@@ -277,7 +282,7 @@ function SettingsTab() {
         <div className="rounded-lg border bg-card">
           <div className="flex items-center justify-between border-b p-3">
             <Label className="flex items-center gap-2">
-              <Usb className="h-4 w-4 text-muted-foreground" />
+              <UsbLineIcon className="h-4 w-4 text-muted-foreground" />
               {t('settings.firmware.currentVersion')}
             </Label>
             <Badge variant="secondary">

@@ -1,13 +1,16 @@
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import type { Tab } from '@/App';
-import { SmartphoneDevice, BrainResearch, ClockRotateRight, Settings } from 'iconoir-react';
+import RemoteControlLineIcon from 'remixicon-react/RemoteControlLineIcon';
+import RobotLineIcon from 'remixicon-react/RobotLineIcon';
+import HistoryLineIcon from 'remixicon-react/HistoryLineIcon';
+import SettingsLineIcon from 'remixicon-react/SettingsLineIcon';
 
-const ITEMS: { key: Tab; labelKey: string; icon: typeof SmartphoneDevice }[] = [
-  { key: 'device', labelKey: 'tabs.device', icon: SmartphoneDevice },
-  { key: 'agent', labelKey: 'tabs.agent', icon: BrainResearch },
-  { key: 'history', labelKey: 'tabs.history', icon: ClockRotateRight },
-  { key: 'settings', labelKey: 'tabs.settings', icon: Settings },
+const ITEMS: { key: Tab; labelKey: string; icon: typeof RemoteControlLineIcon }[] = [
+  { key: 'device', labelKey: 'tabs.device', icon: RemoteControlLineIcon },
+  { key: 'agent', labelKey: 'tabs.agent', icon: RobotLineIcon },
+  { key: 'history', labelKey: 'tabs.history', icon: HistoryLineIcon },
+  { key: 'settings', labelKey: 'tabs.settings', icon: SettingsLineIcon },
 ];
 
 export function Sidebar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {

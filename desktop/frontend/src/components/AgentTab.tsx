@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { App } from '../../bindings/desktop';
 import type { Agent } from '../../bindings/desktop/internal/store/models';
 import { Badge } from '@/components/ui/badge';
-import { Check } from 'iconoir-react';
+import CheckLineIcon from 'remixicon-react/CheckLineIcon';
 
 const agentLogo: Record<string, string> = {
   'claude-code': '/claude-logo.svg',
@@ -103,7 +103,7 @@ function AgentTab() {
                   variant="secondary"
                   className="gap-1 bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
                 >
-                  <Check className="h-3 w-3" />
+                  <CheckLineIcon className="h-3 w-3" />
                   {t('agent.enabled')}
                 </Badge>
               ) : (

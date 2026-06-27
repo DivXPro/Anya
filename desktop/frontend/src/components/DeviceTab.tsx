@@ -5,7 +5,8 @@ import type { DiscoveredDevice } from '../../bindings/desktop/internal/discovery
 import type { AuthorizedDevice } from '../../bindings/desktop/internal/store/models';
 import type { PendingDevice } from '../../bindings/desktop/internal/gateway/models';
 import { Button } from '@/components/ui/button';
-import { Refresh, AntennaSignal } from 'iconoir-react';
+import RefreshLineIcon from 'remixicon-react/RefreshLineIcon';
+import SignalTowerLineIcon from 'remixicon-react/SignalTowerLineIcon';
 import DeviceAuth from './DeviceAuth';
 
 const SCAN_INTERVAL_MS = 15000;
@@ -88,9 +89,9 @@ function DeviceTab() {
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">{t('device.nearbyDevices')}</h2>
           {scanning ? (
-            <Refresh className="h-4 w-4 animate-spin text-primary" />
+            <RefreshLineIcon className="h-4 w-4 animate-spin text-primary" />
           ) : (
-            <Refresh className="h-4 w-4 text-muted-foreground" />
+            <RefreshLineIcon className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
 
@@ -111,7 +112,7 @@ function DeviceTab() {
               className="flex items-center justify-between border-b p-3 last:border-b-0"
             >
               <div className="flex items-center gap-3">
-                <AntennaSignal className="h-4 w-4 text-primary" />
+                <SignalTowerLineIcon className="h-4 w-4 text-primary" />
                 <div>
                   <p className="text-sm font-medium">{d.Name}</p>
                   <p className="text-xs text-muted-foreground">{d.DeviceID.slice(-8)}</p>
