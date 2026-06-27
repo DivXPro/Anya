@@ -17,7 +17,7 @@ import {
 import ShieldCheckLineIcon from 'remixicon-react/ShieldCheckLineIcon';
 import DeleteBinLineIcon from 'remixicon-react/DeleteBinLineIcon';
 import EditLineIcon from 'remixicon-react/EditLineIcon';
-import WifiLineIcon from 'remixicon-react/WifiLineIcon';
+import RemoteControlLineIcon from 'remixicon-react/RemoteControlLineIcon';
 
 function DeviceAuth() {
   const { t } = useTranslation();
@@ -130,28 +130,32 @@ function DeviceAuth() {
                 key={d.device_id}
                 className="flex items-center justify-between border-b p-3 last:border-b-0"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="group flex items-center gap-2">
-                    <WifiLineIcon className="h-4 w-4 text-primary" />
-                    <button
-                      onClick={() => startEdit(d)}
-                      className="flex items-center gap-1.5 text-sm font-medium hover:text-muted-foreground"
-                    >
-                      {displayName(d)}
-                      <EditLineIcon className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                    </button>
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+                    <RemoteControlLineIcon className="h-6 w-6 text-primary" />
                   </div>
-                  <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    {isConnected ? (
-                      <>
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        <span className="text-emerald-700 dark:text-emerald-400">
-                          {t('device.connected')}
-                        </span>
-                      </>
-                    ) : (
-                      <span>{t('device.disconnected')}</span>
-                    )}
+                  <div className="min-w-0 flex-1">
+                    <div className="group flex items-center gap-1.5">
+                      <button
+                        onClick={() => startEdit(d)}
+                        className="text-sm font-medium hover:text-muted-foreground"
+                      >
+                        {displayName(d)}
+                      </button>
+                      <EditLineIcon className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      {isConnected ? (
+                        <>
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          <span className="text-emerald-700 dark:text-emerald-400">
+                            {t('device.connected')}
+                          </span>
+                        </>
+                      ) : (
+                        <span>{t('device.disconnected')}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <Button
