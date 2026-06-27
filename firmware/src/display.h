@@ -1,6 +1,11 @@
 #pragma once
 #include <M5Unified.h>
 
+// Portrait rotation for M5StickC S3.
+// 0 = USB connector at the bottom (native portrait).
+// 2 = USB connector at the top (portrait flipped 180°).
+constexpr uint8_t DISPLAY_ROTATION = 0;
+
 void disp_init();
 void disp_status_bar(int8_t rssi, bool wifiConnected, bool wsConnected, const char* agent, const char* ssid = nullptr);
 void disp_wifi_setup(const char* hotspotSsid, const char* agent);
@@ -15,3 +20,6 @@ void disp_processing(const char* agent);
 void disp_playing(const char* summary, const char* agent);
 void disp_error(const char* msg, const char* agent);
 void disp_menu(const char* agent, int selected, const char* const* items, int count, int8_t rssi, bool wifiConnected, bool wsConnected);
+
+// Call from the main loop to keep the mascot animating on screens that show it.
+void disp_animate_mascot();

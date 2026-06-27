@@ -1,4 +1,5 @@
 #include "wifi_portal.h"
+#include "display.h"
 #include "elf_wifi.h"
 #include "mascot_img.h"
 #include <WiFi.h>
@@ -116,30 +117,29 @@ static String buildScanJson() {
     return json;
 }
 
-// ── Screen drawing (240×135 landscape, matches display.cpp) ──
+// ── Screen drawing (135×240 portrait, matches display.cpp) ──
 static const int P_STATUS_BAR_H = 16;
-static const int P_GAP           = 8;
-static const int P_LINE_SPACING  = 18;
-static const int P_MASCOT_Y      = P_STATUS_BAR_H + P_GAP;          // y=24
-static const int P_PROMPT_Y      = P_MASCOT_Y + 80 + P_GAP;        // y=112
+static const int P_GAP          = 4;
+static const int P_LINE_SPACING = 18;
+static const int P_PROMPT_H     = 12;
+static int portalMascotY = 0;   // computed at runtime after M5.begin()
+static int portalPromptY = 0;
 static bool portalDrawn = false;
 static int  portalFrame  = 0;
-static unsigned long portalLastSwitch = 0;
+static unsigned long portalFrameStart = 0;
 
 static void portalDrawStatusBar() {
     M5.Display.fillRect(0, 0, M5.Display.width(), P_STATUS_BAR_H, TFT_BLACK);
     M5.Display.drawFastHLine(0, P_STATUS_BAR_H, M5.Display.width(), TFT_DARKGREY);
 
     // Connection dot (portal mode = not connected)
-    M5.Display.setTextSize(1);
-    M5.Display.setTextColor(TFT_DARKGREY);
-    M5.Display.setCursor(3, 3);
-    M5.Display.print("○");
+    M5.Display.drawCircle(6, P_STATUS_BAR_H / 2, 3, TFT_DARKGREY);
 
-    // Agent name
+    // Title centred in the status bar
+    M5.Display.setTextSize(1);
     M5.Display.setTextColor(TFT_WHITE);
-    M5.Display.setCursor(11, 3);
-    M5.Display.print("Elf");
+    M5.Display.setTextDatum(textdatum_t::middle_center);
+    M5.Display.drawString("Elf", M5.Display.width() / 2, P_STATUS_BAR_H / 2);
 }
 
 static void portalCenterPrint(const char* s, int y) {
@@ -150,28 +150,34 @@ static void portalCenterPrint(const char* s, int y) {
     M5.Display.print(s);
 }
 
+static void updatePortalLayout() {
+    portalMascotY = P_STATUS_BAR_H +
+                    (M5.Display.height() - P_STATUS_BAR_H - MASCOT_IMG_H - P_PROMPT_H - P_GAP) / 2;
+    portalPromptY = portalMascotY + MASCOT_IMG_H + P_GAP;
+}
+
 static void portalDrawMascot() {
-    // Animate: random frame every 2.5–4s
     unsigned long now = millis();
-    if (portalLastSwitch == 0) portalLastSwitch = now;
-    if (now - portalLastSwitch > 60000 + (esp_random() % 30000)) {  // 60–90s
-        int next;
-        do { next = (esp_random() % MASCOT_FRAMES); } while (next == portalFrame && MASCOT_FRAMES > 1);
-        portalFrame = next;
-        portalLastSwitch = now;
+    if (portalFrameStart == 0) portalFrameStart = now;
+
+    if (now - portalFrameStart >= MASCOT_FRAME_DURATIONS[portalFrame]) {
+        portalFrame = (portalFrame + 1) % MASCOT_FRAMES;
+        portalFrameStart = now;
     }
+
     int x = (M5.Display.width() - MASCOT_IMG_W) / 2;
-    M5.Display.pushImage(x, P_MASCOT_Y, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[portalFrame]);
+    M5.Display.pushImage(x, portalMascotY, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[portalFrame], true);
 }
 
 static void drawPortalScreen() {
-    M5.Display.setRotation(1);
+    M5.Display.setRotation(DISPLAY_ROTATION);
+    updatePortalLayout();
 
     if (!portalDrawn) {
         M5.Display.fillScreen(TFT_BLACK);
         M5.Display.setBrightness(255);
         portalDrawStatusBar();
-        portalCenterPrint("Connect to Elf-hotspot", P_PROMPT_Y);
+        portalCenterPrint("Connect to Elf-hotspot", portalPromptY);
         portalDrawn = true;
     }
     portalDrawMascot();  // animate every call
@@ -182,9 +188,10 @@ static void drawConnectingScreen(const char* ssid) {
 
     M5.Display.fillScreen(TFT_BLACK);
     M5.Display.setBrightness(255);
+    updatePortalLayout();
     portalDrawStatusBar();
-    M5.Display.pushImage(x, P_MASCOT_Y, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[portalFrame]);
-    portalCenterPrint("Connecting...", P_PROMPT_Y);
+    M5.Display.pushImage(x, portalMascotY, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[portalFrame], true);
+    portalCenterPrint("Connecting...", portalPromptY);
 }
 
 // ── Main portal loop ────────────────────────────────────────

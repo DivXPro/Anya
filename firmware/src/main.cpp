@@ -179,6 +179,9 @@ void loop() {
         inMenu = false;
     }
 
+    // Animate mascot on screens that show it.
+    disp_animate_mascot();
+
     // Update status bar with live WiFi RSSI + WS connection (every ~1s)
     {
         static unsigned long lastStatusUpdate = 0;

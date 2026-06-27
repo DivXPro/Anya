@@ -2,20 +2,38 @@
 #include "mascot_img.h"
 #include <cstring>
 
-// Layout — landscape 240×135 (M5StickC Plus rotation 1)
-//   0-16    status bar
-//  16-24    gap
-//  24-104   mascot area (80×80)
-// 104-112   gap
-// 112+      prompt text (bottom margin ~15px)
+// Layout — portrait 135×240 (M5StickC S3 native)
+//   0-16     status bar
+//   16-?     mascot area (original GIF size, centred)
+//   ?-?      prompt text (bottom)
 static const int STATUS_BAR_H = 16;
-static const int MASCOT_GAP   = 8;
+static const int MASCOT_GAP   = 4;
+static const int PROMPT_H     = 12;
+
+static const char* abbreviate_agent(const char* name) {
+    static char buf[32];
+    if (!name || !name[0]) return "";
+    const char* end = strchr(name, ' ');
+    size_t len = end ? (size_t)(end - name) : strlen(name);
+    if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+    memcpy(buf, name, len);
+    buf[len] = '\0';
+    return buf;
+}
+
+static int mascotY = 0;
+static int promptY = 0;
 
 void disp_init() {
-    M5.Display.setRotation(1);  // portrait 135x240
+    M5.Display.setRotation(DISPLAY_ROTATION);  // native portrait 135x240
     M5.Display.setBrightness(255);
     M5.Display.fillScreen(TFT_BLACK);
     M5.Display.setTextColor(TFT_WHITE);
+
+    // Layout must be computed after M5.begin() so width()/height() are valid.
+    mascotY = STATUS_BAR_H +
+              (M5.Display.height() - STATUS_BAR_H - MASCOT_IMG_H - PROMPT_H - MASCOT_GAP) / 2;
+    promptY = mascotY + MASCOT_IMG_H + MASCOT_GAP;
 }
 
 // ── Status Bar ────────────────────────────────────────────────
@@ -56,14 +74,13 @@ void disp_status_bar(int8_t rssi, bool wifiConnected, bool wsConnected, const ch
         M5.Display.drawCircle(DOT_X, DOT_Y, DOT_R, TFT_DARKGREY);
     }
 
-    // Left label: show SSID when provided (e.g. on Pair screen), otherwise agent name.
-    // Use middle-left datum so the text is vertically centered in the 16px bar.
-    const char* label = (ssid && ssid[0]) ? ssid : agent;
+    // Left label: show SSID when provided (e.g. on Pair screen), otherwise abbreviated agent name.
+    const char* label = (ssid && ssid[0]) ? ssid : abbreviate_agent(agent);
     if (label && label[0]) {
-        int maxChars = (M5.Display.width() - 50) / 6;
+        int maxChars = (M5.Display.width() - 44) / 6;
         int len = strlen(label);
         if (len > maxChars) len = maxChars;
-        char buf[64];
+        char buf[32];
         if (len >= (int)sizeof(buf)) len = (int)sizeof(buf) - 1;
         strncpy(buf, label, len);
         buf[len] = '\0';
@@ -75,32 +92,42 @@ void disp_status_bar(int8_t rssi, bool wifiConnected, bool wsConnected, const ch
 }
 
 // ── Mascot ───────────────────────────────────────────────────
-static const int MASCOT_Y = STATUS_BAR_H + MASCOT_GAP;
+// Centre the original-size mascot vertically between the status bar and prompt.
+// mascotY is computed at runtime in disp_init() because M5.Display.height()
+// is not valid before M5.begin() (static initialisation order issue).
 static int  mascotFrame  = 0;
-static unsigned long mascotLastSwitch = 0;
+static unsigned long mascotFrameStart = 0;
+static int  lastDrawnMascotFrame = -1;
+static bool mascotVisible = false;
 
-static void drawMascot() {
-    // Animate: switch to random frame every 2.5–4 seconds
+static void drawMascot(bool force = false) {
     unsigned long now = millis();
-    if (mascotLastSwitch == 0) mascotLastSwitch = now;
-    if (now - mascotLastSwitch > 60000 + (esp_random() % 30000)) {  // 60–90s
-        int next;
-        do { next = (esp_random() % MASCOT_FRAMES); } while (next == mascotFrame && MASCOT_FRAMES > 1);
-        mascotFrame = next;
-        mascotLastSwitch = now;
+    if (mascotFrameStart == 0) mascotFrameStart = now;
+
+    if (now - mascotFrameStart >= MASCOT_FRAME_DURATIONS[mascotFrame]) {
+        mascotFrame = (mascotFrame + 1) % MASCOT_FRAMES;
+        mascotFrameStart = now;
     }
+
+    // Avoid redrawing the same frame every loop tick.
+    if (!force && mascotFrame == lastDrawnMascotFrame) return;
+    lastDrawnMascotFrame = mascotFrame;
 
     int x = (M5.Display.width() - MASCOT_IMG_W) / 2;
     // M5StickC S3 ST7789 expects RGB565 big-endian; ESP32 is little-endian,
     // so swap bytes when pushing the embedded image data.
-    M5.Display.pushImage(x, MASCOT_Y, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[mascotFrame], true);
+    M5.Display.pushImage(x, mascotY, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[mascotFrame], true);
 }
 
-// ── Prompt ───────────────────────────────────────────────────
-static const int PROMPT_Y = MASCOT_Y + MASCOT_IMG_H + MASCOT_GAP;
+void disp_animate_mascot() {
+    if (mascotVisible) {
+        drawMascot(false);
+    }
+}
+
+
 
 static void centerPrint(const char* s, int y) {
-    // Reset datum to top-left so setCursor positions the text top-left corner.
     M5.Display.setTextDatum(textdatum_t::top_left);
     int w = (int)strlen(s) * 6;
     M5.Display.setCursor((M5.Display.width() - w) / 2, y);
@@ -110,9 +137,9 @@ static void centerPrint(const char* s, int y) {
 static void drawPrompt(const char* line1, const char* line2) {
     M5.Display.setTextSize(1);
     M5.Display.setTextColor(TFT_WHITE);
-    centerPrint(line1, PROMPT_Y);
+    centerPrint(line1, promptY);
     if (line2) {
-        centerPrint(line2, PROMPT_Y + 18);
+        centerPrint(line2, promptY + 18);
     }
 }
 
@@ -120,83 +147,94 @@ static void drawPrompt(const char* line1, const char* line2) {
 void disp_wifi_setup(const char* hotspotSsid, const char* agent) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, false, false, agent);
-    drawMascot();
+    mascotVisible = true;
+    drawMascot(true);
     drawPrompt("Connect to Elf-hotspot", nullptr);
 }
 
 void disp_wifi_connecting(const char* ssid, const char* agent) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, false, false, agent);
-    drawMascot();
+    mascotVisible = true;
+    drawMascot(true);
     drawPrompt("Connecting...", nullptr);
 }
 
 void disp_pair_ready(const char* agent) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, false, agent);
-    drawMascot();
+    mascotVisible = true;
+    drawMascot(true);
     drawPrompt("Ready to pair", nullptr);
 }
 
 void disp_pairing(const char* agent) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, false, agent);
-    drawMascot();
+    mascotVisible = true;
+    drawMascot(true);
     drawPrompt("Pairing...", nullptr);
 }
 
 void disp_idle(const char* agent, bool connected) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, connected, agent);
-    drawMascot();
+    mascotVisible = true;
+    drawMascot(true);
     drawPrompt(connected ? "Click to speak" : "Disconnect", nullptr);
 }
 
 void disp_listening(const char* agent) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, true, agent);
-    drawMascot();
+    mascotVisible = true;
+    drawMascot(true);
     drawPrompt("Listening...", nullptr);
 }
 
 void disp_sending(const char* agent) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, true, agent);
-    drawMascot();
+    mascotVisible = true;
+    drawMascot(true);
     drawPrompt("Sending...", nullptr);
 }
 
 void disp_processing(const char* agent) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, true, agent);
-    drawMascot();
+    mascotVisible = true;
+    drawMascot(true);
     drawPrompt("Thinking...", nullptr);
 }
 
 void disp_playing(const char* summary, const char* agent) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, true, agent);
+    mascotVisible = false;
     M5.Display.setTextColor(TFT_WHITE);
     M5.Display.setTextSize(1);
-    M5.Display.setCursor(4, PROMPT_Y);
+    M5.Display.setCursor(4, promptY);
     M5.Display.print(summary);
 }
 
 void disp_connecting(const char* desktopName, const char* agent) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, false, agent);
-    drawMascot();
+    mascotVisible = true;
+    drawMascot(true);
     M5.Display.setTextSize(1);
     M5.Display.setTextColor(TFT_WHITE);
-    M5.Display.setCursor(4, PROMPT_Y);
+    M5.Display.setCursor(4, promptY);
     M5.Display.print(desktopName);
 }
 
 void disp_error(const char* msg, const char* agent) {
     M5.Display.fillScreen(TFT_RED);
     disp_status_bar(-1, false, false, agent);
+    mascotVisible = false;
     M5.Display.setTextSize(1);
-    M5.Display.setCursor(4, PROMPT_Y);
+    M5.Display.setCursor(4, promptY);
     M5.Display.print(msg);
 }
 
@@ -204,27 +242,25 @@ void disp_error(const char* msg, const char* agent) {
 void disp_menu(const char* agent, int selected, const char* const* items, int count, int8_t rssi, bool wifiConnected, bool wsConnected) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(rssi, wifiConnected, wsConnected, agent);
+    mascotVisible = false;
 
-    // Mascot on the left
-    int mascotX = 8;
-    int mascotY = MASCOT_Y;
-    M5.Display.pushImage(mascotX, mascotY, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[mascotFrame], true);
-
-    // Menu on the right
-    int menuX = mascotX + MASCOT_IMG_W + 20;
-    int startY = STATUS_BAR_H + 24;
+    // No mascot in menu — vertical list centred under the status bar.
     int lineH = 22;
+    int totalH = count * lineH;
+    int startY = STATUS_BAR_H + (M5.Display.height() - STATUS_BAR_H - totalH) / 2;
+
     M5.Display.setTextSize(1);
-    M5.Display.setTextDatum(textdatum_t::middle_left);
+    M5.Display.setTextDatum(textdatum_t::middle_center);
 
     for (int i = 0; i < count; i++) {
         int y = startY + i * lineH;
         bool sel = (i == selected);
         if (sel) {
             M5.Display.setTextColor(TFT_GREEN);
-            M5.Display.drawString(">", menuX - 12, y + lineH / 2);
+            M5.Display.drawString("> " + String(items[i]) + " <", M5.Display.width() / 2, y + lineH / 2);
+        } else {
+            M5.Display.setTextColor(TFT_WHITE);
+            M5.Display.drawString(items[i], M5.Display.width() / 2, y + lineH / 2);
         }
-        M5.Display.setTextColor(TFT_WHITE);
-        M5.Display.drawString(items[i], menuX, y + lineH / 2);
     }
 }
