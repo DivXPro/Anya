@@ -245,14 +245,26 @@ func (a *HermesAdapter) dispatchLoop(pm *acp.ProcessManager) {
 				evt := acp.StreamEvent{}
 				switch msg.Params.Update.SessionUpdate {
 				case "agent_message_chunk":
+					text, ok := sanitizeACPText(msg.Params.Update.Content.Text)
+					if !ok {
+						continue
+					}
 					evt.Type = "text_delta"
-					evt.Content = msg.Params.Update.Content.Text
+					evt.Content = text
 				case "agent_thought_chunk":
+					text, ok := sanitizeACPText(msg.Params.Update.Content.Text)
+					if !ok {
+						continue
+					}
 					evt.Type = "text_delta"
-					evt.Content = msg.Params.Update.Content.Text
+					evt.Content = text
 				case "tool_call_update":
+					text, ok := sanitizeACPText(msg.Params.Update.Content.Text)
+					if !ok {
+						continue
+					}
 					evt.Type = "tool_use"
-					evt.Content = msg.Params.Update.Content.Text
+					evt.Content = text
 				default:
 					continue
 				}

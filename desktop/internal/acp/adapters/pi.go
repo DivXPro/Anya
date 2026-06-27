@@ -165,6 +165,10 @@ func (a *PiAdapter) dispatchLoop(pm *acp.ProcessManager) {
 			switch msg.Type {
 			case "message_update":
 				if msg.AssistantMessageEvent.Type == "text_delta" {
+					text, ok := sanitizeACPText(msg.AssistantMessageEvent.Delta)
+					if !ok {
+						continue
+					}
 					a.streamMu.RLock()
 					active := a.activeStream
 					a.streamMu.RUnlock()
@@ -172,7 +176,7 @@ func (a *PiAdapter) dispatchLoop(pm *acp.ProcessManager) {
 						continue
 					}
 					select {
-					case active <- acp.StreamEvent{Type: "text_delta", Content: msg.AssistantMessageEvent.Delta}:
+					case active <- acp.StreamEvent{Type: "text_delta", Content: text}:
 					default:
 					}
 				}

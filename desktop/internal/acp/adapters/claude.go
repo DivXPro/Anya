@@ -324,15 +324,27 @@ func (a *ClaudeAdapter) dispatchUpdates(updates <-chan claudeacp.RPCMessage) {
 		evt := acp.StreamEvent{}
 		switch payload.Update.SessionUpdate {
 		case "agent_message_chunk":
+			text, ok := sanitizeACPText(payload.Update.Content.Text)
+			if !ok {
+				continue
+			}
 			evt.Type = "text_delta"
-			evt.Content = payload.Update.Content.Text
+			evt.Content = text
 		case "agent_thought_chunk":
 			// Surface thinking chunks as text so callers can see progress.
+			text, ok := sanitizeACPText(payload.Update.Content.Text)
+			if !ok {
+				continue
+			}
 			evt.Type = "text_delta"
-			evt.Content = payload.Update.Content.Text
+			evt.Content = text
 		case "tool_call_update":
+			text, ok := sanitizeACPText(payload.Update.Content.Text)
+			if !ok {
+				continue
+			}
 			evt.Type = "tool_use"
-			evt.Content = payload.Update.Content.Text
+			evt.Content = text
 		default:
 			continue
 		}
