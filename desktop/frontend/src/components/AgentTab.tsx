@@ -19,7 +19,7 @@ const agentLogo: Record<string, string> = {
   qwen: '/qwen.png',
 };
 
-function AgentLogo({ id, name }: { id: string; name: string }) {
+export function AgentLogo({ id, name }: { id: string; name: string }) {
   const src = agentLogo[id];
   if (!src) {
     return (
