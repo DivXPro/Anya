@@ -16,8 +16,11 @@ static inline uint8_t keyframe_pixel(int idx) {
 }
 
 void mascot_init() {
+    // Non-linear grayscale mapping: skip the darkest range where this LCD
+    // tends to show a purple/blue tint. Level 1 jumps straight to 50% gray.
+    static const uint8_t LEVEL_TO_BRIGHTNESS[MASCOT_LEVELS] = {0, 128, 191, 255};
     for (int l = 0; l < MASCOT_LEVELS; ++l) {
-        uint8_t v = (l * 255) / (MASCOT_LEVELS - 1);
+        uint8_t v = LEVEL_TO_BRIGHTNESS[l];
         levelToRgb565[l] = ((v >> 3) << 11) | ((v >> 2) << 5) | (v >> 3);
     }
     for (int i = 0; i < MASCOT_PIXELS; ++i) {
