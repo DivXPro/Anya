@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App } from '../../bindings/desktop';
 import type { Message, Agent, Session } from '../../bindings/desktop/internal/store/models';
@@ -7,26 +7,53 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Calendar, User, BrainResearch } from 'iconoir-react';
 import { AgentLogo } from './AgentTab';
 
+const PAGE_SIZE = 25;
+
 function HistoryTab() {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [search, setSearch] = useState('');
   const [agents, setAgents] = useState<Agent[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
 
-  const loadMessages = async () => {
+  const loadMessages = async (reset = false) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setLoading(true);
+
     try {
-      const result = search.trim()
-        ? await App.SearchMessages(search.trim(), 100)
-        : await App.ListMessages(100, 0);
-      setMessages(result || []);
+      const nextOffset = reset ? 0 : offset;
+
+      let result: Message[] = [];
+      if (search.trim()) {
+        result = (await App.SearchMessages(search.trim(), 100)) || [];
+        setHasMore(false);
+      } else {
+        result = (await App.ListMessages(PAGE_SIZE, nextOffset)) || [];
+        setHasMore(result.length === PAGE_SIZE);
+      }
+
+      setMessages((prev) => {
+        if (reset) return result;
+        const existing = new Set(prev.map((m) => m.id));
+        const merged = [...prev, ...result.filter((m) => !existing.has(m.id))];
+        return merged;
+      });
+      setOffset(nextOffset + result.length);
     } catch (e) {
       console.error(e);
+    } finally {
+      loadingRef.current = false;
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadMessages();
+    loadMessages(true);
 
     App.ListAgents()
       .then((v) => setAgents(v || []))
@@ -38,9 +65,17 @@ function HistoryTab() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(loadMessages, 300);
+    const timer = window.setTimeout(() => loadMessages(true), 300);
     return () => window.clearTimeout(timer);
   }, [search]);
+
+  const handleScroll: React.UIEventHandler<HTMLDivElement> = (e) => {
+    const target = e.currentTarget;
+    const nearBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 80;
+    if (nearBottom && hasMore && !loadingRef.current && !search.trim()) {
+      loadMessages(false);
+    }
+  };
 
   const grouped = useMemo(() => {
     const groups: Record<string, Message[]> = {};
@@ -126,9 +161,9 @@ function HistoryTab() {
       </div>
 
       <div className="rounded-xl border bg-card/50 p-3">
-        <ScrollArea className="h-[calc(100vh-156px)] pr-2">
+        <ScrollArea onScroll={handleScroll} className="h-[calc(100vh-156px)] pr-2">
           <div className="space-y-5">
-            {Object.entries(grouped).length === 0 && (
+            {Object.entries(grouped).length === 0 && !loading && (
               <div className="py-12 text-center text-sm text-muted-foreground">
                 {t('history.empty')}
               </div>
@@ -144,6 +179,11 @@ function HistoryTab() {
                 </div>
               </div>
             ))}
+            {loading && (
+              <div className="py-3 text-center text-xs text-muted-foreground">
+                {t('history.loading')}
+              </div>
+            )}
           </div>
         </ScrollArea>
       </div>
