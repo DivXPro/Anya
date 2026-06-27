@@ -17,7 +17,7 @@ import {
 import ShieldCheckLineIcon from 'remixicon-react/ShieldCheckLineIcon';
 import DeleteBinLineIcon from 'remixicon-react/DeleteBinLineIcon';
 import EditLineIcon from 'remixicon-react/EditLineIcon';
-import RemoteControlLineIcon from 'remixicon-react/RemoteControlLineIcon';
+import RemoteControlFillIcon from 'remixicon-react/RemoteControlFillIcon';
 
 function DeviceAuth() {
   const { t } = useTranslation();
@@ -132,7 +132,7 @@ function DeviceAuth() {
               >
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
-                    <RemoteControlLineIcon className="h-6 w-6 text-primary" />
+                    <RemoteControlFillIcon className="h-6 w-6 text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="group flex items-center gap-1.5">
