@@ -121,7 +121,7 @@ function HistoryTab() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">{t('tabs.history')}</h1>
@@ -138,26 +138,28 @@ function HistoryTab() {
         </div>
       </div>
 
-      <ScrollArea className="h-[calc(100vh-180px)] pr-2">
-        <div className="space-y-6">
-          {Object.entries(grouped).length === 0 && (
-            <div className="rounded-lg border bg-card py-12 text-center text-sm text-muted-foreground">
-              {t('history.empty')}
-            </div>
-          )}
-          {Object.entries(grouped).map(([date, group]) => (
-            <div key={date}>
-              <div className="mb-3 flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground">
-                <Calendar className="h-3.5 w-3.5" />
-                {date}
+      <div className="rounded-xl border bg-card/50 p-3">
+        <ScrollArea className="h-[calc(100vh-156px)] pr-2">
+          <div className="space-y-5">
+            {Object.entries(grouped).length === 0 && (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                {t('history.empty')}
               </div>
-              <div className="space-y-4">
-                {group.map((m) => renderBubble(m))}
+            )}
+            {Object.entries(grouped).map(([date, group]) => (
+              <div key={date}>
+                <div className="mb-3 flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {date}
+                </div>
+                <div className="space-y-4">
+                  {group.map((m) => renderBubble(m))}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   );
 }
