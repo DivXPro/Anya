@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import SearchLineIcon from 'remixicon-react/SearchLineIcon';
 import CalendarLineIcon from 'remixicon-react/CalendarLineIcon';
 import UserLineIcon from 'remixicon-react/UserLineIcon';
-import RobotLineIcon from 'remixicon-react/RobotLineIcon';
+import { RiRobot2Line } from '@remixicon/react';
 import { AgentLogo } from './AgentTab';
 
 const PAGE_SIZE = 25;
@@ -123,7 +123,7 @@ function HistoryTab() {
               {agent ? (
                 <AgentLogo id={agent.id} name={agent.name} />
               ) : (
-                <RobotLineIcon className="h-5 w-5 text-muted-foreground" />
+                <RiRobot2Line className="h-5 w-5 text-muted-foreground" />
               )}
             </div>
           )}

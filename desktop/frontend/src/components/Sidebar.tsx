@@ -2,13 +2,13 @@ import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import type { Tab } from '@/App';
 import RemoteControlLineIcon from 'remixicon-react/RemoteControlLineIcon';
-import RobotLineIcon from 'remixicon-react/RobotLineIcon';
+import { RiRobot2Line } from '@remixicon/react';
 import HistoryLineIcon from 'remixicon-react/HistoryLineIcon';
 import SettingsLineIcon from 'remixicon-react/SettingsLineIcon';
 
-const ITEMS: { key: Tab; labelKey: string; icon: typeof RemoteControlLineIcon }[] = [
+const ITEMS: { key: Tab; labelKey: string; icon: typeof RemoteControlLineIcon | typeof RiRobot2Line }[] = [
   { key: 'device', labelKey: 'tabs.device', icon: RemoteControlLineIcon },
-  { key: 'agent', labelKey: 'tabs.agent', icon: RobotLineIcon },
+  { key: 'agent', labelKey: 'tabs.agent', icon: RiRobot2Line },
   { key: 'history', labelKey: 'tabs.history', icon: HistoryLineIcon },
   { key: 'settings', labelKey: 'tabs.settings', icon: SettingsLineIcon },
 ];
