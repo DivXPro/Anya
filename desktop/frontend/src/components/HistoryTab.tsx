@@ -64,7 +64,6 @@ function HistoryTab() {
   }, [sessions]);
 
   const displayText = (m: Message) => {
-    if (m.summary && m.summary.trim()) return m.summary;
     return m.content || t('history.noContent');
   };
 
@@ -103,12 +102,6 @@ function HistoryTab() {
           >
             <p className="whitespace-pre-wrap">{displayText(m)}</p>
           </div>
-
-          {m.summary && m.summary !== m.content && (
-            <p className={`mt-1 max-w-full text-xs text-muted-foreground line-clamp-2 ${isUser ? 'text-right' : 'text-left'}`}>
-              {m.content}
-            </p>
-          )}
         </div>
       </div>
     );
