@@ -9,6 +9,7 @@ func TestSanitizeACPText(t *testing.T) {
 		wantOK   bool
 	}{
 		{"turn_startedturn_starteditem_started你好！item_completedturn_completed", "你好！", true},
+		{"turn_startedturn_starteditem_started你好！我是 Claude，一个 AI 助手。有什么我可以帮你的吗？item_completedturn_completed", "你好！我是 Claude，一个 AI 助手。有什么我可以帮你的吗？", true},
 		{"turn_started", "", false},
 		{"item_starteditem_completed", "", false},
 		{"hello world", "hello world", true},
