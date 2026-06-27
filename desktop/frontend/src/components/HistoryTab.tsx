@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   RiSearchLine,
-  RiCalendarLine,
   RiUserLine,
   RiRobot2Line,
 } from '@remixicon/react';
@@ -112,6 +111,10 @@ function HistoryTab() {
     const agentId = sessionAgentIdById[m.session_id];
     const agent = agentId ? agentById[agentId] : undefined;
     const fullTime = new Date(m.created_at).toLocaleString();
+    const shortTime = new Date(m.created_at).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
 
     return (
       <div key={m.id} className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -132,6 +135,7 @@ function HistoryTab() {
         </div>
 
         <div className={`flex max-w-[80%] flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+          <span className="mb-1 text-[10px] text-muted-foreground">{shortTime}</span>
           <div
             title={fullTime}
             className={`rounded-2xl px-4 py-2 text-sm shadow-sm ${
@@ -175,8 +179,7 @@ function HistoryTab() {
             )}
             {Object.entries(grouped).map(([date, group]) => (
               <div key={date}>
-                <div className="mb-3 flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground">
-                  <RiCalendarLine className="h-3.5 w-3.5" />
+                <div className="mb-3 text-center text-xs font-medium text-muted-foreground">
                   {date}
                 </div>
                 <div className="space-y-4">
