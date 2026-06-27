@@ -94,6 +94,20 @@ def format_array_u16(name, data, width=12):
     return lines
 
 
+def format_array_u32(name, data, width=8):
+    lines = [f"const uint32_t {name}[] PROGMEM = {{"]
+    row = "    "
+    for i, v in enumerate(data):
+        row += f"0x{v:08X}, "
+        if (i + 1) % width == 0:
+            lines.append(row.rstrip())
+            row = "    "
+    if row.strip():
+        lines.append(row.rstrip().rstrip(","))
+    lines.append("};")
+    return lines
+
+
 def main() -> None:
     gif = Image.open(INPUT)
     raw_frames = []
@@ -162,7 +176,7 @@ def main() -> None:
         "",
         "extern const int MASCOT_FRAME_DURATIONS[MASCOT_FRAMES];",
         f"extern const uint8_t MASCOT_KEYFRAME[{len(keyframe_bytes)}];",
-        f"extern const uint16_t MASCOT_DELTA_OFFSETS[{frame_count + 1}];",
+        f"extern const uint32_t MASCOT_DELTA_OFFSETS[{frame_count + 1}];",
         "extern const uint8_t MASCOT_DELTA_DATA[];",
         "",
     ]
@@ -185,7 +199,7 @@ def main() -> None:
 
     cpp_lines += format_array_u8("MASCOT_KEYFRAME", keyframe_bytes)
     cpp_lines.append("")
-    cpp_lines += format_array_u16("MASCOT_DELTA_OFFSETS", delta_offsets)
+    cpp_lines += format_array_u32("MASCOT_DELTA_OFFSETS", delta_offsets)
     cpp_lines.append("")
     cpp_lines += format_array_u8("MASCOT_DELTA_DATA", delta_data)
     cpp_lines.append("")

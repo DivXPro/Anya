@@ -23,11 +23,15 @@ void mascot_draw(int frame, int x, int y) {
     }
 
     for (int f = 0; f < frame; ++f) {
-        uint16_t start = pgm_read_byte((const uint8_t*)&MASCOT_DELTA_OFFSETS[f])
-                       | (pgm_read_byte((const uint8_t*)&MASCOT_DELTA_OFFSETS[f] + 1) << 8);
-        uint16_t end   = pgm_read_byte((const uint8_t*)&MASCOT_DELTA_OFFSETS[f + 1])
-                       | (pgm_read_byte((const uint8_t*)&MASCOT_DELTA_OFFSETS[f + 1] + 1) << 8);
-        for (uint16_t p = start; p < end; p += 3) {
+        uint32_t start = pgm_read_byte((const uint8_t*)&MASCOT_DELTA_OFFSETS[f])
+                       | (pgm_read_byte((const uint8_t*)&MASCOT_DELTA_OFFSETS[f] + 1) << 8)
+                       | (pgm_read_byte((const uint8_t*)&MASCOT_DELTA_OFFSETS[f] + 2) << 16)
+                       | (pgm_read_byte((const uint8_t*)&MASCOT_DELTA_OFFSETS[f] + 3) << 24);
+        uint32_t end   = pgm_read_byte((const uint8_t*)&MASCOT_DELTA_OFFSETS[f + 1])
+                       | (pgm_read_byte((const uint8_t*)&MASCOT_DELTA_OFFSETS[f + 1] + 1) << 8)
+                       | (pgm_read_byte((const uint8_t*)&MASCOT_DELTA_OFFSETS[f + 1] + 2) << 16)
+                       | (pgm_read_byte((const uint8_t*)&MASCOT_DELTA_OFFSETS[f + 1] + 3) << 24);
+        for (uint32_t p = start; p < end; p += 3) {
             int idx = pgm_read_byte(&MASCOT_DELTA_DATA[p])
                     | (pgm_read_byte(&MASCOT_DELTA_DATA[p + 1]) << 8);
             uint8_t val = pgm_read_byte(&MASCOT_DELTA_DATA[p + 2]);
