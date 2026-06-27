@@ -1,5 +1,4 @@
 #include "audio.h"
-#include "test_audio.h"
 #include <M5Unified.h>
 #include <cmath>
 #include <cstring>
@@ -39,9 +38,6 @@ void audio_play(const uint8_t* data, size_t len) {
 }
 
 void audio_play_test_tone() {
-    // Copy the embedded sample from flash to RAM before playback;
-    // M5.Speaker.playRaw may not reliably stream directly from flash/PROGMEM.
-    static int16_t ram_buffer[TEST_AUDIO_LEN / sizeof(int16_t)];
-    std::memcpy(ram_buffer, TEST_AUDIO, TEST_AUDIO_LEN);
-    M5.Speaker.playRaw(reinterpret_cast<uint8_t*>(ram_buffer), TEST_AUDIO_LEN, 16000, false);
+    // Generate a 1 kHz beep instead of embedding a sample.
+    M5.Speaker.tone(1000, 1000);
 }

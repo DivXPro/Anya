@@ -1,5 +1,5 @@
 #include "display.h"
-#include "mascot_img.h"
+#include "mascot.h"
 #include <cstring>
 
 // Layout — portrait 135×240 (M5StickC S3 native)
@@ -34,6 +34,8 @@ void disp_init() {
     mascotY = STATUS_BAR_H +
               (M5.Display.height() - STATUS_BAR_H - MASCOT_IMG_H - PROMPT_H - MASCOT_GAP) / 2;
     promptY = mascotY + MASCOT_IMG_H + MASCOT_GAP;
+
+    mascot_init();
 }
 
 // ── Status Bar ────────────────────────────────────────────────
@@ -100,23 +102,24 @@ static unsigned long mascotFrameStart = 0;
 static int  lastDrawnMascotFrame = -1;
 static bool mascotVisible = false;
 
-static void drawMascot(bool force = false) {
+static inline int mascot_x() {
+    return (M5.Display.width() - MASCOT_IMG_W) / 2;
+}
+
+static void updateMascotFrame() {
     unsigned long now = millis();
     if (mascotFrameStart == 0) mascotFrameStart = now;
-
     if (now - mascotFrameStart >= MASCOT_FRAME_DURATIONS[mascotFrame]) {
         mascotFrame = (mascotFrame + 1) % MASCOT_FRAMES;
         mascotFrameStart = now;
     }
+}
 
-    // Avoid redrawing the same frame every loop tick.
+static void drawMascot(bool force = false) {
+    updateMascotFrame();
     if (!force && mascotFrame == lastDrawnMascotFrame) return;
     lastDrawnMascotFrame = mascotFrame;
-
-    int x = (M5.Display.width() - MASCOT_IMG_W) / 2;
-    // M5StickC S3 ST7789 expects RGB565 big-endian; ESP32 is little-endian,
-    // so swap bytes when pushing the embedded image data.
-    M5.Display.pushImage(x, mascotY, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[mascotFrame], true);
+    mascot_draw(mascotFrame, mascot_x(), mascotY);
 }
 
 void disp_animate_mascot() {

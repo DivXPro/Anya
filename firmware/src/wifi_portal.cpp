@@ -1,7 +1,7 @@
 #include "wifi_portal.h"
 #include "display.h"
+#include "mascot.h"
 #include "elf_wifi.h"
-#include "mascot_img.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
@@ -126,6 +126,7 @@ static int portalMascotY = 0;   // computed at runtime after M5.begin()
 static int portalPromptY = 0;
 static bool portalDrawn = false;
 static int  portalFrame  = 0;
+static int  lastPortalDrawnFrame = -1;
 static unsigned long portalFrameStart = 0;
 
 static void portalDrawStatusBar() {
@@ -165,8 +166,11 @@ static void portalDrawMascot() {
         portalFrameStart = now;
     }
 
+    if (portalFrame == lastPortalDrawnFrame) return;
+    lastPortalDrawnFrame = portalFrame;
+
     int x = (M5.Display.width() - MASCOT_IMG_W) / 2;
-    M5.Display.pushImage(x, portalMascotY, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[portalFrame], true);
+    mascot_draw(portalFrame, x, portalMascotY);
 }
 
 static void drawPortalScreen() {
@@ -190,7 +194,8 @@ static void drawConnectingScreen(const char* ssid) {
     M5.Display.setBrightness(255);
     updatePortalLayout();
     portalDrawStatusBar();
-    M5.Display.pushImage(x, portalMascotY, MASCOT_IMG_W, MASCOT_IMG_H, mascot_frames[portalFrame], true);
+    lastPortalDrawnFrame = -1;  // force redraw after screen clear
+    mascot_draw(portalFrame, x, portalMascotY);
     portalCenterPrint("Connecting...", portalPromptY);
 }
 
