@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Convert an animated GIF to a compact delta-encoded 1-bit mascot for Elf firmware.
+"""Convert an animated GIF to a compact delta-encoded grayscale mascot for Elf firmware.
 
 Output is a header + source pair (e.g. mascot_anim.h / mascot_anim.cpp).
-- Frame 0 is stored as a full 1-bit keyframe.
+- Frame 0 is stored as a full packed keyframe.
 - Subsequent frames are stored as a list of changed pixels relative to the
   previous frame, wrapped back to frame 0 at the end of the loop.
 - Each delta entry is 3 bytes: uint16_t pixel offset + uint8_t new value.
@@ -15,33 +15,34 @@ from pathlib import Path
 from PIL import Image
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-INPUT = Path(sys.argv[1]) if len(sys.argv) > 1 else SCRIPT_DIR / "../desktop/frontend/public/cat-loop-1.gif"
+INPUT = Path(sys.argv[1]) if len(sys.argv) > 1 else SCRIPT_DIR / "../desktop/frontend/public/cat.gif"
 OUTPUT_H = Path(sys.argv[2]) if len(sys.argv) > 2 else SCRIPT_DIR / "../firmware/src/mascot_anim.h"
 OUTPUT_CPP = OUTPUT_H.with_suffix(".cpp")
-MAX_FRAMES = int(sys.argv[3]) if len(sys.argv) > 3 else 12
+MAX_FRAMES = int(sys.argv[3]) if len(sys.argv) > 3 else 200
+BITS_PER_PIXEL = 2  # 1 = black/white, 2 = 4 gray levels, 4 = 16 gray levels
 DEFAULT_FRAME_MS = 40
 LAST_FRAME_HOLD_MS = 2000
-BW_THRESHOLD = 128  # Pixels lighter than this become white.
 
 
 def frames_equal(a: Image.Image, b: Image.Image) -> bool:
     return a.size == b.size and list(a.getdata()) == list(b.getdata())
 
 
-def threshold_frame(frame: Image.Image) -> Image.Image:
-    """Return a 1-bit image with only pure black/white pixels."""
-    gray = frame.convert("L")
-    return gray.point(lambda p: 255 if p > BW_THRESHOLD else 0, mode="1")
+def quantize_frame(frame: Image.Image) -> Image.Image:
+    """Quantize a frame to BITS_PER_PIXEL grayscale levels (0..2^bits-1)."""
+    levels = 1 << BITS_PER_PIXEL
+    shift = 8 - BITS_PER_PIXEL
+    return frame.convert("L").point(lambda p: min(p >> shift, levels - 1), mode="L")
 
 
-def downsample(frames, durations):
-    """Evenly sample frames to at most MAX_FRAMES while preserving timing."""
-    if len(frames) <= MAX_FRAMES:
+def downsample(frames, durations, max_frames):
+    """Evenly sample frames to at most max_frames while preserving timing."""
+    if len(frames) <= max_frames:
         return frames, durations
-    step = len(frames) / MAX_FRAMES
+    step = len(frames) / max_frames
     out_frames = []
     out_durations = []
-    for i in range(MAX_FRAMES):
+    for i in range(max_frames):
         start = int(round(i * step))
         end = int(round((i + 1) * step))
         end = min(end, len(frames))
@@ -51,13 +52,16 @@ def downsample(frames, durations):
     return out_frames, out_durations
 
 
-def bits_to_bytes(bits):
-    """Pack a list of 0/1 ints into MSB-first bytes."""
-    n = len(bits)
-    out = bytearray((n + 7) // 8)
-    for i, b in enumerate(bits):
-        if b:
-            out[i >> 3] |= 0x80 >> (i & 7)
+def pack_pixels(values, bpp):
+    """Pack a list of pixel values (0..2^bpp-1) into bytes, MSB first."""
+    pixels_per_byte = 8 // bpp
+    mask = (1 << bpp) - 1
+    n = len(values)
+    out = bytearray((n + pixels_per_byte - 1) // pixels_per_byte)
+    for i, v in enumerate(values):
+        byte_idx = i // pixels_per_byte
+        bit_shift = 8 - bpp - (i % pixels_per_byte) * bpp
+        out[byte_idx] |= (v & mask) << bit_shift
     return bytes(out)
 
 
@@ -71,20 +75,6 @@ def format_array_u8(name, data, width=16):
     row = "    "
     for i, b in enumerate(data):
         row += f"0x{b:02X}, "
-        if (i + 1) % width == 0:
-            lines.append(row.rstrip())
-            row = "    "
-    if row.strip():
-        lines.append(row.rstrip().rstrip(","))
-    lines.append("};")
-    return lines
-
-
-def format_array_u16(name, data, width=12):
-    lines = [f"const uint16_t {name}[] PROGMEM = {{"]
-    row = "    "
-    for i, v in enumerate(data):
-        row += f"0x{v:04X}, "
         if (i + 1) % width == 0:
             lines.append(row.rstrip())
             row = "    "
@@ -114,11 +104,11 @@ def main() -> None:
 
     try:
         while True:
-            # Composite onto black, then threshold to pure black/white.
+            # Composite onto black, then quantize to grayscale levels.
             frame = gif.convert("RGBA")
             bg = Image.new("RGBA", frame.size, (0, 0, 0, 255))
             composite = Image.alpha_composite(bg, frame)
-            raw_frames.append(threshold_frame(composite))
+            raw_frames.append(quantize_frame(composite))
             gif.seek(gif.tell() + 1)
     except EOFError:
         pass
@@ -136,18 +126,18 @@ def main() -> None:
             dedup_frames.append(frame)
             dedup_durations.append(DEFAULT_FRAME_MS)
 
-    frames, durations = downsample(dedup_frames, dedup_durations)
+    frames, durations = downsample(dedup_frames, dedup_durations, MAX_FRAMES)
     if durations:
         durations[-1] = max(durations[-1], LAST_FRAME_HOLD_MS)
 
     w, h = frames[0].size
     frame_count = len(frames)
 
-    # Convert to bit lists.
+    # Convert to pixel value lists.
     bits_list = [list(f.getdata()) for f in frames]
 
     # Keyframe = frame 0.
-    keyframe_bytes = bits_to_bytes(bits_list[0])
+    keyframe_bytes = pack_pixels(bits_list[0], BITS_PER_PIXEL)
 
     # Delta data: for each transition i -> (i+1) % frame_count.
     delta_data = bytearray()
@@ -159,13 +149,13 @@ def main() -> None:
         for offset, value in changes:
             delta_data.append(offset & 0xFF)
             delta_data.append((offset >> 8) & 0xFF)
-            delta_data.append(1 if value else 0)
+            delta_data.append(value & 0xFF)
         delta_offsets.append(len(delta_data))
 
     header_lines = [
         "// Auto-generated mascot animation data.",
         f"// Source: {INPUT}",
-        f"// {frame_count} frames @ {w}x{h}, 1-bit keyframe + delta-encoded changes.",
+        f"// {frame_count} frames @ {w}x{h}, {BITS_PER_PIXEL}-bit keyframe + delta-encoded changes.",
         "#pragma once",
         "#include <cstdint>",
         "",
@@ -173,6 +163,8 @@ def main() -> None:
         f"constexpr int MASCOT_IMG_H = {h};",
         f"constexpr int MASCOT_FRAMES = {frame_count};",
         f"constexpr int MASCOT_PIXELS = {w * h};",
+        f"constexpr int MASCOT_BITS_PER_PIXEL = {BITS_PER_PIXEL};",
+        f"constexpr int MASCOT_LEVELS = {1 << BITS_PER_PIXEL};",
         "",
         "extern const int MASCOT_FRAME_DURATIONS[MASCOT_FRAMES];",
         f"extern const uint8_t MASCOT_KEYFRAME[{len(keyframe_bytes)}];",
@@ -210,7 +202,7 @@ def main() -> None:
         f.write("\n".join(cpp_lines))
 
     print(f"Generated {OUTPUT_H} / {OUTPUT_CPP}")
-    print(f"Frames: {frame_count} @ {w}x{h}, keyframe {len(keyframe_bytes)} bytes, delta {len(delta_data)} bytes")
+    print(f"Frames: {frame_count} @ {w}x{h}, {BITS_PER_PIXEL}-bit, keyframe {len(keyframe_bytes)} bytes, delta {len(delta_data)} bytes")
     print(f"Durations (ms): {durations}")
 
 
