@@ -158,17 +158,23 @@ func (a *ClaudeAdapter) Send(prompt string, history []acp.Message) (<-chan acp.S
 	a.mu.Lock()
 	a.reqID++
 	id := a.reqID
+	systemPrompt := a.systemPrompt
 	ch := make(chan acp.StreamEvent, 256)
 	a.streamMu.Lock()
 	a.activeStream = ch
 	a.streamMu.Unlock()
 	a.mu.Unlock()
 
+	params := map[string]any{
+		"sessionId": a.sessionID,
+		"prompt":    []map[string]any{{"type": "text", "text": prompt}},
+	}
+	if systemPrompt != "" {
+		params["systemInstructions"] = systemPrompt
+	}
+
 	go func() {
-		_, err := a.clientRequest(id, "session/prompt", map[string]any{
-			"sessionId": a.sessionID,
-			"prompt":    []map[string]any{{"type": "text", "text": prompt}},
-		})
+		_, err := a.clientRequest(id, "session/prompt", params)
 
 		a.streamMu.Lock()
 		defer a.streamMu.Unlock()

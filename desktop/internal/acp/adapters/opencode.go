@@ -112,20 +112,25 @@ func (a *OpenCodeAdapter) Send(prompt string, history []acp.Message) (<-chan acp
 	a.reqID++
 	id := a.reqID
 	a.lastPromptReqID = id
+	systemPrompt := a.systemPrompt
 	ch := make(chan acp.StreamEvent, 256)
 	a.streamMu.Lock()
 	a.activeStream = ch
 	a.streamMu.Unlock()
 	a.mu.Unlock()
 
+	promptParams := map[string]any{
+		"sessionId": a.sessionID,
+		"prompt":    []map[string]any{{"type": "text", "text": prompt}},
+	}
+	if systemPrompt != "" {
+		promptParams["systemInstructions"] = systemPrompt
+	}
 	req := map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,
 		"method":  "session/prompt",
-		"params": map[string]any{
-			"sessionId": a.sessionID,
-			"prompt":    []map[string]any{{"type": "text", "text": prompt}},
-		},
+		"params":  promptParams,
 	}
 
 	if err := a.pm.SendJSON(req); err != nil {
