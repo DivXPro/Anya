@@ -163,9 +163,9 @@ void disp_wifi_connecting(const char* ssid, const char* agent) {
     drawPrompt("Connecting...", nullptr);
 }
 
-void disp_pair_ready(const char* agent) {
+void disp_pair_ready(const char* agent, const char* ssid) {
     M5.Display.fillScreen(TFT_BLACK);
-    disp_status_bar(-1, true, false, agent);
+    disp_status_bar(-1, true, false, agent, ssid);
     mascotVisible = true;
     drawMascot(true);
     drawPrompt("Ready to pair", nullptr);

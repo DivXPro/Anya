@@ -40,7 +40,7 @@ void state_transition(State s) {
             disp_wifi_connecting(wifi_ssid.c_str(), agentName);
             break;
         case State::PAIR_READY:
-            disp_pair_ready(agentName);
+            disp_pair_ready(agentName, status_ssid());
             break;
         case State::PAIRING:
             disp_pairing(agentName);
@@ -63,7 +63,10 @@ void state_transition(State s) {
             disp_menu(agentName, 0, nullptr, 0, lastRssi, lastWifiConnected, lastWsConnected);
             break;
     }
-    disp_status_bar(lastRssi, lastWifiConnected, lastWsConnected, agentName, status_ssid());
+    // PAIR_READY already draws the status bar with the SSID in one shot.
+    if (current != State::PAIR_READY) {
+        disp_status_bar(lastRssi, lastWifiConnected, lastWsConnected, agentName, status_ssid());
+    }
 }
 
 void state_set_agent(const char* name) {
