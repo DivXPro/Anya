@@ -72,7 +72,7 @@ function HistoryTab() {
     const isUser = m.role === 'user';
     const agentId = sessionAgentIdById[m.session_id];
     const agent = agentId ? agentById[agentId] : undefined;
-    const time = m.created_at.slice(11, 16);
+    const fullTime = new Date(m.created_at).toLocaleString();
 
     return (
       <div key={m.id} className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -93,14 +93,8 @@ function HistoryTab() {
         </div>
 
         <div className={`flex max-w-[80%] flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-          <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-medium">
-              {isUser ? t('history.roleUser') : agent?.name || t('history.roleAssistant')}
-            </span>
-            <span>{time}</span>
-          </div>
-
           <div
+            title={fullTime}
             className={`rounded-2xl px-4 py-2 text-sm shadow-sm ${
               isUser
                 ? 'rounded-br-sm bg-primary text-primary-foreground'
