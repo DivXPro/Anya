@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { App } from "../../bindings/desktop";
-import type {
+import { App } from "../../bindings/desktop";import type {
   Message,
   Agent,
   Session,

@@ -62,3 +62,27 @@ func TTSEndMessage() DeviceMessage {
 func StatusMessage(state string) DeviceMessage {
 	return DeviceMessage{Type: "status", State: state}
 }
+
+func FirmwareVersionReqMessage() DeviceMessage {
+	return DeviceMessage{Type: "firmware_version_req"}
+}
+
+func FirmwareUpdateMessage(version string, size int, md5 string, chunkSize int) DeviceMessage {
+	return DeviceMessage{
+		Type: "firmware_update",
+		Payload: map[string]interface{}{
+			"version":    version,
+			"size":       size,
+			"md5":        md5,
+			"chunk_size": chunkSize,
+		},
+	}
+}
+
+func FirmwareCommitMessage() DeviceMessage {
+	return DeviceMessage{Type: "firmware_commit"}
+}
+
+func FirmwareUpdateCancelMessage() DeviceMessage {
+	return DeviceMessage{Type: "firmware_update_cancel"}
+}

@@ -28,6 +28,10 @@ func TestAllMessageTypes(t *testing.T) {
 		TTSStartMessage("pcm"),
 		TTSEndMessage(),
 		StatusMessage("listening"),
+		FirmwareVersionReqMessage(),
+		FirmwareUpdateMessage("1.0.0", 1234, "abcd", 4096),
+		FirmwareCommitMessage(),
+		FirmwareUpdateCancelMessage(),
 	}
 
 	for i, msg := range msgs {

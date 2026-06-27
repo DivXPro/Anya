@@ -11,6 +11,7 @@
 #include "buttons.h"
 #include "protocol.h"
 #include "state.h"
+#include "ota.h"
 
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "0.0.0-dev"
@@ -88,6 +89,10 @@ void setup() {
     }
 
     btn_on_ptt_press([]() {
+        if (ota_in_progress()) {
+            ESP_LOGI("main", "PTT press ignored: OTA in progress");
+            return;
+        }
         if (inMenu) {
             ESP_LOGI("main", "menu confirm: %s", menuItems[menuSelected]);
             if (menuSelected == 0) {
@@ -143,6 +148,7 @@ void setup() {
     });
 
     btn_on_ptt_release([]() {
+        if (ota_in_progress()) return;
         if (inMenu) return;
         if (!ws_connected()) {
             ESP_LOGI("main", "PTT release ignored: not connected");
@@ -155,6 +161,10 @@ void setup() {
     });
 
     btn_on_next([]() {
+        if (ota_in_progress()) {
+            ESP_LOGI("main", "menu navigation ignored: OTA in progress");
+            return;
+        }
         if (!inMenu) {
             ESP_LOGI("main", "enter menu");
             inMenu = true;
@@ -220,7 +230,7 @@ void loop() {
         }
     }
 
-    if (connect_is_requested()) {
+    if (!ota_in_progress() && connect_is_requested()) {
         connect_clear_request();
         String ip = connect_get_ip();
         uint16_t port = connect_get_port();
@@ -235,7 +245,7 @@ void loop() {
         ws_connect(ip.c_str(), port);
     }
 
-    if (audio_is_recording()) {
+    if (!ota_in_progress() && audio_is_recording()) {
         static uint8_t buf[1024];
         size_t len = audio_capture(buf, sizeof(buf));
         if (len > 0) {

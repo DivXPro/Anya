@@ -2,6 +2,7 @@
 #include "display.h"
 #include "audio.h"
 #include "elf_wifi.h"
+#include "ota.h"
 #include <cstring>
 
 static State current = State::WIFI_SETUP;
@@ -62,6 +63,9 @@ void state_transition(State s) {
         case State::MENU:
             disp_menu(agentName, 0, nullptr, 0, lastRssi, lastWifiConnected, lastWsConnected);
             break;
+        case State::UPDATING:
+            disp_updating(0, "", agentName);
+            break;
     }
     // PAIR_READY already draws the status bar with the SSID in one shot.
     if (current != State::PAIR_READY) {
@@ -83,6 +87,9 @@ void state_set_summary(const char* text) {
 }
 
 void state_force_idle() {
+    if (current == State::UPDATING) {
+        ota_abort();
+    }
     connected = false;
     lastWifiConnected = false;
     lastWsConnected = false;
@@ -94,6 +101,12 @@ void state_force_idle() {
 
 void state_play_audio(const uint8_t* data, size_t len) {
     audio_play(data, len);
+}
+
+void state_set_ota_progress(int8_t percent, const char* version) {
+    if (current != State::UPDATING) return;
+    disp_updating(percent, version, agentName);
+    disp_status_bar(lastRssi, lastWifiConnected, lastWsConnected, agentName, status_ssid());
 }
 
 State state_current() { return current; }

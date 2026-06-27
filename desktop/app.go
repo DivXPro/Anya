@@ -49,6 +49,7 @@ type App struct {
 	trayDeviceName string
 	trayUILanguage string
 	flashMgr       *firmware.Manager
+	otaMgr         *firmware.OTAManager
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
@@ -171,6 +172,7 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 
 	// 2.0 Init firmware flash manager
 	a.flashMgr = firmware.NewManager()
+	a.otaMgr = firmware.NewOTAManager()
 
 	// 2.1 Scan which agent commands are installed and enable the first available one.
 	// This also ensures only one agent is marked as enabled at startup.
@@ -506,6 +508,8 @@ func (a *App) recoverOrCreateSession(deviceID, agentID string) (*store.Session, 
 func (a *App) handleDeviceDisconnect(deviceID string) {
 	log.Printf("[elf] device disconnected: %s", deviceID)
 
+	a.otaMgr.DeviceDisconnected(deviceID)
+
 	// Update tray menu
 	a.trayDeviceName = ""
 	a.refreshTrayDeviceStatus()
@@ -530,6 +534,10 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 		case evt, ok := <-events:
 			if !ok {
 				return
+			}
+			if strings.HasPrefix(evt.Type, "firmware_") {
+				a.otaMgr.HandleEvent(dev.Info().ID, &evt)
+				continue
 			}
 			switch evt.Type {
 			case "audio_start":
@@ -872,6 +880,47 @@ func (a *App) FindEsptool() (string, error) {
 // startup banner and returns the firmware version reported by the device.
 func (a *App) ReadDeviceFirmwareVersion(port string) (string, error) {
 	return firmware.ReadDeviceFirmwareVersion(port, 3*time.Second)
+}
+
+func (a *App) CheckDeviceFirmwareVersion(deviceID string) error {
+	if a.wsServer == nil {
+		return fmt.Errorf("server not initialized")
+	}
+	dev := a.wsServer.GetDevice(deviceID)
+	if dev == nil {
+		return fmt.Errorf("device not connected: %s", deviceID)
+	}
+	return a.otaMgr.CheckVersion(deviceID, dev)
+}
+
+func (a *App) StartOTAUpdate(deviceID string) error {
+	if a.wsServer == nil {
+		return fmt.Errorf("server not initialized")
+	}
+	dev := a.wsServer.GetDevice(deviceID)
+	if dev == nil {
+		return fmt.Errorf("device not connected: %s", deviceID)
+	}
+	if !firmware.HasEmbeddedFirmware() {
+		return fmt.Errorf("no firmware binary embedded")
+	}
+	return a.otaMgr.StartUpdate(deviceID, dev, firmware.EmbeddedFirmware(), firmware.EmbeddedFirmwareVersion())
+}
+
+func (a *App) CancelOTAUpdate(deviceID string) error {
+	if a.wsServer == nil {
+		return fmt.Errorf("server not initialized")
+	}
+	dev := a.wsServer.GetDevice(deviceID)
+	return a.otaMgr.Cancel(deviceID, dev)
+}
+
+func (a *App) GetOTAProgress(deviceID string) firmware.OTAProgress {
+	return a.otaMgr.Progress(deviceID)
+}
+
+func (a *App) GetDeviceFirmwareVersion(deviceID string) string {
+	return a.otaMgr.DeviceVersion(deviceID)
 }
 
 func (a *App) UpdateAgent(agent store.Agent) error {

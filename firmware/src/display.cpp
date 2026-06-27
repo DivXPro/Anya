@@ -241,6 +241,37 @@ void disp_error(const char* msg, const char* agent) {
     M5.Display.print(msg);
 }
 
+void disp_updating(int8_t percent, const char* version, const char* agent) {
+    M5.Display.fillScreen(TFT_BLACK);
+    disp_status_bar(-1, true, true, agent);
+    mascotVisible = false;
+
+    M5.Display.setTextSize(1);
+    M5.Display.setTextColor(TFT_WHITE);
+    M5.Display.setTextDatum(textdatum_t::middle_center);
+    M5.Display.drawString("Updating firmware...", M5.Display.width() / 2, promptY - 24);
+
+    const int barW = M5.Display.width() - 24;
+    const int barH = 10;
+    const int x = 12;
+    const int y = promptY;
+    M5.Display.drawRect(x, y, barW, barH, TFT_WHITE);
+    int fillW = (int)percent * barW / 100;
+    if (fillW < 0) fillW = 0;
+    if (fillW > barW) fillW = barW;
+    M5.Display.fillRect(x + 2, y + 2, fillW - 4, barH - 4, TFT_GREEN);
+
+    char pct[8];
+    snprintf(pct, sizeof(pct), "%d%%", percent);
+    M5.Display.drawString(pct, M5.Display.width() / 2, y + barH + 12);
+
+    if (version && version[0]) {
+        char ver[48];
+        snprintf(ver, sizeof(ver), "to %s", version);
+        M5.Display.drawString(ver, M5.Display.width() / 2, y + barH + 26);
+    }
+}
+
 // ── Menu ──────────────────────────────────────────────────────
 void disp_menu(const char* agent, int selected, const char* const* items, int count, int8_t rssi, bool wifiConnected, bool wsConnected) {
     M5.Display.fillScreen(TFT_BLACK);

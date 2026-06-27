@@ -2,8 +2,14 @@
 #include "ws_client.h"
 #include "state.h"
 #include "elf_wifi.h"
+#include "ota.h"
 #include <ArduinoJson.h>
 #include <cstring>
+
+static size_t otaChunkSize = 0;
+static size_t otaTotalSize = 0;
+static size_t otaReceived = 0;
+static int otaSeq = 0;
 
 void protocol_init() {
     ws_on_text([](const char* msg) {
@@ -54,6 +60,44 @@ void protocol_handle_message(const char* json) {
             return;
         }
         state_transition(State::PAIRING);
+    } else if (strcmp(type, "firmware_version_req") == 0) {
+        char json[128];
+        snprintf(json, sizeof(json), "{\"type\":\"firmware_version\",\"payload\":{\"version\":\"%s\"}}", FIRMWARE_VERSION);
+        ws_send_text(json);
+    } else if (strcmp(type, "firmware_update") == 0) {
+        if (state_current() != State::IDLE) {
+            ws_send_text("{\"type\":\"firmware_update_error\",\"payload\":{\"message\":\"device not idle\"}}");
+            return;
+        }
+        const char* version = doc["payload"]["version"] | "";
+        size_t size = doc["payload"]["size"] | 0;
+        const char* md5 = doc["payload"]["md5"] | "";
+        size_t chunkSize = doc["payload"]["chunk_size"] | 4096;
+        ESP_LOGI("ota", "update offer v=%s size=%u md5=%s chunk=%u", version, (unsigned)size, md5, (unsigned)chunkSize);
+        if (size == 0 || chunkSize == 0) {
+            ws_send_text("{\"type\":\"firmware_update_error\",\"payload\":{\"message\":\"invalid update parameters\"}}");
+            return;
+        }
+        otaChunkSize = chunkSize;
+        otaTotalSize = size;
+        otaReceived = 0;
+        otaSeq = 0;
+        if (!ota_begin(size, md5, chunkSize)) {
+            ws_send_text("{\"type\":\"firmware_update_error\",\"payload\":{\"message\":\"flash init failed\"}}");
+            return;
+        }
+        state_transition(State::UPDATING);
+        ws_send_text("{\"type\":\"firmware_update_ack\"}");
+    } else if (strcmp(type, "firmware_commit") == 0) {
+        if (!ota_in_progress()) {
+            ws_send_text("{\"type\":\"firmware_update_error\",\"payload\":{\"message\":\"no update to commit\"}}");
+            return;
+        }
+        ota_commit();
+    } else if (strcmp(type, "firmware_update_cancel") == 0) {
+        ota_abort();
+        state_force_idle();
+        ws_send_text("{\"type\":\"firmware_update_cancelled\"}");
     } else if (strcmp(type, "tts_start") == 0) {
         // prepare for TTS audio
     } else if (strcmp(type, "tts_end") == 0) {
@@ -62,6 +106,25 @@ void protocol_handle_message(const char* json) {
 }
 
 void protocol_handle_binary(const uint8_t* data, size_t len) {
+    if (ota_in_progress()) {
+        if (!ota_write_chunk(data, len)) {
+            ota_abort();
+            state_force_idle();
+            ws_send_text("{\"type\":\"firmware_update_error\",\"payload\":{\"message\":\"chunk write failed\"}}");
+            return;
+        }
+        otaReceived += len;
+        int percent = (int)(otaReceived * 100 / otaTotalSize);
+        char ack[128];
+        snprintf(ack, sizeof(ack), "{\"type\":\"firmware_chunk_ack\",\"payload\":{\"seq\":%d,\"percent\":%d}}", otaSeq, percent);
+        ws_send_text(ack);
+        otaSeq++;
+        state_set_ota_progress((int8_t)percent, "");
+        if (otaReceived >= otaTotalSize) {
+            ws_send_text("{\"type\":\"firmware_update_complete\"}");
+        }
+        return;
+    }
     state_play_audio(data, len);
 }
 

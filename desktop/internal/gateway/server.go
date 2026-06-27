@@ -86,6 +86,12 @@ func (s *Server) ConnectedDeviceIDs() []string {
 	return ids
 }
 
+func (s *Server) GetDevice(deviceID string) DeviceAdapter {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.devices[deviceID]
+}
+
 func (s *Server) ListPendingDevices() []PendingDevice {
 	s.pendingAuthMu.Lock()
 	defer s.pendingAuthMu.Unlock()

@@ -3,7 +3,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -35,6 +35,14 @@ export function CancelFlash(): $CancellablePromise<void> {
     return $Call.ByID(3536286619);
 }
 
+export function CancelOTAUpdate(deviceID: string): $CancellablePromise<void> {
+    return $Call.ByID(1473713506, deviceID);
+}
+
+export function CheckDeviceFirmwareVersion(deviceID: string): $CancellablePromise<void> {
+    return $Call.ByID(3237672752, deviceID);
+}
+
 /**
  * ConnectToDevice notifies a scanned device to open a WebSocket back to the desktop.
  * The device is NOT authorized here; authorization happens after the device sends
@@ -62,55 +70,87 @@ export function GetDeviceAlias(deviceID: string): $CancellablePromise<string> {
     return $Call.ByID(1475520567, deviceID);
 }
 
+export function GetDeviceFirmwareVersion(deviceID: string): $CancellablePromise<string> {
+    return $Call.ByID(72830496, deviceID);
+}
+
 export function GetFlashProgress(): $CancellablePromise<firmware$0.FlashProgress> {
-    return $Call.ByID(2233710848);
+    return $Call.ByID(2233710848).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function GetOTAProgress(deviceID: string): $CancellablePromise<firmware$0.OTAProgress> {
+    return $Call.ByID(3461899768, deviceID).then(($result: any) => {
+        return $$createType1($result);
+    });
 }
 
 /**
  * GetSTTDownloadProgress exposes the local whisper model download progress.
  */
 export function GetSTTDownloadProgress(): $CancellablePromise<speech$0.DownloadProgress> {
-    return $Call.ByID(2507448111);
+    return $Call.ByID(2507448111).then(($result: any) => {
+        return $$createType2($result);
+    });
 }
 
-export function GetSessionMessages(sessionID: string): $CancellablePromise<store$0.Message[] | null> {
-    return $Call.ByID(988970873, sessionID);
+export function GetSessionMessages(sessionID: string): $CancellablePromise<store$0.Message[]> {
+    return $Call.ByID(988970873, sessionID).then(($result: any) => {
+        return $$createType4($result);
+    });
 }
 
-export function GetSettings(): $CancellablePromise<{ [_ in string]?: string } | null> {
-    return $Call.ByID(2554697378);
+export function GetSettings(): $CancellablePromise<{ [_ in string]?: string }> {
+    return $Call.ByID(2554697378).then(($result: any) => {
+        return $$createType5($result);
+    });
 }
 
 export function HasEmbeddedFirmware(): $CancellablePromise<boolean> {
     return $Call.ByID(3682150640);
 }
 
-export function ListAgents(): $CancellablePromise<store$0.Agent[] | null> {
-    return $Call.ByID(578673379);
+export function ListAgents(): $CancellablePromise<store$0.Agent[]> {
+    return $Call.ByID(578673379).then(($result: any) => {
+        return $$createType7($result);
+    });
 }
 
-export function ListAuthorizedDevices(): $CancellablePromise<store$0.AuthorizedDevice[] | null> {
-    return $Call.ByID(1577096867);
+export function ListAuthorizedDevices(): $CancellablePromise<store$0.AuthorizedDevice[]> {
+    return $Call.ByID(1577096867).then(($result: any) => {
+        return $$createType9($result);
+    });
 }
 
-export function ListConnectedDeviceIDs(): $CancellablePromise<string[] | null> {
-    return $Call.ByID(1131397920);
+export function ListConnectedDeviceIDs(): $CancellablePromise<string[]> {
+    return $Call.ByID(1131397920).then(($result: any) => {
+        return $$createType10($result);
+    });
 }
 
-export function ListMessages(limit: number, offset: number): $CancellablePromise<store$0.Message[] | null> {
-    return $Call.ByID(2939394281, limit, offset);
+export function ListMessages(limit: number, offset: number): $CancellablePromise<store$0.Message[]> {
+    return $Call.ByID(2939394281, limit, offset).then(($result: any) => {
+        return $$createType4($result);
+    });
 }
 
-export function ListPendingDevices(): $CancellablePromise<gateway$0.PendingDevice[] | null> {
-    return $Call.ByID(4263251995);
+export function ListPendingDevices(): $CancellablePromise<gateway$0.PendingDevice[]> {
+    return $Call.ByID(4263251995).then(($result: any) => {
+        return $$createType12($result);
+    });
 }
 
-export function ListSerialPorts(): $CancellablePromise<firmware$0.SerialPortInfo[] | null> {
-    return $Call.ByID(3298629127);
+export function ListSerialPorts(): $CancellablePromise<firmware$0.SerialPortInfo[]> {
+    return $Call.ByID(3298629127).then(($result: any) => {
+        return $$createType14($result);
+    });
 }
 
-export function ListSessions(limit: number, offset: number): $CancellablePromise<store$0.Session[] | null> {
-    return $Call.ByID(827108744, limit, offset);
+export function ListSessions(limit: number, offset: number): $CancellablePromise<store$0.Session[]> {
+    return $Call.ByID(827108744, limit, offset).then(($result: any) => {
+        return $$createType16($result);
+    });
 }
 
 /**
@@ -132,12 +172,16 @@ export function STTReady(): $CancellablePromise<boolean> {
     return $Call.ByID(664123937);
 }
 
-export function ScanDevices(): $CancellablePromise<discovery$0.DiscoveredDevice[] | null> {
-    return $Call.ByID(752654171);
+export function ScanDevices(): $CancellablePromise<discovery$0.DiscoveredDevice[]> {
+    return $Call.ByID(752654171).then(($result: any) => {
+        return $$createType18($result);
+    });
 }
 
-export function SearchMessages(query: string, limit: number): $CancellablePromise<store$0.Message[] | null> {
-    return $Call.ByID(3203246577, query, limit);
+export function SearchMessages(query: string, limit: number): $CancellablePromise<store$0.Message[]> {
+    return $Call.ByID(3203246577, query, limit).then(($result: any) => {
+        return $$createType4($result);
+    });
 }
 
 /**
@@ -171,6 +215,31 @@ export function SetTrayQuitItem(item: application$0.MenuItem | null): $Cancellab
     return $Call.ByID(3681134623, item);
 }
 
+export function StartOTAUpdate(deviceID: string): $CancellablePromise<void> {
+    return $Call.ByID(665326238, deviceID);
+}
+
 export function UpdateAgent(agent: store$0.Agent): $CancellablePromise<void> {
     return $Call.ByID(1405986229, agent);
 }
+
+// Private type creation functions
+const $$createType0 = firmware$0.FlashProgress.createFrom;
+const $$createType1 = firmware$0.OTAProgress.createFrom;
+const $$createType2 = speech$0.DownloadProgress.createFrom;
+const $$createType3 = store$0.Message.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = $Create.Map($Create.Any, $Create.Any);
+const $$createType6 = store$0.Agent.createFrom;
+const $$createType7 = $Create.Array($$createType6);
+const $$createType8 = store$0.AuthorizedDevice.createFrom;
+const $$createType9 = $Create.Array($$createType8);
+const $$createType10 = $Create.Array($Create.Any);
+const $$createType11 = gateway$0.PendingDevice.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = firmware$0.SerialPortInfo.createFrom;
+const $$createType14 = $Create.Array($$createType13);
+const $$createType15 = store$0.Session.createFrom;
+const $$createType16 = $Create.Array($$createType15);
+const $$createType17 = discovery$0.DiscoveredDevice.createFrom;
+const $$createType18 = $Create.Array($$createType17);
