@@ -30,6 +30,8 @@ function SettingsTab() {
   const [selectedPort, setSelectedPort] = useState('');
   const [hasFirmware, setHasFirmware] = useState(false);
   const [firmwareVersion, setFirmwareVersion] = useState('');
+  const [deviceVersion, setDeviceVersion] = useState('');
+  const [checkingVersion, setCheckingVersion] = useState(false);
   const [flashProgress, setFlashProgress] = useState<FlashProgress>({
     running: false,
     stage: FlashStage.StageIdle,
@@ -103,6 +105,27 @@ function SettingsTab() {
   const cancelFlash = () => {
     App.CancelFlash().catch(console.error);
   };
+
+  const checkDeviceVersion = async () => {
+    if (!selectedPort) return;
+    setCheckingVersion(true);
+    setDeviceVersion('');
+    try {
+      const v = await App.ReadDeviceFirmwareVersion(selectedPort);
+      setDeviceVersion(v || '');
+    } catch (e) {
+      console.error(e);
+      setDeviceVersion('');
+    } finally {
+      setCheckingVersion(false);
+    }
+  };
+
+  const upgradeAvailable =
+    hasFirmware &&
+    firmwareVersion &&
+    deviceVersion &&
+    firmwareVersion !== deviceVersion;
 
   const updateSetting = (key: string, value: string) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -260,6 +283,30 @@ function SettingsTab() {
             <Badge variant="secondary">
               {hasFirmware ? firmwareVersion || 'unknown' : t('settings.firmware.noFirmware')}
             </Badge>
+          </div>
+
+          <div className="flex items-center justify-between border-b p-3">
+            <div className="space-y-0.5">
+              <Label>{t('settings.firmware.deviceVersion')}</Label>
+              <p className="text-xs text-muted-foreground">
+                {deviceVersion
+                  ? t('settings.firmware.deviceVersionValue', { version: deviceVersion })
+                  : t('settings.firmware.deviceVersionEmpty')}
+                {upgradeAvailable && (
+                  <span className="ml-2 text-amber-600 dark:text-amber-400">
+                    {t('settings.firmware.upgradeAvailable')}
+                  </span>
+                )}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={checkDeviceVersion}
+              disabled={checkingVersion || !selectedPort}
+            >
+              {checkingVersion ? t('settings.firmware.checkingVersion') : t('settings.firmware.checkVersion')}
+            </Button>
           </div>
 
           <div className="flex items-center justify-between border-b p-3">

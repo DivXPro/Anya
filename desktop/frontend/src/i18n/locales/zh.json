@@ -56,6 +56,12 @@
       "success": "烧录成功",
       "failed": "烧录失败",
 
+      "deviceVersion": "设备版本",
+      "deviceVersionValue": "检测到版本：{{version}}",
+      "deviceVersionEmpty": "点击检查读取已连接设备的版本",
+      "checkVersion": "检查",
+      "checkingVersion": "检查中...",
+      "upgradeAvailable": "有新版本可用",
       "hintBoot": "如果设备无法连接，请按住 BOOT 键再插入 USB。"
     }
   },

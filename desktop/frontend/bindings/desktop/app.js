@@ -191,6 +191,16 @@ export function ListSessions(limit, offset) {
 }
 
 /**
+ * ReadDeviceFirmwareVersion listens on the given serial port for the device's
+ * startup banner and returns the firmware version reported by the device.
+ * @param {string} port
+ * @returns {$CancellablePromise<string>}
+ */
+export function ReadDeviceFirmwareVersion(port) {
+    return $Call.ByID(225378278, port);
+}
+
+/**
  * @param {string} deviceID
  * @returns {$CancellablePromise<void>}
  */

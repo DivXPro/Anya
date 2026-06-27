@@ -859,6 +859,12 @@ func (a *App) FindEsptool() (string, error) {
 	return firmware.FindEsptool()
 }
 
+// ReadDeviceFirmwareVersion listens on the given serial port for the device's
+// startup banner and returns the firmware version reported by the device.
+func (a *App) ReadDeviceFirmwareVersion(port string) (string, error) {
+	return firmware.ReadDeviceFirmwareVersion(port, 3*time.Second)
+}
+
 func (a *App) UpdateAgent(agent store.Agent) error {
 	if err := store.UpdateAgent(a.db, &agent); err != nil {
 		return err

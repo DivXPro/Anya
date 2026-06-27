@@ -56,6 +56,12 @@
       "success": "Flash successful",
       "failed": "Flash failed",
 
+      "deviceVersion": "Device Version",
+      "deviceVersionValue": "Detected version: {{version}}",
+      "deviceVersionEmpty": "Click check to read the version from the connected device",
+      "checkVersion": "Check",
+      "checkingVersion": "Checking...",
+      "upgradeAvailable": "A new version is available",
       "hintBoot": "If the device cannot connect, hold the BOOT button while plugging in USB."
     }
   },

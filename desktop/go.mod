@@ -1,14 +1,18 @@
 module desktop
 
-go 1.26.0
+go 1.26.2
 
 require (
 	github.com/ardanlabs/bucky v1.0.6
 	github.com/beyond5959/acp-adapter v0.3.8
+	github.com/foresturquhart/edge-tts v1.0.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/hashicorp/mdns v1.0.7
+	github.com/tphakala/go-audio-resampler v1.4.0
 	github.com/wailsapp/wails/v3 v3.0.0-alpha2.106
+	go.bug.st/serial v1.6.2
 	modernc.org/sqlite v1.44.3
 	tinygo.org/x/espflasher v0.6.1
 )
@@ -77,9 +81,9 @@ require (
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/spiffe/go-spiffe/v2 v2.7.0 // indirect
+	github.com/tphakala/simd v1.1.0 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
 	github.com/wailsapp/wails/webview2 v1.0.27 // indirect
-	go.bug.st/serial v1.6.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.44.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.69.0 // indirect
