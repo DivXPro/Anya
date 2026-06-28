@@ -4,10 +4,12 @@ import DeviceTab from '@/components/DeviceTab';
 import AgentTab from '@/components/AgentTab';
 import HistoryTab from '@/components/HistoryTab';
 import SettingsTab from '@/components/SettingsTab';
+import { useThemeInit } from '@/hooks/useThemeInit';
 
 export type Tab = 'device' | 'agent' | 'history' | 'settings';
 
 function App() {
+  useThemeInit();
   const [activeTab, setActiveTab] = useState<Tab>('device');
 
   return (

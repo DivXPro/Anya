@@ -6,6 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
     <title>Anya</title>
+    <script>
+      // Avoid a flash of the wrong theme while the app loads settings.
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+      }
+    </script>
   </head>
   <body>
     <div class="bg" aria-hidden="true"></div>
