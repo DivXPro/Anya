@@ -36,6 +36,7 @@ func terminateProcess(cmd *exec.Cmd, exited <-chan struct{}) error {
 	select {
 	case <-exited:
 		log.Printf("[stdio] process exited gracefully")
+		return nil
 	case <-time.After(10 * time.Second):
 		log.Printf("[stdio] process didn't exit, sending SIGKILL")
 		if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {

@@ -66,6 +66,7 @@ func terminateProcess(cmd *exec.Cmd, exited <-chan struct{}) error {
 	select {
 	case <-exited:
 		log.Printf("[stdio] process exited")
+		return nil
 	case <-time.After(10 * time.Second):
 		err := errors.New("process did not exit within timeout")
 		log.Printf("[stdio] %v", err)
