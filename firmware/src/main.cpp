@@ -100,14 +100,21 @@ void setup() {
                 inMenu = false;
                 state_transition(State::WIFI_SETUP);
                 if (wifi_portal_begin()) {
-                    state_transition(State::IDLE);
-                    // Reconnect to the bound desktop if available
                     String boundID = wifi_get_bound_desktop_id();
                     String boundIP = wifi_get_bound_desktop_ip();
                     uint16_t boundPort = wifi_get_bound_desktop_port();
                     if (boundIP.length() > 0) {
+                        state_transition(State::IDLE);
+                        // Reconnect to the bound desktop if available
                         ws_set_hello_data(deviceID, deviceName, boundID.c_str(), "");
                         ws_connect(boundIP.c_str(), boundPort);
+                    } else {
+                        // No bound desktop yet: show the pairing screen.
+                        state_transition(State::PAIR_READY);
+                        if (!advertising) {
+                            mdns_start_advertise(deviceID, deviceName);
+                            advertising = true;
+                        }
                     }
                 } else {
                     disp_error("WiFi setup failed", "Anya");
@@ -206,9 +213,11 @@ void loop() {
 
     // WebSocket lifecycle: hello is sent from the onEvent(CONNECTED) callback.
     // When connected, stop advertising to avoid showing up in the desktop scan list.
-    // When disconnected, keep advertising so a desktop can find us, but show:
-    //   - "Ready to pair" if this device has never been paired,
-    //   - "Disconnected" if it has a bound desktop but cannot reach it.
+    // When disconnected, keep advertising so a desktop can find us, but show the
+    // disconnected idle screen (status bar "No agent", bottom "Disconnected").
+    // The "Ready to pair" screen is only shown on first boot or when the user
+    // explicitly chooses Repair from the menu; we never switch back to it
+    // automatically after a disconnect.
     // Menu mode overrides automatic state transitions.
     if (!inMenu) {
         if (ws_connected()) {
@@ -221,10 +230,7 @@ void loop() {
                 mdns_start_advertise(deviceID, deviceName);
                 advertising = true;
             }
-            String boundID = wifi_get_bound_desktop_id();
-            if (boundID.length() == 0) {
-                state_transition(State::PAIR_READY);
-            } else if (state_current() != State::IDLE) {
+            if (state_current() != State::IDLE && state_current() != State::PAIR_READY) {
                 state_transition(State::IDLE);
             }
         }
