@@ -65,6 +65,40 @@ if [ ! -d "frontend/node_modules" ]; then
     (cd frontend && npm install)
 fi
 
+# Generate app icons from the source anya.png so the .app bundle and status bar
+# always use the current logo instead of a stale Wails default.
+ICON_SRC="$DESKTOP_DIR/frontend/public/anya.png"
+ICON_DIR="$DESKTOP_DIR/build"
+APPICON_PNG="$ICON_DIR/appicon.png"
+ICNS_PATH="$ICON_DIR/darwin/icons.icns"
+
+if [[ "$OSTYPE" == "darwin"* ]] && [ -f "$ICON_SRC" ]; then
+    log "Generating app icons from $ICON_SRC..."
+    mkdir -p "$ICON_DIR/darwin"
+
+    # Remove stale Wails Assets.car so it doesn't override the new icons.icns.
+    rm -f "$ICON_DIR/darwin/Assets.car"
+
+    # 1024x1024 app icon used by the bundle script.
+    sips -Z 1024 "$ICON_SRC" --out "$APPICON_PNG" >/dev/null 2>&1
+
+    # macOS .icns set for the .app bundle and status bar.
+    ICONSET_DIR="$(mktemp -d)/anya.iconset"
+    mkdir -p "$ICONSET_DIR"
+    for size in 16 32 64 128 256 512; do
+        sips -Z "$size" "$ICON_SRC" --out "$ICONSET_DIR/icon_${size}x${size}.png" >/dev/null 2>&1
+        sips -Z "$((size*2))" "$ICON_SRC" --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" >/dev/null 2>&1
+    done
+    sips -Z 1024 "$ICON_SRC" --out "$ICONSET_DIR/icon_512x512@2x.png" >/dev/null 2>&1
+    iconutil -c icns "$ICONSET_DIR" -o "$ICNS_PATH"
+    rm -rf "$ICONSET_DIR"
+fi
+
+# Clean stale build artifacts from previous names so the user doesn't accidentally
+# run an old "elf" binary that still has the Wails icon.
+rm -f "$DESKTOP_DIR/bin/elf" "$DESKTOP_DIR/bin/elf.dev.app"
+rm -rf "$DESKTOP_DIR/bin/Elf.app"
+
 # Full Wails build (bindings + frontend + Go)
 wails3 build
 

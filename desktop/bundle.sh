@@ -6,7 +6,8 @@ BIN_DIR="$(cd "$(dirname "$0")/bin" && pwd)"
 APP_NAME="Anya"
 APP_BUNDLE="$BIN_DIR/$APP_NAME.app"
 BINARY="$BIN_DIR/anya"
-ICON="$BIN_DIR/../build/appicon.png"
+ICON_PNG="$BIN_DIR/../build/appicon.png"
+ICON_ICNS="$BIN_DIR/../build/darwin/icons.icns"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
@@ -38,13 +39,17 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>CFBundleIconFile</key>
+    <string>icons</string>
 </dict>
 </plist>
 EOF
 
-# Icon
-if [ -f "$ICON" ]; then
-    cp "$ICON" "$APP_BUNDLE/Contents/Resources/appicon.png"
+# Icons
+if [ -f "$ICON_ICNS" ]; then
+    cp "$ICON_ICNS" "$APP_BUNDLE/Contents/Resources/icons.icns"
+elif [ -f "$ICON_PNG" ]; then
+    cp "$ICON_PNG" "$APP_BUNDLE/Contents/Resources/appicon.png"
 fi
 
 echo "Bundle created: $APP_BUNDLE"
