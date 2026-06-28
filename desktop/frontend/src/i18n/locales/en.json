@@ -85,15 +85,15 @@
     "deleteDescription": "Are you sure you want to remove {{name}}? You will need to pair it again.",
     "connected": "Connected",
     "disconnected": "Disconnected",
-    "otaUpdate": "Update Firmware",
-    "otaUpdating": "Updating firmware...",
-    "otaCheckVersion": "Check Firmware Version",
-    "otaCancel": "Cancel Update",
-    "otaSuccess": "Firmware update complete; device is restarting",
-    "otaFailed": "Firmware update failed",
+    "otaUpdate": "Update",
+    "otaUpdating": "Updating",
+    "otaCheckVersion": "Check Version",
+    "otaCancel": "Cancel",
+    "otaSuccess": "Updated",
+    "otaFailed": "Update failed",
     "otaVersionUnknown": "Unknown version",
-    "otaVersionCurrent": "Device version: {{version}}",
-    "otaUpgradeAvailable": "A new version is available"
+    "otaVersionCurrent": "v{{version}}",
+    "otaUpgradeAvailable": "Update available"
   },
   "agent": {
     "title": "Agent",

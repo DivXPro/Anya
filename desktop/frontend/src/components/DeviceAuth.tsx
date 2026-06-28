@@ -197,13 +197,9 @@ function DeviceAuth() {
             const otaTerminal = otaDone || otaError || otaCancelled;
 
             const statusText = () => {
-              if (otaRunning) {
-                return `${t('device.otaUpdating')} ${ota.percent || 0}%${
-                  ota.message ? ` · ${ota.message}` : ''
-                }`;
-              }
+              if (otaRunning) return `${t('device.otaUpdating')} ${ota.percent || 0}%`;
               if (otaDone) return t('device.otaSuccess');
-              if (otaError) return `${t('device.otaFailed')}${ota.error ? `: ${ota.error}` : ''}`;
+              if (otaError) return t('device.otaFailed');
               if (otaCancelled) return t('device.otaCancel');
               if (deviceVersion) return t('device.otaVersionCurrent', { version: deviceVersion });
               return '';

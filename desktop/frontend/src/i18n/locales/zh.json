@@ -85,15 +85,15 @@
     "deleteDescription": "确定要删除 {{name}} 吗？删除后需要重新配对。",
     "connected": "已连接",
     "disconnected": "未连接",
-    "otaUpdate": "更新固件",
-    "otaUpdating": "正在更新固件...",
-    "otaCheckVersion": "检查固件版本",
-    "otaCancel": "取消更新",
-    "otaSuccess": "固件更新完成，设备正在重启",
-    "otaFailed": "固件更新失败",
+    "otaUpdate": "更新",
+    "otaUpdating": "更新中",
+    "otaCheckVersion": "检查版本",
+    "otaCancel": "取消",
+    "otaSuccess": "更新完成",
+    "otaFailed": "更新失败",
     "otaVersionUnknown": "未知版本",
-    "otaVersionCurrent": "设备版本：{{version}}",
-    "otaUpgradeAvailable": "有新版本可用"
+    "otaVersionCurrent": "版本 {{version}}",
+    "otaUpgradeAvailable": "可更新"
   },
   "agent": {
     "title": "Agent",
