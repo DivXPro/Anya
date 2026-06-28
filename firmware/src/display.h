@@ -21,6 +21,7 @@ void disp_playing(const char* summary, const char* agent);
 void disp_error(const char* msg, const char* agent);
 void disp_menu(const char* agent, int selected, const char* const* items, int count, int8_t rssi, bool wifiConnected, bool wsConnected);
 void disp_updating(int8_t percent, const char* version, const char* agent);
+void disp_updating_progress(int8_t percent);
 
 // Call from the main loop to keep the mascot animating on screens that show it.
 void disp_animate_mascot();

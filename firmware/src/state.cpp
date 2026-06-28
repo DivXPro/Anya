@@ -105,8 +105,7 @@ void state_play_audio(const uint8_t* data, size_t len) {
 
 void state_set_ota_progress(int8_t percent, const char* version) {
     if (current != State::UPDATING) return;
-    disp_updating(percent, version, agentName);
-    disp_status_bar(lastRssi, lastWifiConnected, lastWsConnected, agentName, status_ssid());
+    disp_updating_progress(percent);
 }
 
 State state_current() { return current; }

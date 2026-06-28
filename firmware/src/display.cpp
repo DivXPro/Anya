@@ -241,6 +241,36 @@ void disp_error(const char* msg, const char* agent) {
     M5.Display.print(msg);
 }
 
+void disp_updating_progress(int8_t percent) {
+    const int barW = M5.Display.width() - 24;
+    const int barH = 10;
+    const int x = 12;
+    const int y = promptY;
+
+    // Clear only the inside of the progress bar.
+    M5.Display.fillRect(x + 2, y + 2, barW - 4, barH - 4, TFT_BLACK);
+
+    int fillW = (int)percent * (barW - 4) / 100;
+    if (fillW < 0) fillW = 0;
+    if (fillW > barW - 4) fillW = barW - 4;
+    if (fillW > 0) {
+        M5.Display.fillRect(x + 2, y + 2, fillW, barH - 4, TFT_GREEN);
+    }
+
+    // Update percentage text without redrawing the whole screen.
+    const int textY = y + barH + 12;
+    const int textW = 40;
+    const int textX = (M5.Display.width() - textW) / 2;
+    M5.Display.fillRect(textX, textY - 6, textW, 12, TFT_BLACK);
+
+    char pct[8];
+    snprintf(pct, sizeof(pct), "%d%%", percent);
+    M5.Display.setTextSize(1);
+    M5.Display.setTextColor(TFT_WHITE);
+    M5.Display.setTextDatum(textdatum_t::middle_center);
+    M5.Display.drawString(pct, M5.Display.width() / 2, textY);
+}
+
 void disp_updating(int8_t percent, const char* version, const char* agent) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, true, agent);
@@ -251,19 +281,14 @@ void disp_updating(int8_t percent, const char* version, const char* agent) {
     M5.Display.setTextDatum(textdatum_t::middle_center);
     M5.Display.drawString("Updating firmware...", M5.Display.width() / 2, promptY - 24);
 
+    // Draw the static bar outline once.
     const int barW = M5.Display.width() - 24;
     const int barH = 10;
     const int x = 12;
     const int y = promptY;
     M5.Display.drawRect(x, y, barW, barH, TFT_WHITE);
-    int fillW = (int)percent * barW / 100;
-    if (fillW < 0) fillW = 0;
-    if (fillW > barW) fillW = barW;
-    M5.Display.fillRect(x + 2, y + 2, fillW - 4, barH - 4, TFT_GREEN);
 
-    char pct[8];
-    snprintf(pct, sizeof(pct), "%d%%", percent);
-    M5.Display.drawString(pct, M5.Display.width() / 2, y + barH + 12);
+    disp_updating_progress(percent);
 
     if (version && version[0]) {
         char ver[48];
