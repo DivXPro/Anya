@@ -94,6 +94,15 @@ void state_force_idle() {
     lastWifiConnected = false;
     lastWsConnected = false;
     audio_stop_recording();
+
+    // Avoid redrawing the whole screen on repeated disconnect events while the
+    // device is already showing the disconnected idle screen. The WebSocket
+    // library retries every 5s, and each failed attempt fires a disconnect event.
+    if (current == State::IDLE) {
+        disp_status_bar(lastRssi, false, false, agentName, status_ssid());
+        return;
+    }
+
     current = State::IDLE;
     disp_idle(agentName, false);
     disp_status_bar(lastRssi, false, false, agentName, status_ssid());
