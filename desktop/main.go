@@ -15,6 +15,9 @@ var assets embed.FS
 //go:embed frontend/public/anya.png
 var appIcon []byte
 
+//go:embed frontend/public/anya-tray.png
+var trayIcon []byte
+
 func main() {
 	elfApp := NewApp()
 
@@ -60,7 +63,7 @@ func main() {
 	systemTray.SetTooltip("Anya")
 
 	if runtime.GOOS == "darwin" {
-		systemTray.SetIcon(appIcon)
+		systemTray.SetIcon(trayIcon)
 	}
 
 	// Tray menu
