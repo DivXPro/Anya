@@ -100,7 +100,15 @@
     "subtitle": "Choose the active AI Agent",
     "enabled": "Enabled",
     "available": "Available",
-    "notInstalled": "Not Installed"
+    "notInstalled": "Not Installed",
+    "active": "Active",
+    "installed": "Installed",
+    "install": "Install",
+    "installing": "Installing...",
+    "retry": "Retry",
+    "nodeRequiredTitle": "Node.js package manager required",
+    "nodeRequiredDesc": "Installing {{name}} requires Node.js and npm, pnpm, or yarn. Please install one of them, then run the command below in your terminal:",
+    "installCommandPlaceholder": "Install command"
   },
   "history": {
     "title": "History",
