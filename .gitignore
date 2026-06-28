@@ -1,4 +1,5 @@
 desktop/build/
+desktop/desktop
 desktop/frontend/node_modules/
 desktop/frontend/dist/
 *.exe

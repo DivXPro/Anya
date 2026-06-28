@@ -7,11 +7,13 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
-	"github.com/wailsapp/wails/v3/pkg/icons"
 )
 
 //go:embed frontend/dist
 var assets embed.FS
+
+//go:embed frontend/public/anya.png
+var appIcon []byte
 
 func main() {
 	elfApp := NewApp()
@@ -19,6 +21,7 @@ func main() {
 	wailsApp := application.New(application.Options{
 		Name:        "Anya",
 		Description: "Hardware Agent Voice Assistant",
+		Icon:        appIcon,
 		Assets:      application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
 		Mac: application.MacOptions{
 			ActivationPolicy: application.ActivationPolicyAccessory,
@@ -57,7 +60,7 @@ func main() {
 	systemTray.SetTooltip("Anya")
 
 	if runtime.GOOS == "darwin" {
-		systemTray.SetTemplateIcon(icons.SystrayMacTemplate)
+		systemTray.SetIcon(appIcon)
 	}
 
 	// Tray menu
