@@ -80,7 +80,7 @@ func (a *App) trayText(key string) string {
 		case "connected":
 			return "Connected"
 		case "open":
-			return "Open Elf"
+			return "Open Anya"
 		case "quit":
 			return "Quit"
 		}
@@ -92,7 +92,7 @@ func (a *App) trayText(key string) string {
 	case "connected":
 		return "已连接"
 	case "open":
-		return "打开 Elf"
+		return "打开 Anya"
 	case "quit":
 		return "退出"
 	}

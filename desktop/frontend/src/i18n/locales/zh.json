@@ -1,5 +1,5 @@
 {
-  "appName": "Elf",
+  "appName": "Anya",
   "app": {
     "tagline": "智能硬件伴侣"
   },
@@ -66,7 +66,7 @@
     }
   },
   "device": {
-    "subtitle": "搜索并连接附近的 Elf 设备",
+    "subtitle": "搜索并连接附近的 Anya 设备",
     "myDevices": "我的设备",
     "nearbyDevices": "附近设备",
     "scanning": "扫描中...",
@@ -120,7 +120,7 @@
   },
   "tray": {
     "noDevice": "未连接设备",
-    "open": "打开 Elf",
+    "open": "打开 Anya",
     "quit": "退出",
     "agent": "Agent"
   }

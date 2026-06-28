@@ -152,7 +152,7 @@ void disp_wifi_setup(const char* hotspotSsid, const char* agent) {
     disp_status_bar(-1, false, false, agent);
     mascotVisible = true;
     drawMascot(true);
-    drawPrompt("Connect to Elf-hotspot", nullptr);
+    drawPrompt("Connect to Anya-hotspot", nullptr);
 }
 
 void disp_wifi_connecting(const char* ssid, const char* agent) {

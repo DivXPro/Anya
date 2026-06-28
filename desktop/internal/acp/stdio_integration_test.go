@@ -30,7 +30,7 @@ func TestProcessManagerNDJSONWithOpenCode(t *testing.T) {
 				"fs":       map[string]bool{"readTextFile": true, "writeTextFile": true},
 				"terminal": true,
 			},
-			"clientInfo": map[string]string{"name": "elf-test", "version": "1.0.0"},
+			"clientInfo": map[string]string{"name": "anya-test", "version": "1.0.0"},
 		},
 	}
 	if err := pm.SendJSON(init); err != nil {

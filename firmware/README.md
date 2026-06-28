@@ -1,6 +1,6 @@
-# Elf Firmware
+# Anya Firmware
 
-M5StickC S3 firmware for the Elf hardware agent voice assistant.
+M5StickC S3 firmware for the Anya hardware agent voice assistant.
 
 ## Prerequisites
 

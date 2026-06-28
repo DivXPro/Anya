@@ -36,13 +36,13 @@ void init_device_identity() {
         esp_read_mac(mac, ESP_MAC_WIFI_STA);
         snprintf(deviceID, sizeof(deviceID), "%02x%02x%02x%02x%02x%02x-%04x",
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], esp_random() & 0xFFFF);
-        snprintf(deviceName, sizeof(deviceName), "elf-%02x%02x", mac[4], mac[5]);
+        snprintf(deviceName, sizeof(deviceName), "anya-%02x%02x", mac[4], mac[5]);
         prefs.putString("device_id", deviceID);
         prefs.putString("device_name", deviceName);
     } else {
         strncpy(deviceID, storedID.c_str(), sizeof(deviceID) - 1);
         deviceID[sizeof(deviceID) - 1] = '\0';
-        if (storedName.length() == 0) storedName = "elf-device";
+        if (storedName.length() == 0) storedName = "anya-device";
         strncpy(deviceName, storedName.c_str(), sizeof(deviceName) - 1);
         deviceName[sizeof(deviceName) - 1] = '\0';
     }
@@ -67,7 +67,7 @@ void setup() {
         wifiOK = wifi_portal_begin();
     }
     if (!wifiOK) {
-        disp_error("WiFi setup failed", "Elf");
+        disp_error("WiFi setup failed", "Anya");
         return;
     }
     http_setup_connect_endpoint();
@@ -110,7 +110,7 @@ void setup() {
                         ws_connect(boundIP.c_str(), boundPort);
                     }
                 } else {
-                    disp_error("WiFi setup failed", "Elf");
+                    disp_error("WiFi setup failed", "Anya");
                 }
             } else if (menuSelected == 1) {
                 // Repair: clear binding and start fresh advertising

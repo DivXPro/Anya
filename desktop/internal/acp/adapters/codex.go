@@ -11,7 +11,7 @@ import (
 	"desktop/internal/acp"
 )
 
-// CodexAdapter implements the Elf ACP interface on top of the OpenAI Codex CLI
+// CodexAdapter implements the Anya ACP interface on top of the OpenAI Codex CLI
 // app-server protocol (JSON-RPC over stdio, newline-delimited).
 type CodexAdapter struct {
 	pm                 *acp.ProcessManager
@@ -93,7 +93,7 @@ func (a *CodexAdapter) ensureInitWithSkip(skipNewThread bool) error {
 	a.dispatchMu.Unlock()
 
 	if _, err := a.sendRequest("initialize", map[string]any{
-		"clientInfo": map[string]string{"name": "elf", "version": "1.0.0"},
+		"clientInfo": map[string]string{"name": "anya", "version": "1.0.0"},
 		"capabilities": map[string]any{
 			"experimentalApi": true,
 		},
@@ -142,7 +142,7 @@ func (a *CodexAdapter) ensureInitWithSkip(skipNewThread bool) error {
 }
 
 // Send starts a new user turn on the active Codex thread and streams back the
-// assistant response as Elf StreamEvents.
+// assistant response as Anya StreamEvents.
 func (a *CodexAdapter) Send(prompt string, history []acp.Message) (<-chan acp.StreamEvent, error) {
 	if err := a.ensureInit(); err != nil {
 		return nil, err

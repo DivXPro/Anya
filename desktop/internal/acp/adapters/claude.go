@@ -77,7 +77,7 @@ func (a *ClaudeAdapter) initRuntime() error {
 			"fs":       map[string]bool{"readTextFile": true, "writeTextFile": true},
 			"terminal": true,
 		},
-		"clientInfo": map[string]string{"name": "elf", "version": "1.0.0"},
+		"clientInfo": map[string]string{"name": "anya", "version": "1.0.0"},
 	})
 	if err != nil {
 		rt.Close()

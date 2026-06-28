@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ============================================================
-# Elf Development Script
+# Anya Development Script
 # Runs the desktop app in dev mode (hot reload) or directly
 # Usage: ./dev.sh [dev|run|test]
 # ============================================================
@@ -52,23 +52,23 @@ run_dev() {
 }
 
 run_app() {
-    log "Starting Elf desktop app..."
+    log "Starting Anya desktop app..."
 
-    if [ ! -f "$DESKTOP_DIR/bin/elf" ]; then
+    if [ ! -f "$DESKTOP_DIR/bin/anya" ]; then
         log "No binary found, building first..."
         "$SCRIPT_DIR/build.sh" desktop
     fi
 
     cd "$DESKTOP_DIR"
-    ./bin/elf &
-    ELF_PID=$!
-    info "Elf running (PID=$ELF_PID)"
+    ./bin/anya &
+    ANYA_PID=$!
+    info "Anya running (PID=$ANYA_PID)"
     info "WebSocket server: ws://localhost:9876"
     info "Data directory: ~/.elf/"
     info "Press Ctrl+C to stop"
 
-    trap "kill $ELF_PID 2>/dev/null; log 'Stopped.'" EXIT
-    wait $ELF_PID
+    trap "kill $ANYA_PID 2>/dev/null; log 'Stopped.'" EXIT
+    wait $ANYA_PID
 }
 
 run_tests() {

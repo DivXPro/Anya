@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Wrap the elf binary into a macOS .app bundle so Finder treats it as a GUI app.
+# Wrap the anya binary into a macOS .app bundle so Finder treats it as a GUI app.
 
 BIN_DIR="$(cd "$(dirname "$0")/bin" && pwd)"
-APP_NAME="Elf"
+APP_NAME="Anya"
 APP_BUNDLE="$BIN_DIR/$APP_NAME.app"
-BINARY="$BIN_DIR/elf"
+BINARY="$BIN_DIR/anya"
 ICON="$BIN_DIR/../build/appicon.png"
 
 rm -rf "$APP_BUNDLE"
@@ -25,7 +25,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <key>CFBundleExecutable</key>
     <string>$APP_NAME</string>
     <key>CFBundleIdentifier</key>
-    <string>com.elf.app</string>
+    <string>com.anya.app</string>
     <key>CFBundleName</key>
     <string>$APP_NAME</string>
     <key>CFBundleVersion</key>

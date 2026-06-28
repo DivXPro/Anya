@@ -35,7 +35,7 @@ void state_transition(State s) {
     current = s;
     switch (s) {
         case State::WIFI_SETUP:
-            disp_wifi_setup("Elf-hotspot", agentName);
+            disp_wifi_setup("Anya-hotspot", agentName);
             break;
         case State::WIFI_CONNECTING:
             disp_wifi_connecting(wifi_ssid.c_str(), agentName);

@@ -43,7 +43,7 @@ func NewStickCS3Adapter(ws *websocket.Conn) gateway.DeviceAdapter {
 		conn: ws,
 		info: gateway.DeviceInfo{
 			ID:           uuid.NewString(),
-			Name:         fmt.Sprintf("elf-stick-%s", uuid.NewString()[:8]),
+			Name:         fmt.Sprintf("anya-stick-%s", uuid.NewString()[:8]),
 			Model:        "m5stickc-s3",
 			Capabilities: []string{"audio_input", "audio_output", "display", "buttons"},
 		},

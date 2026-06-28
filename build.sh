@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ============================================================
-# Elf Desktop Build Script
+# Anya Desktop Build Script
 # Compiles the Wails desktop app and wraps it into a .app bundle
 # Usage: ./build.sh
 # ============================================================
@@ -72,8 +72,8 @@ wails3 build
 if [[ "$(uname)" == "Darwin" ]]; then
     log "Wrapping into .app bundle..."
     bash bundle.sh
-    log "App: $(realpath bin/Elf.app)"
+    log "App: $(realpath bin/Anya.app)"
 fi
 
-log "Desktop binary: $(realpath bin/elf) ($(du -sh bin/elf | cut -f1))"
+log "Desktop binary: $(realpath bin/anya) ($(du -sh bin/anya | cut -f1))"
 log "Done."

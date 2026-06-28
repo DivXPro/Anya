@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository contains Elf planning documentation.
+This repository contains Anya planning documentation.
 
 - `docs/superpowers/specs/`: product and architecture specs.
 - `docs/superpowers/plans/`: executable implementation plans and phase checklists.

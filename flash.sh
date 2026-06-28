@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ============================================================
-# Elf Firmware Flash Script
+# Anya Firmware Flash Script
 # Compiles and uploads firmware to M5StickC S3
 # Usage: ./flash.sh [upload|monitor|clean]
 # ============================================================

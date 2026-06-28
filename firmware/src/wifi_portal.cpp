@@ -8,7 +8,7 @@
 #include <M5Unified.h>
 #include <map>
 
-static const char* kPortalSsid = "Elf-hotspot";
+static const char* kPortalSsid = "Anya-hotspot";
 static const byte kDnsPort = 53;
 
 // ── Portal HTML (adapted from Arkloop style) ─────────────────
@@ -16,7 +16,7 @@ static const char kPortalHtml[] PROGMEM = R"HTML(
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Elf WiFi Setup</title>
+<title>Anya WiFi Setup</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
@@ -140,7 +140,7 @@ static void portalDrawStatusBar() {
     M5.Display.setTextSize(1);
     M5.Display.setTextColor(TFT_WHITE);
     M5.Display.setTextDatum(textdatum_t::middle_center);
-    M5.Display.drawString("Elf", M5.Display.width() / 2, P_STATUS_BAR_H / 2);
+    M5.Display.drawString("Anya", M5.Display.width() / 2, P_STATUS_BAR_H / 2);
 }
 
 static void portalCenterPrint(const char* s, int y) {
@@ -181,7 +181,7 @@ static void drawPortalScreen() {
         M5.Display.fillScreen(TFT_BLACK);
         M5.Display.setBrightness(255);
         portalDrawStatusBar();
-        portalCenterPrint("Connect to Elf-hotspot", portalPromptY);
+        portalCenterPrint("Connect to Anya-hotspot", portalPromptY);
         portalDrawn = true;
     }
     portalDrawMascot();  // animate every call

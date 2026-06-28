@@ -17,7 +17,7 @@ func main() {
 	elfApp := NewApp()
 
 	wailsApp := application.New(application.Options{
-		Name:        "Elf",
+		Name:        "Anya",
 		Description: "Hardware Agent Voice Assistant",
 		Assets:      application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
 		Mac: application.MacOptions{
@@ -30,7 +30,7 @@ func main() {
 
 	// Main window — hidden initially, opened via menu
 	mainWindow := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:           "Elf",
+		Title:           "Anya",
 		Width:           960,
 		Height:          680,
 		URL:             "/",
@@ -54,7 +54,7 @@ func main() {
 
 	// ── Menu bar icon ──
 	systemTray := wailsApp.SystemTray.New()
-	systemTray.SetTooltip("Elf")
+	systemTray.SetTooltip("Anya")
 
 	if runtime.GOOS == "darwin" {
 		systemTray.SetTemplateIcon(icons.SystrayMacTemplate)
