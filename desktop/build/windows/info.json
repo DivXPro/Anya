@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.1.0"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "0.1.0",
+			"CompanyName": "Anya",
+			"FileDescription": "Anya desktop application",
+			"LegalCopyright": "© 2026, Anya",
+			"ProductName": "Anya",
+			"Comments": "智能硬件伴侣 / Hardware Agent Voice Assistant"
+		}
+	}
+}
