@@ -62,7 +62,7 @@ func main() {
 	systemTray := wailsApp.SystemTray.New()
 	systemTray.SetTooltip("Anya")
 
-	if runtime.GOOS == "darwin" {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		systemTray.SetIcon(trayIcon)
 	}
 
