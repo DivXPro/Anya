@@ -142,7 +142,11 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	a.ctx = ctx
 	log.Println("[elf] starting up...")
 
-	dataDir := filepath.Join(os.Getenv("HOME"), ".elf")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("get user home dir: %w", err)
+	}
+	dataDir := filepath.Join(home, ".elf")
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
 	}
