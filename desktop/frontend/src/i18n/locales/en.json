@@ -106,8 +106,8 @@
     "install": "Install",
     "installing": "Installing...",
     "retry": "Retry",
-    "nodeRequiredTitle": "Node.js package manager required",
-    "nodeRequiredDesc": "Installing {{name}} requires Node.js and npm, pnpm, or yarn. Please install one of them, then run the command below in your terminal:",
+    "installManuallyTitle": "Automatic install unavailable",
+    "installManuallyDesc": "Anya couldn't install {{name}} automatically. Copy the command below and run it in your terminal, then click Install again:",
     "installCommandPlaceholder": "Install command"
   },
   "history": {

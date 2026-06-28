@@ -96,13 +96,10 @@ func (i *Installer) detectOne(id, command string) error {
 		}
 	}
 
-	pm, _ := DetectPackageManager()
-	if pm != "" {
-		cmd, err := InstallCommand(id, pm)
-		if err == nil {
-			if err := store.UpdateAgentInstallCommand(i.db, id, cmd); err != nil {
-				log.Printf("[agentinstall] save install command %s error: %v", id, err)
-			}
+	if args, display, err := PlatformInstallCommand(id); err == nil {
+		_ = args
+		if err := store.UpdateAgentInstallCommand(i.db, id, display); err != nil {
+			log.Printf("[agentinstall] save install command %s error: %v", id, err)
 		}
 	}
 
@@ -132,27 +129,20 @@ func (i *Installer) Install(id string) error {
 	i.tasks[id] = &Task{AgentID: id, Running: true}
 	i.mu.Unlock()
 
-	pm, pmPath := DetectPackageManager()
-	if pm == "" {
-		i.finishTask(id, false)
-		return fmt.Errorf("no package manager found")
-	}
-
-	cmdStr, err := InstallCommand(id, pm)
+	args, display, err := PlatformInstallCommand(id)
 	if err != nil {
 		i.finishTask(id, false)
 		return err
 	}
 
-	if err := store.UpdateAgentInstallCommand(i.db, id, cmdStr); err != nil {
+	if err := store.UpdateAgentInstallCommand(i.db, id, display); err != nil {
 		log.Printf("[agentinstall] save install command %s error: %v", id, err)
 	}
 
 	i.emit(EventInstallStarted, map[string]string{"agentID": id})
 
 	go func() {
-		parts := strings.Fields(cmdStr)
-		if len(parts) == 0 {
+		if len(args) == 0 {
 			i.emitFailure(id, "empty install command")
 			return
 		}
@@ -160,11 +150,12 @@ func (i *Installer) Install(id string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
-		// Ensure the chosen package manager is on PATH for the child process.
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		// Ensure any discovered package manager and common bin dirs are on PATH.
+		_, pmPath := DetectPackageManager()
 		cmd.Env = append(os.Environ(), fmt.Sprintf("PATH=%s", augmentPath(pmPath)))
 
-		log.Printf("[agentinstall] installing %s: %s", id, cmdStr)
+		log.Printf("[agentinstall] installing %s: %s", id, display)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			msg := string(out)

@@ -813,7 +813,8 @@ func (a *App) GetPackageManager() string {
 	return pm
 }
 
-// GetAgentInstallCommand returns the install command currently stored for an agent.
+// GetAgentInstallCommand returns the install command currently stored for an agent,
+// or the best platform-specific fallback if nothing has been stored yet.
 func (a *App) GetAgentInstallCommand(agentID string) string {
 	ag, err := store.GetAgent(a.db, agentID)
 	if err != nil {
@@ -822,15 +823,11 @@ func (a *App) GetAgentInstallCommand(agentID string) string {
 	if ag.InstallCommand != nil && *ag.InstallCommand != "" {
 		return *ag.InstallCommand
 	}
-	pm := a.GetPackageManager()
-	if pm == "" {
-		return ""
-	}
-	cmd, err := agentinstall.InstallCommand(agentID, pm)
+	_, display, err := agentinstall.PlatformInstallCommand(agentID)
 	if err != nil {
 		return ""
 	}
-	return cmd
+	return display
 }
 
 func (a *App) ListSerialPorts() ([]firmware.SerialPortInfo, error) {

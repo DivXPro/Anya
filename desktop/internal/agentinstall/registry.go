@@ -15,6 +15,16 @@ type AgentInfo struct {
 	Binary   string // executable name, e.g. "claude"
 	Command  string // full command used by Anya, e.g. "claude --acp"
 	Packages map[string]string
+	// Scripts maps GOOS to an official one-line installer for that platform.
+	// When present and the required shell is available, it takes precedence
+	// over package-manager installs.
+	Scripts map[string]PlatformScript
+}
+
+// PlatformScript describes a platform-specific one-line installer.
+type PlatformScript struct {
+	Shell   string // "powershell", "bash", or "sh"
+	Command string // the script body, e.g. "irm https://example.com/install.ps1 | iex"
 }
 
 // Registry maps agent IDs to their install metadata.
@@ -29,6 +39,11 @@ var Registry = map[string]AgentInfo{
 			"pnpm": "@anthropic-ai/claude-code",
 			"yarn": "@anthropic-ai/claude-code",
 		},
+		Scripts: map[string]PlatformScript{
+			"windows": {Shell: "powershell", Command: "irm https://claude.ai/install.ps1 | iex"},
+			"darwin":  {Shell: "bash", Command: "curl -fsSL https://claude.ai/install.sh | bash"},
+			"linux":   {Shell: "bash", Command: "curl -fsSL https://claude.ai/install.sh | bash"},
+		},
 	},
 	"opencode": {
 		ID:      "opencode",
@@ -39,6 +54,10 @@ var Registry = map[string]AgentInfo{
 			"npm":  "opencode-ai",
 			"pnpm": "opencode-ai",
 			"yarn": "opencode-ai",
+		},
+		Scripts: map[string]PlatformScript{
+			"darwin": {Shell: "bash", Command: "curl -fsSL https://opencode.ai/install | bash"},
+			"linux":  {Shell: "bash", Command: "curl -fsSL https://opencode.ai/install | bash"},
 		},
 	},
 	"codex": {
@@ -51,6 +70,11 @@ var Registry = map[string]AgentInfo{
 			"pnpm": "@openai/codex",
 			"yarn": "@openai/codex",
 		},
+		Scripts: map[string]PlatformScript{
+			"windows": {Shell: "powershell", Command: "irm https://chatgpt.com/codex/install.ps1 | iex"},
+			"darwin":  {Shell: "sh", Command: "curl -fsSL https://chatgpt.com/codex/install.sh | sh"},
+			"linux":   {Shell: "sh", Command: "curl -fsSL https://chatgpt.com/codex/install.sh | sh"},
+		},
 	},
 	"kimi": {
 		ID:      "kimi",
@@ -61,6 +85,11 @@ var Registry = map[string]AgentInfo{
 			"npm":  "@moonshot-ai/kimi-code",
 			"pnpm": "@moonshot-ai/kimi-code",
 			"yarn": "@moonshot-ai/kimi-code",
+		},
+		Scripts: map[string]PlatformScript{
+			"windows": {Shell: "powershell", Command: "irm https://code.kimi.com/kimi-code/install.ps1 | iex"},
+			"darwin":  {Shell: "bash", Command: "curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash"},
+			"linux":   {Shell: "bash", Command: "curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash"},
 		},
 	},
 	"hermes": {
@@ -73,6 +102,11 @@ var Registry = map[string]AgentInfo{
 			"pnpm": "hermes-agent",
 			"yarn": "hermes-agent",
 		},
+		Scripts: map[string]PlatformScript{
+			"windows": {Shell: "powershell", Command: "iex (irm https://hermes-agent.nousresearch.com/install.ps1)"},
+			"darwin":  {Shell: "bash", Command: "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash"},
+			"linux":   {Shell: "bash", Command: "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash"},
+		},
 	},
 	"pi": {
 		ID:      "pi",
@@ -83,6 +117,10 @@ var Registry = map[string]AgentInfo{
 			"npm":  "@earendil-works/pi-coding-agent",
 			"pnpm": "@earendil-works/pi-coding-agent",
 			"yarn": "@earendil-works/pi-coding-agent",
+		},
+		Scripts: map[string]PlatformScript{
+			"darwin": {Shell: "sh", Command: "curl -fsSL https://pi.dev/install.sh | sh"},
+			"linux":  {Shell: "sh", Command: "curl -fsSL https://pi.dev/install.sh | sh"},
 		},
 	},
 }
@@ -117,6 +155,59 @@ func InstallCommand(agentID, pm string) (string, error) {
 		return fmt.Sprintf("yarn global add %s", pkg), nil
 	default:
 		return "", fmt.Errorf("unsupported package manager %q", pm)
+	}
+}
+
+// PlatformInstallCommand returns the best install command for the current OS.
+// It prefers official one-line installers, then falls back to npm/pnpm/yarn.
+// The returned slice is the exec.Command arguments, and the string is a
+// human-readable form suitable for display.
+func PlatformInstallCommand(agentID string) ([]string, string, error) {
+	info, ok := Registry[agentID]
+	if !ok {
+		return nil, "", fmt.Errorf("unknown agent %q", agentID)
+	}
+
+	goos := runtime.GOOS
+	if script, ok := info.Scripts[goos]; ok {
+		if args, display, err := buildScriptCommand(script); err == nil {
+			return args, display, nil
+		}
+	}
+
+	pm, _ := DetectPackageManager()
+	if pm == "" {
+		return nil, "", fmt.Errorf("no package manager found")
+	}
+	cmd, err := InstallCommand(agentID, pm)
+	if err != nil {
+		return nil, "", err
+	}
+	return strings.Fields(cmd), cmd, nil
+}
+
+func buildScriptCommand(s PlatformScript) ([]string, string, error) {
+	switch s.Shell {
+	case "powershell":
+		exe, err := exec.LookPath("powershell.exe")
+		if err != nil {
+			return nil, "", err
+		}
+		return []string{exe, "-Command", s.Command}, s.Command, nil
+	case "bash":
+		exe, err := exec.LookPath("bash")
+		if err != nil {
+			return nil, "", err
+		}
+		return []string{exe, "-c", s.Command}, s.Command, nil
+	case "sh":
+		exe, err := exec.LookPath("sh")
+		if err != nil {
+			return nil, "", err
+		}
+		return []string{exe, "-c", s.Command}, s.Command, nil
+	default:
+		return nil, "", fmt.Errorf("unsupported shell %q", s.Shell)
 	}
 }
 

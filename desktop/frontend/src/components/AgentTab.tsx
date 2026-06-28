@@ -17,7 +17,6 @@ import {
   DetectAgents,
   InstallAgent,
   IsAgentInstalling,
-  GetPackageManager,
   GetAgentInstallCommand,
   EventInstallStarted,
   EventInstallFinished,
@@ -163,15 +162,8 @@ function AgentTab() {
   };
 
   const handleInstall = async (agent: Agent) => {
+    setInstallingIds((prev) => new Set(prev).add(agent.id));
     try {
-      const pm = await GetPackageManager();
-      if (!pm) {
-        const cmd = await GetAgentInstallCommand(agent.id);
-        setManualCommand(cmd || '');
-        setMissingPmAgent(agent);
-        return;
-      }
-      setInstallingIds((prev) => new Set(prev).add(agent.id));
       await InstallAgent(agent.id);
     } catch (e) {
       console.error(e);
@@ -180,6 +172,13 @@ function AgentTab() {
         next.delete(agent.id);
         return next;
       });
+      try {
+        const cmd = await GetAgentInstallCommand(agent.id);
+        setManualCommand(cmd || '');
+      } catch {
+        setManualCommand('');
+      }
+      setMissingPmAgent(agent);
     }
   };
 
@@ -260,9 +259,9 @@ function AgentTab() {
       <Dialog open={missingPmAgent !== null} onOpenChange={(open) => !open && setMissingPmAgent(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('agent.nodeRequiredTitle')}</DialogTitle>
+            <DialogTitle>{t('agent.installManuallyTitle')}</DialogTitle>
             <DialogDescription>
-              {t('agent.nodeRequiredDesc', { name: missingPmAgent?.name || '' })}
+              {t('agent.installManuallyDesc', { name: missingPmAgent?.name || '' })}
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-md bg-muted p-3">
