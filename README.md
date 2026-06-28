@@ -1,5 +1,7 @@
 # Anya
 
+[English](README.md) | [中文](README.zh.md)
+
 > A compact voice assistant device for your workspace — just talk, and Anya responds.
 
 Anya is a hands-free voice companion that sits on your desk. A small hardware device listens when you press its talk button, sends your voice to the Anya desktop app on your computer, and speaks back the answer through its built-in speaker while showing a short summary on its screen.
