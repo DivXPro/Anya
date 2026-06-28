@@ -10,6 +10,23 @@ You can ask it to write code, look things up, take notes, or control your tools 
 
 ---
 
+## Works with the agents you already use
+
+Anya is not tied to a single AI provider. It speaks to any local agent that supports the ACP protocol, so you can pick the right brain for each task or keep using the tools you already have installed.
+
+Out of the box, Anya can drive:
+
+- **Claude Code**
+- **Codex**
+- **OpenCode**
+- **Kimi**
+- **Hermes**
+- **Pi**
+
+Switching agents takes a single click in the menu bar or settings window. New ACP-compatible agents can be added without replacing the device or rewriting the core app.
+
+---
+
 ## What Anya does
 
 - **Push-to-talk voice control** — Hold the button on the device, speak, and release. Anya handles the rest.
