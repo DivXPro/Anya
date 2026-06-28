@@ -9,6 +9,8 @@ export interface Agent {
     "selected": boolean;
     "version": string | null;
     "config": string | null;
+    "installed": boolean;
+    "install_command": string | null;
 }
 
 export interface AuthorizedDevice {

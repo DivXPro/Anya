@@ -58,12 +58,27 @@ export function CurrentFirmwareVersion(): $CancellablePromise<string> {
     return $Call.ByID(4024534077);
 }
 
+/**
+ * DetectAgents rescans the filesystem for installed agent CLIs and updates the
+ * database. It returns immediately and performs the work in the background.
+ */
+export function DetectAgents(): $CancellablePromise<void> {
+    return $Call.ByID(131824692);
+}
+
 export function FindEsptool(): $CancellablePromise<string> {
     return $Call.ByID(1191879424);
 }
 
 export function FlashFirmware(port: string): $CancellablePromise<void> {
     return $Call.ByID(1445842456, port);
+}
+
+/**
+ * GetAgentInstallCommand returns the install command currently stored for an agent.
+ */
+export function GetAgentInstallCommand(agentID: string): $CancellablePromise<string> {
+    return $Call.ByID(2828009516, agentID);
 }
 
 export function GetDeviceAlias(deviceID: string): $CancellablePromise<string> {
@@ -83,6 +98,14 @@ export function GetOTAProgress(deviceID: string): $CancellablePromise<firmware$0
 }
 
 /**
+ * GetPackageManager returns the first available npm-compatible package manager,
+ * or an empty string if none is found.
+ */
+export function GetPackageManager(): $CancellablePromise<string> {
+    return $Call.ByID(4269996172);
+}
+
+/**
  * GetSTTDownloadProgress exposes the local whisper model download progress.
  */
 export function GetSTTDownloadProgress(): $CancellablePromise<speech$0.DownloadProgress> {
@@ -99,6 +122,20 @@ export function GetSettings(): $CancellablePromise<{ [_ in string]?: string } | 
 
 export function HasEmbeddedFirmware(): $CancellablePromise<boolean> {
     return $Call.ByID(3682150640);
+}
+
+/**
+ * InstallAgent starts an asynchronous install of the requested agent.
+ */
+export function InstallAgent(agentID: string): $CancellablePromise<void> {
+    return $Call.ByID(2999129, agentID);
+}
+
+/**
+ * IsAgentInstalling reports whether the agent is currently being installed.
+ */
+export function IsAgentInstalling(agentID: string): $CancellablePromise<boolean> {
+    return $Call.ByID(681861547, agentID);
 }
 
 export function ListAgents(): $CancellablePromise<store$0.Agent[] | null> {
@@ -158,6 +195,7 @@ export function SearchMessages(query: string, limit: number): $CancellablePromis
 
 /**
  * SelectAgent marks the chosen agent as selected and clears selection from all others.
+ * Only installed agents can be selected.
  */
 export function SelectAgent(agentID: string): $CancellablePromise<void> {
     return $Call.ByID(1605882214, agentID);

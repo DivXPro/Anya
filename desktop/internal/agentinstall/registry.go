@@ -1,0 +1,152 @@
+package agentinstall
+
+import (
+	"fmt"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+)
+
+// AgentInfo holds the metadata required to detect and install an agent.
+type AgentInfo struct {
+	ID       string
+	Name     string
+	Binary   string // executable name, e.g. "claude"
+	Command  string // full command used by Anya, e.g. "claude --acp"
+	Packages map[string]string
+}
+
+// Registry maps agent IDs to their install metadata.
+var Registry = map[string]AgentInfo{
+	"claude-code": {
+		ID:      "claude-code",
+		Name:    "Claude Code",
+		Binary:  "claude",
+		Command: "claude --acp",
+		Packages: map[string]string{
+			"npm":  "@anthropic-ai/claude-code",
+			"pnpm": "@anthropic-ai/claude-code",
+			"yarn": "@anthropic-ai/claude-code",
+		},
+	},
+	"opencode": {
+		ID:      "opencode",
+		Name:    "OpenCode",
+		Binary:  "opencode",
+		Command: "opencode acp",
+		Packages: map[string]string{
+			"npm":  "opencode-ai",
+			"pnpm": "opencode-ai",
+			"yarn": "opencode-ai",
+		},
+	},
+	"codex": {
+		ID:      "codex",
+		Name:    "Codex",
+		Binary:  "codex",
+		Command: "codex app-server --stdio",
+		Packages: map[string]string{
+			"npm":  "@openai/codex",
+			"pnpm": "@openai/codex",
+			"yarn": "@openai/codex",
+		},
+	},
+	"kimi": {
+		ID:      "kimi",
+		Name:    "Kimi Code",
+		Binary:  "kimi",
+		Command: "kimi acp",
+		Packages: map[string]string{
+			"npm":  "@moonshot-ai/kimi-code",
+			"pnpm": "@moonshot-ai/kimi-code",
+			"yarn": "@moonshot-ai/kimi-code",
+		},
+	},
+	"hermes": {
+		ID:      "hermes",
+		Name:    "Hermes",
+		Binary:  "hermes",
+		Command: "hermes acp",
+		Packages: map[string]string{
+			"npm":  "hermes-agent",
+			"pnpm": "hermes-agent",
+			"yarn": "hermes-agent",
+		},
+	},
+	"pi": {
+		ID:      "pi",
+		Name:    "Pi",
+		Binary:  "pi",
+		Command: "pi --mode rpc --no-session",
+		Packages: map[string]string{
+			"npm":  "@earendil-works/pi-coding-agent",
+			"pnpm": "@earendil-works/pi-coding-agent",
+			"yarn": "@earendil-works/pi-coding-agent",
+		},
+	},
+}
+
+// DetectPackageManager returns the first available npm-compatible package manager.
+// Priority: npm > pnpm > yarn.
+func DetectPackageManager() (string, string) {
+	for _, name := range []string{"npm", "pnpm", "yarn"} {
+		if path, err := exec.LookPath(name); err == nil {
+			return name, path
+		}
+	}
+	return "", ""
+}
+
+// InstallCommand builds the install command for the given agent and package manager.
+func InstallCommand(agentID, pm string) (string, error) {
+	info, ok := Registry[agentID]
+	if !ok {
+		return "", fmt.Errorf("unknown agent %q", agentID)
+	}
+	pkg, ok := info.Packages[pm]
+	if !ok {
+		return "", fmt.Errorf("no package defined for %s/%s", agentID, pm)
+	}
+	switch pm {
+	case "npm":
+		return fmt.Sprintf("npm install -g %s", pkg), nil
+	case "pnpm":
+		return fmt.Sprintf("pnpm add -g %s", pkg), nil
+	case "yarn":
+		return fmt.Sprintf("yarn global add %s", pkg), nil
+	default:
+		return "", fmt.Errorf("unsupported package manager %q", pm)
+	}
+}
+
+// GlobalBinDir returns the global bin directory for a package manager.
+// If it cannot be determined, an empty string is returned.
+func GlobalBinDir(pm string) string {
+	switch pm {
+	case "npm":
+		out, err := exec.Command("npm", "prefix", "-g").Output()
+		if err != nil {
+			return ""
+		}
+		return filepath.Join(strings.TrimSpace(string(out)), "bin")
+	case "pnpm":
+		out, err := exec.Command("pnpm", "bin", "-g").Output()
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(out))
+	case "yarn":
+		out, err := exec.Command("yarn", "global", "bin").Output()
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(out))
+	}
+	return ""
+}
+
+// Platform returns the runtime platform string used for logging/UI.
+func Platform() string {
+	return fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
+}

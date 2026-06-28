@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -17,6 +16,7 @@ import (
 
 	"desktop/internal/acp"
 	"desktop/internal/acp/adapters"
+	"desktop/internal/agentinstall"
 	logoassets "desktop/internal/assets"
 	"desktop/internal/discovery"
 	"desktop/internal/firmware"
@@ -50,6 +50,7 @@ type App struct {
 	trayUILanguage string
 	flashMgr       *firmware.Manager
 	otaMgr         *firmware.OTAManager
+	agentInstaller *agentinstall.Installer
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
@@ -174,10 +175,13 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	a.flashMgr = firmware.NewManager()
 	a.otaMgr = firmware.NewOTAManager()
 
-	// 2.1 Scan which agent commands are installed and enable the first available one.
-	// This also ensures only one agent is marked as enabled at startup.
-	if err := a.refreshAgentAvailability(); err != nil {
-		log.Printf("[elf] refresh agent availability error: %v", err)
+	// 2.1 Detect which agent CLIs are installed and select the first available one.
+	a.agentInstaller = agentinstall.New(application.Get(), a.db)
+	if err := a.agentInstaller.DetectAll(); err != nil {
+		log.Printf("[elf] detect agents error: %v", err)
+	}
+	if err := a.refreshAgentInstallStatus(); err != nil {
+		log.Printf("[elf] refresh agent install status error: %v", err)
 	}
 
 	// 3. Init TTS immediately; load STT assets in the background so the UI
@@ -251,111 +255,44 @@ func (a *App) ScanDevices() ([]discovery.DiscoveredDevice, error) {
 	return discovery.ScanDevices()
 }
 
-// refreshAgentAvailability checks which agent commands are installed on this
-// machine and updates their availability flag. It keeps the currently selected
-// agent if it is still available, otherwise it selects the first available one.
-// If no agent is available, the current selection is cleared.
-func (a *App) refreshAgentAvailability() error {
+// refreshAgentInstallStatus keeps the currently selected agent if it is still
+// installed, otherwise it selects the first installed one. If no agent is
+// installed, the current selection is cleared.
+func (a *App) refreshAgentInstallStatus() error {
 	agents, err := store.ListAgents(a.db)
 	if err != nil {
 		return fmt.Errorf("list agents: %w", err)
 	}
 
-	// Canonical commands for agents. These are normalized at startup so that
-	// historical database rows with old/wrong command strings still work.
-	expectedCommands := map[string]string{
-		"claude-code": "claude",
-		"opencode":    "opencode acp",
-		"kimi":        "kimi acp",
-		"hermes":      "hermes acp",
-		"pi":          "pi --mode rpc --no-session",
-		"codex":       "codex app-server --stdio",
-	}
-
-	var currentSelected, firstAvailable string
-	selectedAvailable := false
+	var currentSelected, firstInstalled string
+	selectedInstalled := false
 	for _, ag := range agents {
-		command := ag.Command
-		if expected, ok := expectedCommands[ag.ID]; ok && command != expected {
-			command = expected
-			ag.Command = command
-			if err := store.UpdateAgent(a.db, &ag); err != nil {
-				return fmt.Errorf("update %s command: %w", ag.ID, err)
-			}
-		}
-
-		available := isCommandAvailable(command)
-		if ag.Enabled != available {
-			if err := store.UpdateAgentEnabled(a.db, ag.ID, available); err != nil {
-				return fmt.Errorf("update agent availability %s: %w", ag.ID, err)
-			}
-		}
-
-		version := getCommandVersion(command)
-		if version == "" {
-			version = ag.ID
-		}
-		if err := store.UpdateAgentVersion(a.db, ag.ID, version); err != nil {
-			return fmt.Errorf("update agent version %s: %w", ag.ID, err)
-		}
-
 		if ag.Selected {
 			currentSelected = ag.ID
-			selectedAvailable = available
+			selectedInstalled = ag.Installed
 		}
-		if available && firstAvailable == "" {
-			firstAvailable = ag.ID
+		if ag.Installed && firstInstalled == "" {
+			firstInstalled = ag.ID
 		}
 	}
 
 	switch {
-	case currentSelected != "" && selectedAvailable:
+	case currentSelected != "" && selectedInstalled:
 		log.Printf("[elf] keeping selected agent: %s", currentSelected)
-	case firstAvailable != "":
-		if err := a.SelectAgent(firstAvailable); err != nil {
-			return fmt.Errorf("select first available agent %s: %w", firstAvailable, err)
+	case firstInstalled != "":
+		if err := a.SelectAgent(firstInstalled); err != nil {
+			return fmt.Errorf("select first installed agent %s: %w", firstInstalled, err)
 		}
-		log.Printf("[elf] active agent: %s", firstAvailable)
+		log.Printf("[elf] active agent: %s", firstInstalled)
 	default:
 		if err := store.ClearAgentSelection(a.db); err != nil {
 			return fmt.Errorf("clear agent selection: %w", err)
 		}
-		log.Println("[elf] no agent command found; selection cleared")
+		log.Println("[elf] no agent installed; selection cleared")
 	}
 
 	a.refreshTrayAgentMenu()
 	return nil
-}
-
-// isCommandAvailable reports whether the executable referenced by command
-// (the first whitespace-separated token) exists in PATH.
-func isCommandAvailable(command string) bool {
-	name := strings.Fields(command)[0]
-	if _, err := exec.LookPath(name); err != nil {
-		return false
-	}
-	return true
-}
-
-// getCommandVersion runs `<exe> --version` and returns the first non-empty line
-// of output. If the command fails or produces no output, it returns an empty string.
-func getCommandVersion(command string) string {
-	name := strings.Fields(command)[0]
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, name, "--version")
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	for _, line := range lines {
-		if trimmed := strings.TrimSpace(line); trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
 }
 
 // loadSTTAssets downloads the whisper.cpp library and model if needed, then
@@ -443,14 +380,14 @@ func (a *App) handleDeviceConnect(dev gateway.DeviceAdapter) {
 	}
 	agentID := ""
 	for _, ag := range agents {
-		if ag.Selected {
+		if ag.Selected && ag.Installed {
 			agentID = ag.ID
 			break
 		}
 	}
 	if agentID == "" {
 		for _, ag := range agents {
-			if ag.Enabled {
+			if ag.Installed {
 				agentID = ag.ID
 				break
 			}
@@ -831,6 +768,67 @@ func (a *App) ListAgents() ([]store.Agent, error) {
 	return store.ListAgents(a.db)
 }
 
+// DetectAgents rescans the filesystem for installed agent CLIs and updates the
+// database. It returns immediately and performs the work in the background.
+func (a *App) DetectAgents() error {
+	if a.agentInstaller == nil {
+		return fmt.Errorf("agent installer not initialized")
+	}
+	go func() {
+		if err := a.agentInstaller.DetectAll(); err != nil {
+			log.Printf("[elf] detect agents error: %v", err)
+			return
+		}
+		if err := a.refreshAgentInstallStatus(); err != nil {
+			log.Printf("[elf] refresh agent install status error: %v", err)
+		}
+	}()
+	return nil
+}
+
+// InstallAgent starts an asynchronous install of the requested agent.
+func (a *App) InstallAgent(agentID string) error {
+	if a.agentInstaller == nil {
+		return fmt.Errorf("agent installer not initialized")
+	}
+	return a.agentInstaller.Install(agentID)
+}
+
+// IsAgentInstalling reports whether the agent is currently being installed.
+func (a *App) IsAgentInstalling(agentID string) bool {
+	if a.agentInstaller == nil {
+		return false
+	}
+	return a.agentInstaller.IsInstalling(agentID)
+}
+
+// GetPackageManager returns the first available npm-compatible package manager,
+// or an empty string if none is found.
+func (a *App) GetPackageManager() string {
+	pm, _ := agentinstall.DetectPackageManager()
+	return pm
+}
+
+// GetAgentInstallCommand returns the install command currently stored for an agent.
+func (a *App) GetAgentInstallCommand(agentID string) string {
+	ag, err := store.GetAgent(a.db, agentID)
+	if err != nil {
+		return ""
+	}
+	if ag.InstallCommand != nil && *ag.InstallCommand != "" {
+		return *ag.InstallCommand
+	}
+	pm := a.GetPackageManager()
+	if pm == "" {
+		return ""
+	}
+	cmd, err := agentinstall.InstallCommand(agentID, pm)
+	if err != nil {
+		return ""
+	}
+	return cmd
+}
+
 func (a *App) ListSerialPorts() ([]firmware.SerialPortInfo, error) {
 	return firmware.ListSerialPorts()
 }
@@ -932,12 +930,16 @@ func (a *App) UpdateAgent(agent store.Agent) error {
 }
 
 // SelectAgent marks the chosen agent as selected and clears selection from all others.
+// Only installed agents can be selected.
 func (a *App) SelectAgent(agentID string) error {
 	agents, err := store.ListAgents(a.db)
 	if err != nil {
 		return err
 	}
 	for _, ag := range agents {
+		if ag.ID == agentID && !ag.Installed {
+			return fmt.Errorf("agent %s is not installed", agentID)
+		}
 		selected := ag.ID == agentID
 		if ag.Selected != selected {
 			if err := store.UpdateAgentSelected(a.db, ag.ID, selected); err != nil {

@@ -21,11 +21,13 @@ type Message struct {
 }
 
 type Agent struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	Command  string  `json:"command"`
-	Enabled  bool    `json:"enabled"`
-	Selected bool    `json:"selected"`
-	Version  *string `json:"version"`
-	Config   *string `json:"config"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Command        string  `json:"command"`
+	Enabled        bool    `json:"enabled"`
+	Selected       bool    `json:"selected"`
+	Version        *string `json:"version"`
+	Config         *string `json:"config"`
+	Installed      bool    `json:"installed"`
+	InstallCommand *string `json:"install_command"`
 }

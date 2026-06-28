@@ -3,7 +3,7 @@ package store
 import "database/sql"
 
 func ListAgents(db *sql.DB) ([]Agent, error) {
-	rows, err := db.Query("SELECT id, name, command, enabled, selected, version, config FROM agents ORDER BY id")
+	rows, err := db.Query("SELECT id, name, command, enabled, selected, version, config, installed, install_command FROM agents ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -11,7 +11,7 @@ func ListAgents(db *sql.DB) ([]Agent, error) {
 	var agents []Agent
 	for rows.Next() {
 		var a Agent
-		if err := rows.Scan(&a.ID, &a.Name, &a.Command, &a.Enabled, &a.Selected, &a.Version, &a.Config); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &a.Command, &a.Enabled, &a.Selected, &a.Version, &a.Config, &a.Installed, &a.InstallCommand); err != nil {
 			return nil, err
 		}
 		agents = append(agents, a)
@@ -22,8 +22,8 @@ func ListAgents(db *sql.DB) ([]Agent, error) {
 func GetAgent(db *sql.DB, id string) (*Agent, error) {
 	a := &Agent{}
 	err := db.QueryRow(
-		"SELECT id, name, command, enabled, selected, version, config FROM agents WHERE id = ?", id,
-	).Scan(&a.ID, &a.Name, &a.Command, &a.Enabled, &a.Selected, &a.Version, &a.Config)
+		"SELECT id, name, command, enabled, selected, version, config, installed, install_command FROM agents WHERE id = ?", id,
+	).Scan(&a.ID, &a.Name, &a.Command, &a.Enabled, &a.Selected, &a.Version, &a.Config, &a.Installed, &a.InstallCommand)
 	if err != nil {
 		return nil, err
 	}
@@ -32,16 +32,16 @@ func GetAgent(db *sql.DB, id string) (*Agent, error) {
 
 func UpdateAgent(db *sql.DB, a *Agent) error {
 	_, err := db.Exec(
-		"UPDATE agents SET name=?, command=?, enabled=?, selected=?, version=?, config=? WHERE id=?",
-		a.Name, a.Command, a.Enabled, a.Selected, a.Version, a.Config, a.ID,
+		"UPDATE agents SET name=?, command=?, enabled=?, selected=?, version=?, config=?, installed=?, install_command=? WHERE id=?",
+		a.Name, a.Command, a.Enabled, a.Selected, a.Version, a.Config, a.Installed, a.InstallCommand, a.ID,
 	)
 	return err
 }
 
 func InsertAgent(db *sql.DB, a *Agent) error {
 	_, err := db.Exec(
-		"INSERT INTO agents (id, name, command, enabled, selected, version, config) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		a.ID, a.Name, a.Command, a.Enabled, a.Selected, a.Version, a.Config,
+		"INSERT INTO agents (id, name, command, enabled, selected, version, config, installed, install_command) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		a.ID, a.Name, a.Command, a.Enabled, a.Selected, a.Version, a.Config, a.Installed, a.InstallCommand,
 	)
 	return err
 }
@@ -58,6 +58,16 @@ func UpdateAgentSelected(db *sql.DB, id string, selected bool) error {
 
 func UpdateAgentVersion(db *sql.DB, id string, version string) error {
 	_, err := db.Exec("UPDATE agents SET version = ? WHERE id = ?", version, id)
+	return err
+}
+
+func UpdateAgentInstalled(db *sql.DB, id string, installed bool) error {
+	_, err := db.Exec("UPDATE agents SET installed = ? WHERE id = ?", boolToInt(installed), id)
+	return err
+}
+
+func UpdateAgentInstallCommand(db *sql.DB, id string, command string) error {
+	_, err := db.Exec("UPDATE agents SET install_command = ? WHERE id = ?", command, id)
 	return err
 }
 

@@ -6,6 +6,7 @@ desktop/frontend/dist/
 *.exe
 *.dmg
 .DS_Store
+.worktrees/
 firmware/.pio/
 firmware/.vscode/
 # Embedded firmware assets are rebuilt by build.sh; keep the placeholders only.
