@@ -225,15 +225,37 @@ func findBinary(name string) string {
 		return path
 	}
 	for _, dir := range commonBinDirs() {
-		candidate := filepath.Join(dir, name)
 		if runtime.GOOS == "windows" {
-			candidate += ".exe"
-		}
-		if isExecutable(candidate) {
-			return candidate
+			for _, candidate := range windowsCandidates(filepath.Join(dir, name)) {
+				if isExecutable(candidate) {
+					return candidate
+				}
+			}
+		} else {
+			candidate := filepath.Join(dir, name)
+			if isExecutable(candidate) {
+				return candidate
+			}
 		}
 	}
 	return ""
+}
+
+func windowsCandidates(base string) []string {
+	pathext := os.Getenv("PATHEXT")
+	if pathext == "" {
+		pathext = ".exe;.cmd;.bat"
+	}
+	exts := strings.Split(pathext, string(filepath.ListSeparator))
+	var out []string
+	for _, ext := range exts {
+		ext = strings.TrimSpace(ext)
+		if ext == "" {
+			continue
+		}
+		out = append(out, base+strings.ToLower(ext))
+	}
+	return out
 }
 
 func isExecutable(path string) bool {
@@ -273,21 +295,35 @@ func commandVersion(name string) string {
 
 func commonBinDirs() []string {
 	home, _ := os.UserHomeDir()
-	dirs := []string{
-		"/opt/homebrew/bin",
-		"/usr/local/bin",
-		"/usr/bin",
-		"/bin",
+	var dirs []string
+
+	if runtime.GOOS == "windows" {
+		if home != "" {
+			dirs = append(dirs,
+				filepath.Join(home, "AppData", "Roaming", "npm"),
+				filepath.Join(home, "AppData", "Local", "pnpm"),
+				filepath.Join(home, "AppData", "Local", "Yarn", "bin"),
+				filepath.Join(home, ".cargo", "bin"),
+			)
+		}
+	} else {
+		dirs = []string{
+			"/opt/homebrew/bin",
+			"/usr/local/bin",
+			"/usr/bin",
+			"/bin",
+		}
+		if home != "" {
+			dirs = append(dirs,
+				filepath.Join(home, ".local", "bin"),
+				filepath.Join(home, ".npm-global", "bin"),
+				filepath.Join(home, ".yarn", "bin"),
+				filepath.Join(home, ".pnpm", "global", "node_modules", ".bin"),
+				filepath.Join(home, ".cargo", "bin"),
+			)
+		}
 	}
-	if home != "" {
-		dirs = append(dirs,
-			filepath.Join(home, ".local", "bin"),
-			filepath.Join(home, ".npm-global", "bin"),
-			filepath.Join(home, ".yarn", "bin"),
-			filepath.Join(home, ".pnpm", "global", "node_modules", ".bin"),
-			filepath.Join(home, ".cargo", "bin"),
-		)
-	}
+
 	for _, pm := range []string{"npm", "pnpm", "yarn"} {
 		if bin := GlobalBinDir(pm); bin != "" {
 			dirs = append(dirs, bin)

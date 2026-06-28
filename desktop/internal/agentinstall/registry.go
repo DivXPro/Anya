@@ -129,7 +129,12 @@ func GlobalBinDir(pm string) string {
 		if err != nil {
 			return ""
 		}
-		return filepath.Join(strings.TrimSpace(string(out)), "bin")
+		prefix := strings.TrimSpace(string(out))
+		if runtime.GOOS == "windows" {
+			// npm global prefix on Windows already contains the bin dir
+			return prefix
+		}
+		return filepath.Join(prefix, "bin")
 	case "pnpm":
 		out, err := exec.Command("pnpm", "bin", "-g").Output()
 		if err != nil {

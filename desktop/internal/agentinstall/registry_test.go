@@ -3,6 +3,7 @@ package agentinstall
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -101,6 +102,9 @@ func TestDetectPackageManagerPriority(t *testing.T) {
 }
 
 func TestGlobalBinDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix-only test")
+	}
 	tmp := t.TempDir()
 	writeFakeNPM(t, tmp)
 	t.Setenv("PATH", tmp)
@@ -109,5 +113,19 @@ func TestGlobalBinDir(t *testing.T) {
 	want := filepath.Join(tmp, "bin")
 	if got != want {
 		t.Fatalf("GlobalBinDir(npm) = %q, want %q", got, want)
+	}
+}
+
+func TestGlobalBinDirNPMOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows-only test")
+	}
+	tmp := t.TempDir()
+	writeFakeNPM(t, tmp)
+	t.Setenv("PATH", tmp)
+
+	got := GlobalBinDir("npm")
+	if got != tmp {
+		t.Fatalf("GlobalBinDir(npm) on Windows = %q, want %q", got, tmp)
 	}
 }
