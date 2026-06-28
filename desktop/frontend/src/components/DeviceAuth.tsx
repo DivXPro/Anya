@@ -7,7 +7,6 @@ import type { OTAProgress } from '../../bindings/desktop/internal/firmware/model
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Progress } from '@/components/ui/progress';
 import {
   Dialog,
   DialogContent,
@@ -22,7 +21,7 @@ import {
   RiEditLine,
   RiRemoteControlFill,
   RiDownloadCloudLine,
-  RiLoader2Line,
+  RiCloseLine,
 } from '@remixicon/react';
 
 function DeviceAuth() {
@@ -138,6 +137,25 @@ function DeviceAuth() {
     });
   }, [connectedIds, activeDevices, otaProgress]);
 
+  // Clear terminal OTA states after a few seconds so the version info reappears.
+  useEffect(() => {
+    const timers: number[] = [];
+    Object.entries(otaProgress).forEach(([deviceID, p]) => {
+      if (!p.running && ['done', 'cancelled', 'error'].includes(p.stage)) {
+        timers.push(
+          window.setTimeout(() => {
+            setOtaProgress((prev) => {
+              const next = { ...prev };
+              delete next[deviceID];
+              return next;
+            });
+          }, 3000)
+        );
+      }
+    });
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, [otaProgress]);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -176,113 +194,101 @@ function DeviceAuth() {
             const otaDone = ota?.stage === 'done';
             const otaError = ota?.stage === 'error';
             const otaCancelled = ota?.stage === 'cancelled';
+            const otaTerminal = otaDone || otaError || otaCancelled;
+
+            const statusText = () => {
+              if (otaRunning) {
+                return `${t('device.otaUpdating')} ${ota.percent || 0}%${
+                  ota.message ? ` · ${ota.message}` : ''
+                }`;
+              }
+              if (otaDone) return t('device.otaSuccess');
+              if (otaError) return `${t('device.otaFailed')}${ota.error ? `: ${ota.error}` : ''}`;
+              if (otaCancelled) return t('device.otaCancel');
+              if (deviceVersion) return t('device.otaVersionCurrent', { version: deviceVersion });
+              return '';
+            };
+
             return (
               <div
                 key={d.device_id}
-                className="border-b p-3 last:border-b-0"
+                className="flex items-center justify-between border-b p-3 last:border-b-0"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
-                      <RiRemoteControlFill className="h-6 w-6 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="group flex items-center gap-1.5">
-                        <button
-                          onClick={() => startEdit(d)}
-                          className="text-sm font-medium hover:text-muted-foreground"
-                        >
-                          {displayName(d)}
-                        </button>
-                        <RiEditLine className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {isConnected ? (
-                          <>
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            <span className="text-emerald-700 dark:text-emerald-400">
-                              {t('device.connected')}
-                            </span>
-                          </>
-                        ) : (
-                          <span>{t('device.disconnected')}</span>
-                        )}
-                        {deviceVersion && (
-                          <span className="text-muted-foreground">
-                            · {t('device.otaVersionCurrent', { version: deviceVersion })}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+                    <RiRemoteControlFill className="h-6 w-6 text-primary" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    {isConnected && (
-                      <Button
-                        size="sm"
-                        variant={otaRunning ? 'secondary' : 'outline'}
-                        disabled={otaRunning || otaDone}
-                        onClick={() => startOta(d.device_id)}
+                  <div className="min-w-0 flex-1">
+                    <div className="group flex items-center gap-1.5">
+                      <button
+                        onClick={() => startEdit(d)}
+                        className="text-sm font-medium hover:text-muted-foreground"
                       >
-                        {otaRunning ? (
-                          <>
-                            <RiLoader2Line className="mr-1 h-3.5 w-3.5 animate-spin" />
-                            {t('device.otaUpdating')}
-                          </>
-                        ) : (
-                          <>
-                            <RiDownloadCloudLine className="mr-1 h-3.5 w-3.5" />
-                            {t('device.otaUpdate')}
-                          </>
-                        )}
-                      </Button>
-                    )}
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => confirmDelete(d)}
-                    >
-                      <RiDeleteBinLine className="h-4 w-4" />
-                    </Button>
+                        {displayName(d)}
+                      </button>
+                      <RiEditLine className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      {isConnected ? (
+                        <>
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          <span className="text-emerald-700 dark:text-emerald-400">
+                            {t('device.connected')}
+                          </span>
+                        </>
+                      ) : (
+                        <span>{t('device.disconnected')}</span>
+                      )}
+                      {statusText() && (
+                        <span
+                          className={
+                            otaError
+                              ? 'text-red-700 dark:text-red-400'
+                              : otaDone
+                              ? 'text-emerald-700 dark:text-emerald-400'
+                              : otaRunning
+                              ? 'text-amber-700 dark:text-amber-400'
+                              : 'text-muted-foreground'
+                          }
+                        >
+                          · {statusText()}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                {otaRunning && (
-                  <div className="mt-3 space-y-1.5">
-                    <Progress value={ota.percent || 0} />
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{ota.percent || 0}%</span>
-                      <span className="truncate max-w-[200px]">{ota.message || ''}</span>
-                    </div>
+                <div className="flex items-center gap-2">
+                  {isConnected && (
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => cancelOta(d.device_id)}
+                      variant={otaRunning ? 'secondary' : 'outline'}
+                      disabled={otaTerminal}
+                      onClick={() =>
+                        otaRunning ? cancelOta(d.device_id) : startOta(d.device_id)
+                      }
                     >
-                      {t('device.otaCancel')}
+                      {otaRunning ? (
+                        <>
+                          <RiCloseLine className="mr-1 h-3.5 w-3.5" />
+                          {t('device.otaCancel')}
+                        </>
+                      ) : (
+                        <>
+                          <RiDownloadCloudLine className="mr-1 h-3.5 w-3.5" />
+                          {t('device.otaUpdate')}
+                        </>
+                      )}
                     </Button>
-                  </div>
-                )}
-
-                {otaDone && (
-                  <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">
-                    {t('device.otaSuccess')}
-                  </p>
-                )}
-                {otaError && (
-                  <div className="mt-2 space-y-0.5">
-                    <p className="text-xs text-red-700 dark:text-red-400">
-                      {t('device.otaFailed')}
-                    </p>
-                    {ota.error && (
-                      <p className="text-xs text-muted-foreground">{ota.error}</p>
-                    )}
-                  </div>
-                )}
-                {otaCancelled && (
-                  <p className="mt-2 text-xs text-muted-foreground">{t('device.otaCancel')}</p>
-                )}
+                  )}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => confirmDelete(d)}
+                  >
+                    <RiDeleteBinLine className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             );
           })}
