@@ -22,6 +22,28 @@ No root build system exists yet. Use module commands once paths exist:
 
 The desktop app can flash the embedded firmware to an M5StickC S3 via Settings > Device Firmware using the built-in pure-Go flasher. Only a USB-connected device is required.
 
+### Windows 交叉编译
+
+从 macOS/Linux 直接编译 Windows 可执行文件（无需 Windows 主机）：
+
+```bash
+./scripts/build-windows.sh
+```
+
+输出：`desktop/bin/anya-windows-amd64.exe`
+
+Windows 用户运行时需要：
+- WebView2 Runtime（Windows 11 已内置，Windows 10 通常已安装或首次运行时自动下载）
+- USB 转串口驱动（用于固件烧录）
+- Node.js + npm/pnpm/yarn（若使用 Agent 安装功能）
+
+如需生成 NSIS 安装包，需安装 `wails3` CLI 与 `makensis`：
+
+```bash
+cd desktop
+wails3 task windows:package INSTALL_SCOPE=user
+```
+
 If you add a package manager or Makefile, document root commands here.
 
 ## Implementation Principles
