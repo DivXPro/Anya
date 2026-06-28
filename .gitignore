@@ -9,3 +9,4 @@ firmware/.vscode/
 # Embedded firmware assets are rebuilt by build.sh; keep the placeholders only.
 desktop/internal/firmware/assets/firmware.bin
 desktop/internal/firmware/assets/version.txt
+/docs/superpowers/
