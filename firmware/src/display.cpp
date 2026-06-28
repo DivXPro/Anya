@@ -76,8 +76,16 @@ void disp_status_bar(int8_t rssi, bool wifiConnected, bool wsConnected, const ch
         M5.Display.drawCircle(DOT_X, DOT_Y, DOT_R, TFT_DARKGREY);
     }
 
-    // Left label: show SSID when provided (e.g. on Pair screen), otherwise abbreviated agent name.
-    const char* label = (ssid && ssid[0]) ? ssid : abbreviate_agent(agent);
+    // Left label: show SSID when provided (e.g. on Pair screen), otherwise show
+    // the agent name while connected, or "No agent" when the WebSocket is down.
+    const char* label;
+    if (ssid && ssid[0]) {
+        label = ssid;
+    } else if (wsConnected) {
+        label = abbreviate_agent(agent);
+    } else {
+        label = "No agent";
+    }
     if (label && label[0]) {
         int maxChars = (M5.Display.width() - 44) / 6;
         int len = strlen(label);
@@ -184,7 +192,7 @@ void disp_idle(const char* agent, bool connected) {
     disp_status_bar(-1, true, connected, agent);
     mascotVisible = true;
     drawMascot(true);
-    drawPrompt(connected ? "Click to speak" : "Disconnect", nullptr);
+    drawPrompt(connected ? "Click to speak" : "Disconnected", nullptr);
 }
 
 void disp_listening(const char* agent) {

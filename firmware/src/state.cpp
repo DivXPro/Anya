@@ -79,6 +79,13 @@ void state_set_agent(const char* name) {
     connected = true;
     lastWifiConnected = true;
     lastWsConnected = true;
+    // If we are already on the idle screen, refresh it so the prompt switches
+    // from "Disconnected" back to "Click to speak" and the status bar shows
+    // the agent name instead of "No agent".
+    if (current == State::IDLE) {
+        disp_idle(agentName, true);
+        disp_status_bar(lastRssi, lastWifiConnected, lastWsConnected, agentName, status_ssid());
+    }
 }
 
 void state_set_summary(const char* text) {
@@ -90,15 +97,16 @@ void state_force_idle() {
     if (current == State::UPDATING) {
         ota_abort();
     }
-    connected = false;
-    lastWifiConnected = false;
-    lastWsConnected = false;
     audio_stop_recording();
 
     // Avoid redrawing the whole screen on repeated disconnect events while the
     // device is already showing the disconnected idle screen. The WebSocket
     // library retries every 5s, and each failed attempt fires a disconnect event.
-    if (current == State::IDLE) {
+    bool alreadyDisconnectedIdle = (current == State::IDLE && !connected);
+    connected = false;
+    lastWifiConnected = false;
+    lastWsConnected = false;
+    if (alreadyDisconnectedIdle) {
         disp_status_bar(lastRssi, false, false, agentName, status_ssid());
         return;
     }
