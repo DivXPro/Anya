@@ -65,9 +65,9 @@ if [ ! -d "frontend/node_modules" ]; then
     (cd frontend && npm install)
 fi
 
-# Generate app icons from the source anya.png so the .app bundle and status bar
-# always use the current logo instead of a stale Wails default.
-ICON_SRC="$DESKTOP_DIR/frontend/public/anya.png"
+# Generate app icons from the source app icon so the .app bundle
+# always uses the current logo instead of a stale Wails default.
+ICON_SRC="$DESKTOP_DIR/frontend/public/anya-app.png"
 ICON_DIR="$DESKTOP_DIR/build"
 APPICON_PNG="$ICON_DIR/appicon.png"
 ICNS_PATH="$ICON_DIR/darwin/icons.icns"

@@ -12,7 +12,7 @@ import (
 //go:embed frontend/dist
 var assets embed.FS
 
-//go:embed frontend/public/anya.png
+//go:embed frontend/public/anya-app.png
 var appIcon []byte
 
 //go:embed frontend/public/anya-tray.png
