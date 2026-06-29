@@ -180,6 +180,10 @@ func (a *OpenCodeAdapter) Stop() error {
 	a.mu.Unlock()
 	return a.pm.Stop()
 }
+func (a *OpenCodeAdapter) stopLocked() error {
+	a.resetPending = false
+	return a.pm.Stop()
+}
 
 func (a *OpenCodeAdapter) SetCWD(cwd string) {
 	a.mu.Lock()
@@ -344,13 +348,11 @@ func (a *OpenCodeAdapter) dispatchLoop(pm *acp.ProcessManager) {
 			a.mu.Lock()
 			if a.resetPending {
 				a.resetPending = false
-				a.mu.Unlock()
-				if err := a.Stop(); err != nil {
+				if err := a.stopLocked(); err != nil {
 					log.Printf("[opencode] delayed stop after reset failed: %v", err)
 				}
-			} else {
-				a.mu.Unlock()
 			}
+			a.mu.Unlock()
 			return
 		}
 	}

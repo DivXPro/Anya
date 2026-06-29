@@ -166,6 +166,9 @@ func (a *App) refreshTrayCWD() {
 		label = "📁 " + path
 	}
 	a.trayCWDItem.SetLabel(label)
+	if a.agentCWD != "" {
+		a.trayCWDItem.SetTooltip(a.agentCWD)
+	}
 }
 
 func validateWorkingDirectory(path string) error {

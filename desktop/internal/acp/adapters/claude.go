@@ -195,19 +195,19 @@ func (a *ClaudeAdapter) Send(prompt string, history []acp.Message) (<-chan acp.S
 		default:
 		}
 		close(active)
+		a.streamMu.Lock()
 		a.activeStream = nil
+		a.streamMu.Unlock()
 
 		// Check for pending reset after stream completes
 		a.mu.Lock()
 		if a.resetPending {
 			a.resetPending = false
-			a.mu.Unlock()
-			if err := a.Stop(); err != nil {
+			if err := a.stopLocked(); err != nil {
 				log.Printf("[claude] delayed stop after reset failed: %v", err)
 			}
-		} else {
-			a.mu.Unlock()
 		}
+		a.mu.Unlock()
 	}()
 
 	return ch, nil
@@ -272,6 +272,12 @@ func (a *ClaudeAdapter) IsRunning() bool {
 
 func (a *ClaudeAdapter) Stop() error {
 	a.mu.Lock()
+	err := a.stopLocked()
+	a.mu.Unlock()
+	return err
+}
+
+func (a *ClaudeAdapter) stopLocked() error {
 	rt := a.rt
 	a.rt = nil
 	a.initDone = false
@@ -287,7 +293,6 @@ func (a *ClaudeAdapter) Stop() error {
 		a.activeStream = nil
 	}
 	a.streamMu.Unlock()
-	a.mu.Unlock()
 
 	if rt != nil {
 		return rt.Close()

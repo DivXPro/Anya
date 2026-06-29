@@ -1,16 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import DeviceTab from '@/components/DeviceTab';
 import AgentTab from '@/components/AgentTab';
 import HistoryTab from '@/components/HistoryTab';
 import SettingsTab from '@/components/SettingsTab';
 import { useThemeInit } from '@/hooks/useThemeInit';
+import { Events } from '@wailsio/runtime';
 
 export type Tab = 'device' | 'agent' | 'history' | 'settings';
 
 function App() {
   useThemeInit();
   const [activeTab, setActiveTab] = useState<Tab>('device');
+
+  useEffect(() => {
+    const off = Events.On('navigate-to-working-directory', () => {
+      setActiveTab('settings');
+    });
+    return () => off();
+  }, []);
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background/80 text-foreground backdrop-blur-xl">
