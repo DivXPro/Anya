@@ -41,6 +41,29 @@ func TestAgentCWDValidation(t *testing.T) {
 	}
 }
 
+// The turn guard must prevent two voice requests from running concurrently on
+// the same session (which would corrupt the shared ACP session/stream), while
+// keeping different sessions independent.
+func TestTurnGuardSerializesSameSession(t *testing.T) {
+	a := NewApp()
+
+	if !a.tryBeginTurn("s1") {
+		t.Fatal("first begin for s1 should succeed")
+	}
+	if a.tryBeginTurn("s1") {
+		t.Fatal("second begin for s1 must fail while a turn is in flight")
+	}
+	// A different session is unaffected.
+	if !a.tryBeginTurn("s2") {
+		t.Fatal("begin for an independent session s2 should succeed")
+	}
+	// After the turn ends, the session can start a new turn again.
+	a.endTurn("s1")
+	if !a.tryBeginTurn("s1") {
+		t.Fatal("begin for s1 should succeed again after endTurn")
+	}
+}
+
 func TestAppStartupSyncsCWDToRouter(t *testing.T) {
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "elf.db")
