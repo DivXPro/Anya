@@ -595,8 +595,8 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 		return
 	}
 
-	// 7. Send summary to device
-	dev.SendText(gateway.SummaryMessage(resp.Summary))
+	// 7. Send the full reply text to the device for on-screen display.
+	dev.SendText(gateway.SummaryMessage(resp.Content))
 
 	// 8. TTS → stream audio
 	ttsEnabled, err := store.GetSetting(a.db, "tts_enabled")

@@ -297,8 +297,14 @@ void loop() {
         inMenu = false;
     }
 
-    // Animate mascot on screens that show it.
+    // Animate mascot on screens that show it, and scroll agent reply text.
     disp_animate_mascot();
+    disp_animate_text();
+
+    // Return to idle if the agent reply has been on screen for 5 minutes.
+    if (!ota_in_progress() && disp_text_showing_for(5UL * 60UL * 1000UL)) {
+        state_force_idle();
+    }
 
     // Update status bar with live WiFi RSSI + WS connection (every ~1s)
     {

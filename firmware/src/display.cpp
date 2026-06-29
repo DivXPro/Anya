@@ -2,7 +2,9 @@
 #include "mascot.h"
 #include "layout.h"
 #include "lang.h"
+#include "state.h"
 #include <cstring>
+#include <vector>
 
 static const char* abbreviate_agent(const char* name) {
     static char buf[32];
@@ -17,6 +19,14 @@ static const char* abbreviate_agent(const char* name) {
 
 static int mascotY = 0;
 static int promptY = 0;
+
+// Scrolling text state for the agent reply screen.
+static std::vector<String> s_textLines;
+static String s_lastText;
+static int s_scrollOffset = 0;
+static unsigned long s_textShownAt = 0;
+static const int TEXT_LINE_H = 14;
+static const int TEXT_AREA_MARGIN = 4;
 
 void disp_init() {
     M5.Display.setRotation(DISPLAY_ROTATION);  // native portrait 135x240
@@ -218,19 +228,10 @@ static int utf8_char_len(const char* s) {
     return 1;
 }
 
-static void drawWrappedText(const char* text, int startY, int maxLines) {
-    if (!text || !text[0]) return;
-    M5.Display.setTextSize(1);
-    M5.Display.setTextDatum(textdatum_t::top_center);
-    const int lineH = 14;
-    const int margin = 4;
-    const int maxW = M5.Display.width() - margin * 2;
-    const int centerX = M5.Display.width() / 2;
-    int y = startY;
+static std::vector<String> wrapTextLines(const char* text, int maxW) {
+    std::vector<String> lines;
     const char* p = text;
-    int lines = 0;
-
-    while (*p && lines < maxLines) {
+    while (*p) {
         String line;
         while (*p) {
             int charLen = utf8_char_len(p);
@@ -248,19 +249,31 @@ static void drawWrappedText(const char* text, int startY, int maxLines) {
             for (int i = 0; i < charLen; ++i) line += p[i];
             p += charLen;
         }
-        // Truncate the last visible line if more text remains.
-        if (lines == maxLines - 1 && *p) {
-            String ellipsis = "...";
-            while (line.length() > 0 && M5.Display.textWidth((line + ellipsis).c_str()) > maxW) {
-                int idx = line.length() - 1;
-                while (idx > 0 && (line[idx] & 0xc0) == 0x80) idx--;
-                line = line.substring(0, idx);
-            }
-            line += ellipsis;
+        lines.push_back(line);
+    }
+    return lines;
+}
+
+static inline int textAreaTop() { return STATUS_BAR_H + 2; }
+static inline int textAreaBottom() { return M5.Display.height() - TEXT_AREA_MARGIN; }
+static inline int textAreaHeight() { return textAreaBottom() - textAreaTop(); }
+
+static void drawScrollingText() {
+    if (s_textLines.empty()) return;
+    M5.Display.setTextSize(1);
+    M5.Display.setTextDatum(textdatum_t::top_center);
+    M5.Display.setTextColor(TFT_WHITE);
+    int x = M5.Display.width() / 2;
+    int canvasH = s_textLines.size() * TEXT_LINE_H;
+    int areaH = textAreaHeight();
+    int maxOffset = (canvasH > areaH) ? (canvasH - areaH) : 0;
+    if (s_scrollOffset > maxOffset) s_scrollOffset = maxOffset;
+    int bottomY = textAreaBottom();
+    for (size_t i = 0; i < s_textLines.size(); ++i) {
+        int y = bottomY - canvasH + (int)i * TEXT_LINE_H + s_scrollOffset;
+        if (y + TEXT_LINE_H >= textAreaTop() && y <= M5.Display.height()) {
+            M5.Display.drawString(s_textLines[i].c_str(), x, y);
         }
-        M5.Display.drawString(line.c_str(), centerX, y);
-        y += lineH;
-        lines++;
     }
 }
 
@@ -268,10 +281,41 @@ void disp_playing(const char* summary, const char* agent) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, true, agent);
     mascotVisible = false;
-    M5.Display.setTextColor(TFT_WHITE);
-    int maxLines = (M5.Display.height() - promptY - 4) / 14;
-    if (maxLines < 1) maxLines = 1;
-    drawWrappedText(summary, promptY, maxLines);
+
+    if (!summary || !summary[0]) return;
+
+    if (s_lastText != summary) {
+        s_lastText = summary;
+        s_textLines = wrapTextLines(summary, M5.Display.width() - TEXT_AREA_MARGIN * 2);
+        s_scrollOffset = 0;
+        s_textShownAt = millis();
+    }
+    drawScrollingText();
+}
+
+void disp_animate_text() {
+    if (state_current() != State::PLAYING || s_textLines.empty()) return;
+
+    int areaH = textAreaHeight();
+    int canvasH = s_textLines.size() * TEXT_LINE_H;
+    int maxOffset = (canvasH > areaH) ? (canvasH - areaH) : 0;
+    if (s_scrollOffset >= maxOffset) return;
+
+    static unsigned long lastScroll = 0;
+    unsigned long now = millis();
+    if (now - lastScroll < 50) return;
+    lastScroll = now;
+
+    // Clear only the text area and redraw the status bar separator.
+    M5.Display.fillRect(0, textAreaTop(), M5.Display.width(), textAreaHeight(), TFT_BLACK);
+    M5.Display.drawFastHLine(0, STATUS_BAR_H, M5.Display.width(), TFT_DARKGREY);
+
+    s_scrollOffset++;
+    drawScrollingText();
+}
+
+bool disp_text_showing_for(unsigned long ms) {
+    return state_current() == State::PLAYING && (millis() - s_textShownAt) >= ms;
 }
 
 void disp_connecting(const char* desktopName, const char* agent) {
