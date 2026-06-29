@@ -8,7 +8,7 @@
 #include <M5Unified.h>
 #include <map>
 
-static const char* kPortalSsid = "Anya-hotspot";
+static const char* kPortalSsid = "Anya";
 static const byte kDnsPort = 53;
 
 // ── Portal HTML (adapted from Arkloop style) ─────────────────
@@ -181,7 +181,7 @@ static void drawPortalScreen() {
         M5.Display.fillScreen(TFT_BLACK);
         M5.Display.setBrightness(255);
         portalDrawStatusBar();
-        portalCenterPrint("Connect to Anya-hotspot", portalPromptY);
+        portalCenterPrint("Connect to Anya", portalPromptY);
         portalDrawn = true;
     }
     portalDrawMascot();  // animate every call
