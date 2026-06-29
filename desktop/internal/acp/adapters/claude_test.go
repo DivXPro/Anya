@@ -2,8 +2,6 @@ package adapters
 
 import (
 	"testing"
-
-	"desktop/internal/acp"
 )
 
 func TestIsClaudeCliInstalled(t *testing.T) {
@@ -25,6 +23,23 @@ func TestNewClaudeAdapterInfo(t *testing.T) {
 	}
 }
 
-func TestClaudeAdapterImplementsInterface(t *testing.T) {
-	var _ acp.ACPAdapter = (*ClaudeAdapter)(nil)
+func TestClaudeAdapterSetCWD(t *testing.T) {
+	a := &ClaudeAdapter{}
+
+	// Default behavior
+	if got := a.effectiveCWD(); got != "." {
+		t.Fatalf("expected default cwd '.', got %q", got)
+	}
+
+	// Set custom cwd
+	a.SetCWD("/tmp/project")
+	if got := a.effectiveCWD(); got != "/tmp/project" {
+		t.Fatalf("expected cwd '/tmp/project', got %q", got)
+	}
+
+	// Empty string resets to default
+	a.SetCWD("")
+	if got := a.effectiveCWD(); got != "." {
+		t.Fatalf("expected default cwd '.', got %q", got)
+	}
 }

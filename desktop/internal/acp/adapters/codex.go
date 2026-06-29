@@ -54,6 +54,10 @@ func (a *CodexAdapter) Info() acp.AgentInfo { return a.info }
 func (a *CodexAdapter) IsRunning() bool     { return a.pm.IsRunning() }
 func (a *CodexAdapter) Stop() error         { return a.pm.Stop() }
 
+func (a *CodexAdapter) SetCWD(cwd string) {
+	// Codex does not use cwd parameter in thread/start
+}
+
 func (a *CodexAdapter) CurrentSessionID() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()

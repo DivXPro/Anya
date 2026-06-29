@@ -124,6 +124,10 @@ func (a *PiAdapter) Info() acp.AgentInfo { return a.info }
 func (a *PiAdapter) IsRunning() bool { return a.pm.IsRunning() }
 func (a *PiAdapter) Stop() error     { return a.pm.Stop() }
 
+func (a *PiAdapter) SetCWD(cwd string) {
+	// Pi does not use cwd parameter in its RPC protocol
+}
+
 func (a *PiAdapter) dispatchLoop(pm *acp.ProcessManager) {
 	defer func() {
 		a.dispatchMu.Lock()
@@ -227,9 +231,9 @@ func (a *PiAdapter) sendRequest(command string, params map[string]any) error {
 	a.mu.Unlock()
 
 	req := map[string]any{
-		"id":      reqID,
-		"type":    command,
-		"params":  params,
+		"id":     reqID,
+		"type":   command,
+		"params": params,
 	}
 	if err := a.pm.SendJSON(req); err != nil {
 		a.mu.Lock()

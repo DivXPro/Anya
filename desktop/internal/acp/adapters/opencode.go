@@ -24,6 +24,7 @@ type OpenCodeAdapter struct {
 	initDone        bool
 	lastPromptReqID int
 	systemPrompt    string
+	cwd             string
 }
 
 func NewOpenCodeAdapter() *OpenCodeAdapter {
@@ -83,7 +84,7 @@ func (a *OpenCodeAdapter) ensureInit() error {
 	}
 
 	params := map[string]any{
-		"cwd":        ".",
+		"cwd":        a.effectiveCWD(),
 		"mcpServers": []any{},
 	}
 	if a.systemPrompt != "" {
@@ -174,6 +175,21 @@ func (a *OpenCodeAdapter) Info() acp.AgentInfo { return a.info }
 func (a *OpenCodeAdapter) IsRunning() bool { return a.pm.IsRunning() }
 func (a *OpenCodeAdapter) Stop() error     { return a.pm.Stop() }
 
+func (a *OpenCodeAdapter) SetCWD(cwd string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.cwd = cwd
+}
+
+func (a *OpenCodeAdapter) effectiveCWD() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.cwd == "" {
+		return "."
+	}
+	return a.cwd
+}
+
 func (a *OpenCodeAdapter) dispatchLoop(pm *acp.ProcessManager) {
 	defer func() {
 		a.dispatchMu.Lock()
@@ -189,9 +205,9 @@ func (a *OpenCodeAdapter) dispatchLoop(pm *acp.ProcessManager) {
 				return
 			}
 			var msg struct {
-				ID     int            `json:"id"`
-				Method string         `json:"method"`
-				Result map[string]any `json:"result"`
+				ID     int                       `json:"id"`
+				Method string                    `json:"method"`
+				Result map[string]any            `json:"result"`
 				Error  *struct{ Message string } `json:"error"`
 				Params struct {
 					SessionID string `json:"sessionId"`

@@ -34,6 +34,7 @@ type ClaudeAdapter struct {
 	streamMu     sync.RWMutex
 	stopSub      func()
 	systemPrompt string
+	cwd          string
 }
 
 func NewClaudeAdapter() *ClaudeAdapter {
@@ -106,7 +107,7 @@ func (a *ClaudeAdapter) newSession() error {
 	a.mu.Unlock()
 
 	params := map[string]any{
-		"cwd":        ".",
+		"cwd":        a.effectiveCWD(),
 		"mcpServers": []any{},
 	}
 	if systemPrompt != "" {
@@ -278,6 +279,21 @@ func (a *ClaudeAdapter) Stop() error {
 		return rt.Close()
 	}
 	return nil
+}
+
+func (a *ClaudeAdapter) SetCWD(cwd string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.cwd = cwd
+}
+
+func (a *ClaudeAdapter) effectiveCWD() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.cwd == "" {
+		return "."
+	}
+	return a.cwd
 }
 
 func (a *ClaudeAdapter) clientRequest(id int, method string, params map[string]any) (map[string]any, error) {

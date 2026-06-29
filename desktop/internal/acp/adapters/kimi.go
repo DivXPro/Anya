@@ -25,6 +25,7 @@ type KimiAdapter struct {
 	initDone        bool
 	lastPromptReqID int
 	systemPrompt    string
+	cwd             string
 }
 
 func NewKimiAdapter() *KimiAdapter {
@@ -83,7 +84,7 @@ func (a *KimiAdapter) ensureInit() error {
 	}
 
 	params := map[string]any{
-		"cwd":        ".",
+		"cwd":        a.effectiveCWD(),
 		"mcpServers": []any{},
 	}
 	if a.systemPrompt != "" {
@@ -174,6 +175,21 @@ func (a *KimiAdapter) Info() acp.AgentInfo { return a.info }
 func (a *KimiAdapter) IsRunning() bool { return a.pm.IsRunning() }
 func (a *KimiAdapter) Stop() error     { return a.pm.Stop() }
 
+func (a *KimiAdapter) SetCWD(cwd string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.cwd = cwd
+}
+
+func (a *KimiAdapter) effectiveCWD() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.cwd == "" {
+		return "."
+	}
+	return a.cwd
+}
+
 func (a *KimiAdapter) dispatchLoop(pm *acp.ProcessManager) {
 	defer func() {
 		a.dispatchMu.Lock()
@@ -189,9 +205,9 @@ func (a *KimiAdapter) dispatchLoop(pm *acp.ProcessManager) {
 				return
 			}
 			var msg struct {
-				ID     int            `json:"id"`
-				Method string         `json:"method"`
-				Result map[string]any `json:"result"`
+				ID     int                       `json:"id"`
+				Method string                    `json:"method"`
+				Result map[string]any            `json:"result"`
 				Error  *struct{ Message string } `json:"error"`
 				Params struct {
 					SessionID string `json:"sessionId"`
