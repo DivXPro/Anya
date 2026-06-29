@@ -242,6 +242,10 @@ export function SetTrayAgentMenu(menu: application$0.Menu | null): $CancellableP
     return $Call.ByID(2881811, menu);
 }
 
+export function SetTrayCWDItem(item: application$0.MenuItem | null): $CancellablePromise<void> {
+    return $Call.ByID(1397873416, item);
+}
+
 export function SetTrayDeviceItem(item: application$0.MenuItem | null): $CancellablePromise<void> {
     return $Call.ByID(3133036894, item);
 }
