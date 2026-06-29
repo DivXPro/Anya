@@ -119,7 +119,8 @@ static String buildScanJson() {
 
 // ── Screen drawing (135×240 portrait, matches display.cpp) ──
 static const int P_STATUS_BAR_H = 16;
-static const int P_GAP          = 4;
+static const int P_GAP          = 24;  // space between mascot and prompt text
+static const int P_TOP_BIAS     = -16; // shift mascot up from vertical centre
 static const int P_LINE_SPACING = 18;
 static const int P_PROMPT_H     = 12;
 static int portalMascotY = 0;   // computed at runtime after M5.begin()
@@ -153,7 +154,8 @@ static void portalCenterPrint(const char* s, int y) {
 
 static void updatePortalLayout() {
     portalMascotY = P_STATUS_BAR_H +
-                    (M5.Display.height() - P_STATUS_BAR_H - MASCOT_IMG_H - P_PROMPT_H - P_GAP) / 2;
+                    (M5.Display.height() - P_STATUS_BAR_H - MASCOT_IMG_H - P_PROMPT_H - P_GAP) / 2 +
+                    P_TOP_BIAS;
     portalPromptY = portalMascotY + MASCOT_IMG_H + P_GAP;
 }
 
