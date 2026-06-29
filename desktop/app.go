@@ -5,11 +5,13 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -54,6 +56,8 @@ type App struct {
 
 	confirmMu    sync.Mutex
 	confirmWaits map[string]chan string
+	askMu        sync.Mutex
+	askWaits     map[string]chan string
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
@@ -172,6 +176,7 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	// 2. Init ACP router + register all adapters
 	a.router = acp.NewRouter()
 	a.confirmWaits = make(map[string]chan string)
+	a.askWaits = make(map[string]chan string)
 	a.router.Register(adapters.NewClaudeAdapter())
 	a.router.Register(adapters.NewOpenCodeAdapter())
 	a.router.Register(adapters.NewKimiAdapter())
@@ -519,6 +524,19 @@ func (a *App) handleConfirmResponse(payload map[string]interface{}) {
 	if reqID == "" {
 		return
 	}
+	if strings.HasPrefix(reqID, "ask-") {
+		a.askMu.Lock()
+		ch := a.askWaits[reqID]
+		a.askMu.Unlock()
+		if ch == nil {
+			return
+		}
+		select {
+		case ch <- optionID:
+		default:
+		}
+		return
+	}
 	a.confirmMu.Lock()
 	ch := a.confirmWaits[reqID]
 	a.confirmMu.Unlock()
@@ -528,6 +546,66 @@ func (a *App) handleConfirmResponse(payload map[string]interface{}) {
 	select {
 	case ch <- optionID:
 	default:
+	}
+}
+
+type askUserPrompt struct {
+	Question string
+	Options  []gateway.ConfirmOption
+}
+
+var askUserMarkerRE = regexp.MustCompile(`(?s)\[ASK_USER\]\s*(\{.*?\})\s*\[/ASK_USER\]`)
+
+func extractAskUserMarker(content string) (string, *askUserPrompt) {
+	match := askUserMarkerRE.FindStringSubmatch(content)
+	if match == nil {
+		return content, nil
+	}
+	var payload struct {
+		Question string `json:"question"`
+		Options  []struct {
+			ID    string `json:"id"`
+			Label string `json:"label"`
+		} `json:"options"`
+	}
+	if err := json.Unmarshal([]byte(match[1]), &payload); err != nil {
+		return content, nil
+	}
+	if payload.Question == "" || len(payload.Options) == 0 {
+		return content, nil
+	}
+	opts := make([]gateway.ConfirmOption, len(payload.Options))
+	for i, o := range payload.Options {
+		opts[i] = gateway.ConfirmOption{ID: o.ID, Label: o.Label}
+	}
+	clean := strings.TrimSpace(askUserMarkerRE.ReplaceAllString(content, ""))
+	return clean, &askUserPrompt{Question: payload.Question, Options: opts}
+}
+
+func (a *App) askUserOnDevice(dev gateway.DeviceAdapter, prompt *askUserPrompt) (string, bool) {
+	reqID := "ask-" + uuid.New().String()
+	ch := make(chan string, 1)
+	a.askMu.Lock()
+	a.askWaits[reqID] = ch
+	a.askMu.Unlock()
+	defer func() {
+		a.askMu.Lock()
+		delete(a.askWaits, reqID)
+		a.askMu.Unlock()
+	}()
+
+	if err := dev.SendText(gateway.ConfirmMessage(reqID, prompt.Question, prompt.Options)); err != nil {
+		log.Printf("[elf] send ask message error: %v", err)
+		return "", false
+	}
+
+	const askTimeout = 5 * time.Minute
+	select {
+	case optionID := <-ch:
+		return optionID, true
+	case <-time.After(askTimeout):
+		log.Printf("[elf] ask user timed out: %s", reqID)
+		return "", false
 	}
 }
 
@@ -586,7 +664,6 @@ func (a *App) runConfirm(ctx context.Context, dev gateway.DeviceAdapter, respond
 func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, audioData []byte) {
 	dev.SendText(gateway.StatusMessage("processing"))
 
-	// 1. STT
 	if !a.sttReady() {
 		dev.SendText(gateway.SummaryMessage("语音模型加载中，请稍候"))
 		dev.SendText(gateway.StatusMessage("connected"))
@@ -604,38 +681,76 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 	}
 	log.Printf("[elf] STT: %s", text)
 
-	// 2. Save user message
+	a.processUserText(dev, sessionID, text)
+}
+
+func (a *App) processUserText(dev gateway.DeviceAdapter, sessionID string, text string) {
+	// Allow a few ask-user follow-ups before giving up.
+	const maxFollowUps = 3
+	currentText := text
+	for followUp := 0; followUp <= maxFollowUps; followUp++ {
+		ask, err := a.runAgentTurn(dev, sessionID, currentText)
+		if err != nil {
+			log.Printf("[elf] agent turn error: %v", err)
+			return
+		}
+		if ask == nil {
+			return
+		}
+
+		optionID, ok := a.askUserOnDevice(dev, ask)
+		if !ok {
+			dev.SendText(gateway.SummaryMessage("等待回答超时"))
+			return
+		}
+		answer := optionID
+		for _, o := range ask.Options {
+			if o.ID == optionID {
+				answer = o.Label
+				break
+			}
+		}
+		log.Printf("[elf] ask user answer: %s -> %s", optionID, answer)
+
+		if err := store.InsertMessage(a.db, &store.Message{
+			SessionID: sessionID, Role: "user", Content: answer,
+		}); err != nil {
+			dev.SendText(gateway.SummaryMessage("保存回答失败"))
+			return
+		}
+		currentText = answer
+	}
+}
+
+func (a *App) runAgentTurn(dev gateway.DeviceAdapter, sessionID string, text string) (*askUserPrompt, error) {
 	if err := store.InsertMessage(a.db, &store.Message{
 		SessionID: sessionID, Role: "user", Content: text,
 	}); err != nil {
 		dev.SendText(gateway.SummaryMessage("保存消息失败"))
-		return
+		return nil, err
 	}
 
-	// 3. Get history
 	history, err := store.GetSessionMessages(a.db, sessionID)
 	if err != nil {
 		dev.SendText(gateway.SummaryMessage("读取历史失败"))
-		return
+		return nil, err
 	}
 	acpHistory := make([]acp.Message, len(history))
 	for i, m := range history {
 		acpHistory[i] = acp.Message{Role: m.Role, Content: m.Content}
 	}
 
-	// 4. Route to ACP agent
 	session, err := store.GetSession(a.db, sessionID)
 	if err != nil {
 		dev.SendText(gateway.SummaryMessage("会话读取失败"))
-		return
+		return nil, err
 	}
 	events, err := a.router.Route(session.AgentID, text, acpHistory)
 	if err != nil {
 		dev.SendText(gateway.SummaryMessage("Agent 调用失败"))
-		return
+		return nil, err
 	}
 
-	// Watch for ACP permission requests during this turn and surface them on the device.
 	if adapter, ok := a.router.GetAdapter(session.AgentID); ok {
 		if responder, ok := adapter.(acp.PermissionResponder); ok {
 			ctx, cancel := context.WithCancel(context.Background())
@@ -644,7 +759,6 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 		}
 	}
 
-	// Persist the ACP session ID so the conversation can be recovered later.
 	if session.ACPSessionID == nil || *session.ACPSessionID == "" {
 		if acpSessionID, err := a.router.CurrentSessionID(session.AgentID); err == nil && acpSessionID != "" {
 			if err := store.UpdateSessionACPSession(a.db, sessionID, acpSessionID, session.AgentID); err != nil {
@@ -653,7 +767,6 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 		}
 	}
 
-	// 5. Process response with timeout monitoring
 	pipeline := processor.NewPipeline(events)
 	pipeline.SetExecTimeoutCallback(func() {
 		dev.SendText(gateway.StatusMessage("processing"))
@@ -662,35 +775,34 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 	switch result {
 	case processor.ResultNoResponseTimeout:
 		dev.SendText(gateway.SummaryMessage("Agent 超时无响应，已中断"))
-		return
+		return nil, fmt.Errorf("agent no response timeout")
 	case processor.ResultExecTimeout:
 		// fall through
 	}
 	if err != nil {
 		dev.SendText(gateway.SummaryMessage("处理出错"))
-		return
+		return nil, err
 	}
 
-	// 6. Save assistant message
+	clean, ask := extractAskUserMarker(resp.Content)
+
 	if err := store.InsertMessage(a.db, &store.Message{
 		SessionID: sessionID, Role: "assistant",
-		Content: resp.Content, Summary: &resp.Summary,
+		Content: clean, Summary: &resp.Summary,
 	}); err != nil {
 		dev.SendText(gateway.SummaryMessage("保存回复失败"))
-		return
+		return nil, err
 	}
 
-	// 7. Send the full reply text to the device for on-screen display.
-	dev.SendText(gateway.SummaryMessage(resp.Content))
+	dev.SendText(gateway.SummaryMessage(clean))
 
-	// 8. TTS → stream audio
 	ttsEnabled, err := store.GetSetting(a.db, "tts_enabled")
 	if err != nil {
 		ttsEnabled = "true"
 	}
 	if ttsEnabled == "true" {
 		dev.SendText(gateway.TTSStartMessage("pcm"))
-		audioStream, err := a.tts.Synthesize(resp.Content)
+		audioStream, err := a.tts.Synthesize(clean)
 		if err != nil {
 			log.Printf("[elf] TTS error: %v", err)
 		} else {
@@ -703,6 +815,7 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 
 	dev.SendText(gateway.StatusMessage("connected"))
 	log.Printf("[elf] request complete")
+	return ask, nil
 }
 
 // ConnectToDevice notifies a scanned device to open a WebSocket back to the desktop.

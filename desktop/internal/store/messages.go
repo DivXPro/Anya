@@ -73,6 +73,30 @@ func GetSessionMessages(db *sql.DB, sessionID string) ([]Message, error) {
 	return GetMessagesBySession(db, sessionID, 1000, 0)
 }
 
+func GetLastAssistantMessage(db *sql.DB, sessionID string) (*Message, error) {
+	row := db.QueryRow(
+		`SELECT id, session_id, role, content, audio_url, summary, created_at
+		 FROM messages WHERE session_id = ? AND role = ? ORDER BY created_at DESC LIMIT 1`,
+		sessionID, "assistant",
+	)
+	var m Message
+	if err := row.Scan(&m.ID, &m.SessionID, &m.Role, &m.Content, &m.AudioURL, &m.Summary, &m.CreatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &m, nil
+}
+
+func UpdateMessageContent(db *sql.DB, messageID, content string) error {
+	_, err := db.Exec(
+		`UPDATE messages SET content = ? WHERE id = ?`,
+		content, messageID,
+	)
+	return err
+}
+
 // ListMessages returns recent messages across all sessions, newest first.
 func ListMessages(db *sql.DB, limit, offset int) ([]Message, error) {
 	rows, err := db.Query(

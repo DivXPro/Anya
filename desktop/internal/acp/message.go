@@ -38,3 +38,21 @@ type PermissionResponder interface {
 	PermissionRequests() <-chan PermissionRequest
 	RespondPermission(requestID, optionID string) error
 }
+
+type AskUserOption struct {
+	ID    string
+	Label string
+}
+
+type AskUserRequest struct {
+	ID         string
+	Prompt     string
+	QuestionID string
+	ToolCallID string
+	Options    []AskUserOption
+}
+
+type AskUserResponder interface {
+	AskUserRequests() <-chan AskUserRequest
+	RespondAskUser(requestID string, answers map[string]string) error
+}
