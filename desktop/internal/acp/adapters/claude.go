@@ -246,7 +246,9 @@ func (a *ClaudeAdapter) LoadSession(acpSessionID string, history []acp.Message) 
 	a.mu.Unlock()
 
 	resp, err := a.clientRequest(id, "session/load", map[string]any{
-		"sessionId": acpSessionID,
+		"sessionId":  acpSessionID,
+		"cwd":        a.effectiveCWD(),
+		"mcpServers": []any{},
 	})
 	if err != nil {
 		log.Printf("[claude] session/load failed, keeping requested id: %v", err)

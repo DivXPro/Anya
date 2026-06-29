@@ -151,7 +151,9 @@ func (a *HermesAdapter) LoadSession(acpSessionID string, history []acp.Message) 
 	}
 
 	resp, err := a.sendRequest("session/load", map[string]any{
-		"sessionId": acpSessionID,
+		"sessionId":  acpSessionID,
+		"cwd":        a.effectiveCWD(),
+		"mcpServers": []any{},
 	})
 	if err != nil {
 		return fmt.Errorf("acp session/load: %w", err)
