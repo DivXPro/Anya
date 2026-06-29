@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App } from '../../bindings/desktop';
 import type { DownloadProgress } from '../../bindings/desktop/internal/speech/models';
@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Events } from '@wailsio/runtime';
 import { Dialogs } from '@wailsio/runtime';
 import {
   RiTranslate,
@@ -30,7 +29,11 @@ function formatBytes(n: number): string {
   return `${(n / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
-function SettingsTab() {
+interface SettingsTabProps {
+  workingDirectoryRef: React.RefObject<HTMLDivElement>;
+}
+
+function SettingsTab({ workingDirectoryRef }: SettingsTabProps) {
   const { t } = useTranslation();
   const { theme, language, updateTheme, updateLanguage } = useAppSettings();
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -49,14 +52,6 @@ function SettingsTab() {
     message: '',
     error: '',
   });
-  const workingDirectoryRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const off = Events.On('navigate-to-working-directory', () => {
-      workingDirectoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
-    return () => off();
-  }, []);
 
   useEffect(() => {
     App.GetSettings()
