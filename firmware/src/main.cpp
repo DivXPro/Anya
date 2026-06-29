@@ -26,6 +26,7 @@ static bool inMenu = false;
 enum class MenuLevel : uint8_t { MAIN, LANGUAGE };
 static MenuLevel menuLevel = MenuLevel::MAIN;
 static int menuSelected = 0;
+static State menuReturnState = State::IDLE;
 
 static const Str mainMenuItems[] = {
     Str::MenuChooseWifi,
@@ -155,9 +156,13 @@ static void register_button_callbacks() {
                 menuSelected = (lang_get() == Lang::EN) ? 0 : 1;
                 show_menu();
             } else if (menuSelected == 4) {
-                // Back: return to normal idle screen
+                // Back: return to the screen we were on before opening the menu.
                 inMenu = false;
-                state_transition(State::IDLE);
+                State target = menuReturnState;
+                if (target == State::WIFI_SETUP) {
+                    target = State::IDLE;
+                }
+                state_transition(target);
             }
             return;
         }
@@ -191,6 +196,7 @@ static void register_button_callbacks() {
         }
         if (!inMenu) {
             ESP_LOGI("main", "enter menu");
+            menuReturnState = state_current();
             inMenu = true;
             menuLevel = MenuLevel::MAIN;
             menuSelected = 0;
@@ -234,6 +240,7 @@ void setup() {
         inMenu = true;
         menuLevel = MenuLevel::MAIN;
         menuSelected = 0;
+        menuReturnState = State::IDLE;
         state_transition(State::MENU);
         show_menu();
     } else {
