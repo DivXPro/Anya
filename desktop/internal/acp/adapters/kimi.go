@@ -26,6 +26,7 @@ type KimiAdapter struct {
 	lastPromptReqID int
 	systemPrompt    string
 	cwd             string
+	resetPending    bool
 }
 
 func NewKimiAdapter() *KimiAdapter {
@@ -179,6 +180,7 @@ func (a *KimiAdapter) SetCWD(cwd string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.cwd = cwd
+	a.resetPending = true
 }
 
 func (a *KimiAdapter) effectiveCWD() string {
@@ -315,6 +317,17 @@ func (a *KimiAdapter) dispatchLoop(pm *acp.ProcessManager) {
 			}
 
 		case <-done:
+			// Check for pending reset after stream completes
+			a.mu.Lock()
+			if a.resetPending {
+				a.resetPending = false
+				a.mu.Unlock()
+				if err := a.Stop(); err != nil {
+					log.Printf("[kimi] delayed stop after reset failed: %v", err)
+				}
+			} else {
+				a.mu.Unlock()
+			}
 			return
 		}
 	}

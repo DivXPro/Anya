@@ -35,6 +35,7 @@ type ClaudeAdapter struct {
 	stopSub      func()
 	systemPrompt string
 	cwd          string
+	resetPending bool
 }
 
 func NewClaudeAdapter() *ClaudeAdapter {
@@ -195,6 +196,18 @@ func (a *ClaudeAdapter) Send(prompt string, history []acp.Message) (<-chan acp.S
 		}
 		close(active)
 		a.activeStream = nil
+
+		// Check for pending reset after stream completes
+		a.mu.Lock()
+		if a.resetPending {
+			a.resetPending = false
+			a.mu.Unlock()
+			if err := a.Stop(); err != nil {
+				log.Printf("[claude] delayed stop after reset failed: %v", err)
+			}
+		} else {
+			a.mu.Unlock()
+		}
 	}()
 
 	return ch, nil
@@ -285,6 +298,7 @@ func (a *ClaudeAdapter) SetCWD(cwd string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.cwd = cwd
+	a.resetPending = true
 }
 
 func (a *ClaudeAdapter) effectiveCWD() string {
