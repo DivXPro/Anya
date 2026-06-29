@@ -7,6 +7,7 @@ static BinaryCallback binaryCb = nullptr;
 static std::function<void()> closeCb = nullptr;
 static bool connected = false;
 static bool pendingHello = false;
+static unsigned long lastRxAt = 0;
 
 static char helloDeviceID[40] = "";
 static char helloDeviceName[40] = "";
@@ -48,12 +49,14 @@ static void onEvent(WStype_t type, uint8_t* payload, size_t length) {
             break;
         case WStype_TEXT:
             ESP_LOGI("ws", "received text: %s", (const char*)payload);
+            lastRxAt = millis();
             if (textCb && payload) {
                 textCb((const char*)payload);
             }
             break;
         case WStype_BIN:
             ESP_LOGI("ws", "received binary len=%u", (unsigned)length);
+            lastRxAt = millis();
             if (binaryCb && payload) {
                 binaryCb(payload, length);
             }
@@ -115,4 +118,8 @@ void ws_disconnect() {
 
 bool ws_connected() {
     return connected;
+}
+
+unsigned long ws_last_rx_at() {
+    return lastRxAt;
 }

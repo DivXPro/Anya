@@ -28,6 +28,7 @@ static const char* s_strings[static_cast<int>(Str::Count)][2] = {
     /* LangEnglish     */ {"English", "English"},
     /* LangChinese     */ {"中文", "中文"},
     /* PlayingTestTone */ {"Playing test tone...", "播放测试音..."},
+    /* NoResponse      */ {"No response, tap to retry", "无响应,点击重试"},
 };
 
 void lang_init() {

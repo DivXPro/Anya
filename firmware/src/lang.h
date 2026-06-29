@@ -30,6 +30,7 @@ enum class Str : uint8_t {
     LangEnglish,
     LangChinese,
     PlayingTestTone,
+    NoResponse,
     Count
 };
 

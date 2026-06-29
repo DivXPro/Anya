@@ -29,6 +29,12 @@ static MenuLevel menuLevel = MenuLevel::MAIN;
 static int menuSelected = 0;
 static State menuReturnState = State::IDLE;
 
+// Turn watchdog: while waiting on the desktop (SENDING/PROCESSING), recover to
+// idle if no frame arrives from the desktop for this long. The desktop sends a
+// "processing" heartbeat every ~12s, so 30s tolerates a couple of missed beats.
+static const unsigned long TURN_WATCHDOG_MS = 30UL * 1000UL;
+static unsigned long s_turnActivityAt = 0;
+
 static const Str mainMenuItems[] = {
     Str::MenuChooseWifi,
     Str::MenuRepair,
@@ -206,6 +212,16 @@ static void register_button_callbacks() {
             ESP_LOGI("main", "PTT press ignored: not connected");
             return;
         }
+        // Reject new input while a turn is in flight (waiting on the desktop).
+        // Starting a second turn would run concurrently on the shared ACP
+        // session and corrupt the in-progress reply.
+        {
+            State st = state_current();
+            if (st == State::SENDING || st == State::PROCESSING) {
+                ESP_LOGI("main", "PTT press ignored: busy (state %d)", (int)st);
+                return;
+            }
+        }
         ESP_LOGI("main", "PTT press -> LISTENING");
         state_transition(State::LISTENING);
         audio_start_recording();
@@ -224,6 +240,7 @@ static void register_button_callbacks() {
         audio_stop_recording();
         protocol_send_audio_end();
         state_transition(State::SENDING);
+        s_turnActivityAt = millis();
     });
 
     btn_on_next([]() {
@@ -330,6 +347,25 @@ void loop() {
     // Return to idle if the agent reply has been on screen for 1 minute.
     if (!ota_in_progress() && disp_text_showing_for(60UL * 1000UL)) {
         state_force_idle();
+    }
+
+    // Turn watchdog: while SENDING/PROCESSING, the device is waiting on the
+    // desktop. If no frame arrives for TURN_WATCHDOG_MS (desktop hung, agent
+    // streaming forever, or any path that never sends a terminal message),
+    // recover instead of staying stuck on "Thinking..." forever. Any received
+    // frame (incl. the periodic "processing" heartbeat) keeps the turn alive.
+    {
+        State st = state_current();
+        if ((st == State::SENDING || st == State::PROCESSING) && !ota_in_progress()) {
+            unsigned long ref = s_turnActivityAt;
+            unsigned long rx = ws_last_rx_at();
+            if (rx > ref) ref = rx;
+            if (millis() - ref > TURN_WATCHDOG_MS) {
+                ESP_LOGW("main", "turn watchdog fired in state %d, recovering", (int)st);
+                state_set_summary(tr(Str::NoResponse));
+                state_transition(State::PLAYING);
+            }
+        }
     }
 
     // Update status bar with live WiFi RSSI + WS connection (every ~1s)

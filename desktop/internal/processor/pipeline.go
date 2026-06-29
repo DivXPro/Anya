@@ -17,18 +17,25 @@ type Pipeline struct {
 	events  <-chan acp.StreamEvent
 	content strings.Builder
 
+	// noResponseTimeout is an idle timeout: it resets on every event, so it
+	// fires only after the agent has been completely silent for this long.
 	noResponseTimeout time.Duration
-	execTimeout       time.Duration
+	// heartbeatInterval drives a periodic "still working" callback so the
+	// device keeps receiving a liveness signal during long turns.
+	heartbeatInterval time.Duration
+	// maxTurnTimeout is a hard wall-clock cap on a single turn. It is NOT reset
+	// on events, so even a backend that streams forever is bounded.
+	maxTurnTimeout time.Duration
 
-	startTime      time.Time
-	lastEventAt    time.Time
-	onExecTimeout  func()
+	startTime   time.Time
+	lastEventAt time.Time
+	onHeartbeat func()
 }
 
 type PipelineResult int
 
 const (
-	ResultComplete          PipelineResult = iota
+	ResultComplete PipelineResult = iota
 	ResultNoResponseTimeout
 	ResultExecTimeout
 )
@@ -38,21 +45,26 @@ func NewPipeline(events <-chan acp.StreamEvent) *Pipeline {
 	return &Pipeline{
 		events:            events,
 		noResponseTimeout: 30 * time.Second,
-		execTimeout:       300 * time.Second,
+		heartbeatInterval: 12 * time.Second,
+		maxTurnTimeout:    10 * time.Minute,
 		startTime:         now,
 		lastEventAt:       now,
 	}
 }
 
-func (p *Pipeline) SetExecTimeoutCallback(cb func()) {
-	p.onExecTimeout = cb
+// SetHeartbeatCallback registers a callback invoked periodically
+// (every heartbeatInterval) while a turn is still being processed.
+func (p *Pipeline) SetHeartbeatCallback(cb func()) {
+	p.onHeartbeat = cb
 }
 
 func (p *Pipeline) Process() (*Response, PipelineResult, error) {
 	noResponseTimer := time.NewTimer(p.noResponseTimeout)
-	execTimer := time.NewTimer(p.execTimeout)
+	heartbeatTimer := time.NewTimer(p.heartbeatInterval)
+	maxTurnTimer := time.NewTimer(p.maxTurnTimeout)
 	defer noResponseTimer.Stop()
-	defer execTimer.Stop()
+	defer heartbeatTimer.Stop()
+	defer maxTurnTimer.Stop()
 
 	for {
 		select {
@@ -92,11 +104,16 @@ func (p *Pipeline) Process() (*Response, PipelineResult, error) {
 		case <-noResponseTimer.C:
 			return nil, ResultNoResponseTimeout, fmt.Errorf("no response from agent within %v", p.noResponseTimeout)
 
-		case <-execTimer.C:
-			if p.onExecTimeout != nil {
-				p.onExecTimeout()
+		case <-maxTurnTimer.C:
+			// Hard cap: a turn that keeps streaming without ever finishing is
+			// still bounded so the caller can send a terminal message.
+			return nil, ResultExecTimeout, fmt.Errorf("turn exceeded max duration %v", p.maxTurnTimeout)
+
+		case <-heartbeatTimer.C:
+			if p.onHeartbeat != nil {
+				p.onHeartbeat()
 			}
-			execTimer.Reset(p.execTimeout)
+			heartbeatTimer.Reset(p.heartbeatInterval)
 		}
 	}
 }

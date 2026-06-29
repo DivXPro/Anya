@@ -16,3 +16,6 @@ void ws_on_close(std::function<void()> cb);
 void ws_loop();
 void ws_disconnect();
 bool ws_connected();
+// millis() timestamp of the last text/binary frame received from the desktop.
+// Used as a liveness signal for the turn watchdog. 0 if nothing received yet.
+unsigned long ws_last_rx_at();

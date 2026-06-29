@@ -57,6 +57,11 @@ type App struct {
 
 	confirmMu    sync.Mutex
 	confirmWaits map[string]chan string
+
+	// turnMu guards turnActive, which tracks sessions with an in-flight turn so
+	// a new voice request can't run concurrently with one already being processed.
+	turnMu     sync.Mutex
+	turnActive map[string]bool
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
@@ -553,8 +558,17 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 				dev.SendText(gateway.StatusMessage("listening"))
 			case "audio_end":
 				// Don't switch to processing immediately; let the device show
-				// "Sending..." until we actually start processing.
-				go a.processVoiceRequest(dev, sessionID, audioBuffer)
+				// "Sending..." until we actually start processing. Guard against
+				// a second turn starting while one is still in flight (which would
+				// corrupt the shared ACP session/stream).
+				if !a.tryBeginTurn(sessionID) {
+					log.Printf("[elf] ignoring audio_end: a turn is already in progress for session %s", sessionID)
+					continue
+				}
+				go func(buf []byte) {
+					defer a.endTurn(sessionID)
+					a.processVoiceRequest(dev, sessionID, buf)
+				}(audioBuffer)
 			case "button":
 				log.Printf("[elf] button: %s", evt.Action)
 			case "confirm_response":
@@ -646,6 +660,29 @@ func (a *App) runConfirm(ctx context.Context, dev gateway.DeviceAdapter, respond
 	}
 }
 
+// tryBeginTurn marks the session as having an in-flight turn. It returns false
+// if a turn is already running for that session, so callers can drop the new
+// request instead of processing two turns concurrently on the same ACP session.
+func (a *App) tryBeginTurn(sessionID string) bool {
+	a.turnMu.Lock()
+	defer a.turnMu.Unlock()
+	if a.turnActive == nil {
+		a.turnActive = make(map[string]bool)
+	}
+	if a.turnActive[sessionID] {
+		return false
+	}
+	a.turnActive[sessionID] = true
+	return true
+}
+
+// endTurn clears the in-flight marker for the session.
+func (a *App) endTurn(sessionID string) {
+	a.turnMu.Lock()
+	delete(a.turnActive, sessionID)
+	a.turnMu.Unlock()
+}
+
 func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, audioData []byte) {
 	dev.SendText(gateway.StatusMessage("processing"))
 
@@ -718,7 +755,7 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 
 	// 5. Process response with timeout monitoring
 	pipeline := processor.NewPipeline(events)
-	pipeline.SetExecTimeoutCallback(func() {
+	pipeline.SetHeartbeatCallback(func() {
 		dev.SendText(gateway.StatusMessage("processing"))
 	})
 	resp, result, err := pipeline.Process()
@@ -727,7 +764,8 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 		dev.SendText(gateway.SummaryMessage("Agent 超时无响应，已中断"))
 		return
 	case processor.ResultExecTimeout:
-		// fall through
+		dev.SendText(gateway.SummaryMessage("Agent 执行超时，已中断"))
+		return
 	}
 	if err != nil {
 		dev.SendText(gateway.SummaryMessage("处理出错"))
