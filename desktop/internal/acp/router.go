@@ -87,6 +87,19 @@ func (r *Router) GetAgent(id string) (AgentInfo, bool) {
 	return a.Info(), true
 }
 
+func (r *Router) SetCWD(cwd string) {
+	r.mu.RLock()
+	adapters := make([]ACPAdapter, 0, len(r.adapters))
+	for _, a := range r.adapters {
+		adapters = append(adapters, a)
+	}
+	r.mu.RUnlock()
+
+	for _, a := range adapters {
+		a.SetCWD(cwd)
+	}
+}
+
 func (r *Router) idleReaper() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
