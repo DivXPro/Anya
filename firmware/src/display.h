@@ -1,5 +1,6 @@
 #pragma once
 #include <M5Unified.h>
+#include "lang.h"
 
 // Portrait rotation for M5StickC S3.
 // 0 = USB connector at the bottom (native portrait).
@@ -19,7 +20,7 @@ void disp_sending(const char* agent);
 void disp_processing(const char* agent);
 void disp_playing(const char* summary, const char* agent);
 void disp_error(const char* msg, const char* agent);
-void disp_menu(const char* agent, int selected, const char* const* items, int count, int8_t rssi, bool wifiConnected, bool wsConnected);
+void disp_menu(const char* agent, int selected, const Str* items, int count, int8_t rssi, bool wifiConnected, bool wsConnected);
 void disp_updating(int8_t percent, const char* version, const char* agent);
 void disp_updating_progress(int8_t percent);
 

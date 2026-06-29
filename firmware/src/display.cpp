@@ -1,6 +1,7 @@
 #include "display.h"
 #include "mascot.h"
 #include "layout.h"
+#include "lang.h"
 #include <cstring>
 
 static const char* abbreviate_agent(const char* name) {
@@ -75,7 +76,7 @@ void disp_status_bar(int8_t rssi, bool wifiConnected, bool wsConnected, const ch
     } else if (wsConnected) {
         label = abbreviate_agent(agent);
     } else {
-        label = "No agent";
+        label = tr(Str::NoAgent);
     }
     if (label && label[0]) {
         int maxChars = (M5.Display.width() - 44) / 6;
@@ -151,7 +152,7 @@ void disp_wifi_setup(const char* hotspotSsid, const char* agent) {
     disp_status_bar(-1, false, false, agent);
     mascotVisible = true;
     drawMascot(true);
-    drawPrompt("Connect to Anya", nullptr);
+    drawPrompt(tr(Str::ConnectToAnya), nullptr);
 }
 
 void disp_wifi_connecting(const char* ssid, const char* agent) {
@@ -159,7 +160,7 @@ void disp_wifi_connecting(const char* ssid, const char* agent) {
     disp_status_bar(-1, false, false, agent);
     mascotVisible = true;
     drawMascot(true);
-    drawPrompt("Connecting...", nullptr);
+    drawPrompt(tr(Str::Connecting), nullptr);
 }
 
 void disp_pair_ready(const char* agent, const char* ssid) {
@@ -167,7 +168,7 @@ void disp_pair_ready(const char* agent, const char* ssid) {
     disp_status_bar(-1, true, false, agent, ssid);
     mascotVisible = true;
     drawMascot(true);
-    drawPrompt("Ready to pair", nullptr);
+    drawPrompt(tr(Str::ReadyToPair), nullptr);
 }
 
 void disp_pairing(const char* agent) {
@@ -175,7 +176,7 @@ void disp_pairing(const char* agent) {
     disp_status_bar(-1, true, false, agent);
     mascotVisible = true;
     drawMascot(true);
-    drawPrompt("Pairing...", nullptr);
+    drawPrompt(tr(Str::Pairing), nullptr);
 }
 
 void disp_idle(const char* agent, bool connected) {
@@ -183,7 +184,7 @@ void disp_idle(const char* agent, bool connected) {
     disp_status_bar(-1, true, connected, agent);
     mascotVisible = true;
     drawMascot(true);
-    drawPrompt(connected ? "Click to speak" : "Disconnected", nullptr);
+    drawPrompt(connected ? tr(Str::ClickToSpeak) : tr(Str::Disconnected), nullptr);
 }
 
 void disp_listening(const char* agent) {
@@ -191,7 +192,7 @@ void disp_listening(const char* agent) {
     disp_status_bar(-1, true, true, agent);
     mascotVisible = true;
     drawMascot(true);
-    drawPrompt("Listening...", nullptr);
+    drawPrompt(tr(Str::Listening), nullptr);
 }
 
 void disp_sending(const char* agent) {
@@ -199,7 +200,7 @@ void disp_sending(const char* agent) {
     disp_status_bar(-1, true, true, agent);
     mascotVisible = true;
     drawMascot(true);
-    drawPrompt("Sending...", nullptr);
+    drawPrompt(tr(Str::Sending), nullptr);
 }
 
 void disp_processing(const char* agent) {
@@ -207,7 +208,7 @@ void disp_processing(const char* agent) {
     disp_status_bar(-1, true, true, agent);
     mascotVisible = true;
     drawMascot(true);
-    drawPrompt("Thinking...", nullptr);
+    drawPrompt(tr(Str::Thinking), nullptr);
 }
 
 void disp_playing(const char* summary, const char* agent) {
@@ -278,7 +279,7 @@ void disp_updating(int8_t percent, const char* version, const char* agent) {
     M5.Display.setTextSize(1);
     M5.Display.setTextColor(TFT_WHITE);
     M5.Display.setTextDatum(textdatum_t::middle_center);
-    M5.Display.drawString("Updating firmware...", M5.Display.width() / 2, promptY - 24);
+    M5.Display.drawString(tr(Str::UpdatingFirmware), M5.Display.width() / 2, promptY - 24);
 
     // Draw the static bar outline once.
     const int barW = M5.Display.width() - 24;
@@ -297,7 +298,7 @@ void disp_updating(int8_t percent, const char* version, const char* agent) {
 }
 
 // ── Menu ──────────────────────────────────────────────────────
-void disp_menu(const char* agent, int selected, const char* const* items, int count, int8_t rssi, bool wifiConnected, bool wsConnected) {
+void disp_menu(const char* agent, int selected, const Str* items, int count, int8_t rssi, bool wifiConnected, bool wsConnected) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(rssi, wifiConnected, wsConnected, agent);
     mascotVisible = false;
@@ -313,12 +314,13 @@ void disp_menu(const char* agent, int selected, const char* const* items, int co
     for (int i = 0; i < count; i++) {
         int y = startY + i * lineH;
         bool sel = (i == selected);
+        const char* label = tr(items[i]);
         if (sel) {
             M5.Display.setTextColor(TFT_GREEN);
-            M5.Display.drawString("> " + String(items[i]) + " <", M5.Display.width() / 2, y + lineH / 2);
+            M5.Display.drawString("> " + String(label) + " <", M5.Display.width() / 2, y + lineH / 2);
         } else {
             M5.Display.setTextColor(TFT_WHITE);
-            M5.Display.drawString(items[i], M5.Display.width() / 2, y + lineH / 2);
+            M5.Display.drawString(label, M5.Display.width() / 2, y + lineH / 2);
         }
     }
 }

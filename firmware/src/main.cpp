@@ -12,6 +12,7 @@
 #include "protocol.h"
 #include "state.h"
 #include "ota.h"
+#include "lang.h"
 
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "0.0.0-dev"
@@ -21,10 +22,36 @@ static char deviceID[37];
 static char deviceName[32];
 static bool advertising = false;
 
-static const char* menuItems[] = {"Choose WiFi", "Repair", "Test Speaker", "Back"};
-static const int menuCount = 4;
-static int menuSelected = 0;
 static bool inMenu = false;
+enum class MenuLevel : uint8_t { MAIN, LANGUAGE };
+static MenuLevel menuLevel = MenuLevel::MAIN;
+static int menuSelected = 0;
+
+static const Str mainMenuItems[] = {
+    Str::MenuChooseWifi,
+    Str::MenuRepair,
+    Str::MenuTestSpeaker,
+    Str::MenuLanguage,
+    Str::MenuBack,
+};
+static const int mainMenuCount = sizeof(mainMenuItems) / sizeof(mainMenuItems[0]);
+
+static const Str langMenuItems[] = {
+    Str::LangEnglish,
+    Str::LangChinese,
+    Str::MenuBack,
+};
+static const int langMenuCount = sizeof(langMenuItems) / sizeof(langMenuItems[0]);
+
+static void show_menu() {
+    if (menuLevel == MenuLevel::LANGUAGE) {
+        disp_menu(deviceName, menuSelected, langMenuItems, langMenuCount,
+                  wifi_rssi(), wifi_connected(), ws_connected());
+    } else {
+        disp_menu(deviceName, menuSelected, mainMenuItems, mainMenuCount,
+                  wifi_rssi(), wifi_connected(), ws_connected());
+    }
+}
 
 void init_device_identity() {
     Preferences prefs;
@@ -52,6 +79,8 @@ void init_device_identity() {
 void setup() {
     auto cfg = M5.config();
     M5.begin(cfg);
+    M5.Display.setFont(&fonts::efontCN_12);
+    lang_init();
     ESP_LOGI("elf", "firmware setup start, version=%s", FIRMWARE_VERSION);
     init_device_identity();
 
@@ -62,30 +91,38 @@ void setup() {
     protocol_init();
 
     bool wifiOK = wifi_init();
+    PortalResult portalResult = PortalResult::SUCCESS;
     if (!wifiOK) {
         state_transition(State::WIFI_SETUP);
-        wifiOK = wifi_portal_begin();
+        portalResult = wifi_portal_begin();
     }
-    if (!wifiOK) {
-        disp_error("WiFi setup failed", "Anya");
+    if (portalResult == PortalResult::FAILED) {
+        disp_error(tr(Str::WifiSetupFailed), deviceName);
         return;
     }
-    http_setup_connect_endpoint();
-    state_transition(State::PAIR_READY);
-
-    String boundID = wifi_get_bound_desktop_id();
-    String boundIP = wifi_get_bound_desktop_ip();
-    uint16_t boundPort = wifi_get_bound_desktop_port();
-
-    if (boundIP.length() > 0) {
-        ESP_LOGI("main", "bound reconnect to %s:%d", boundIP.c_str(), boundPort);
-        ws_set_hello_data(deviceID, deviceName, boundID.c_str(), "");
-        ws_connect(boundIP.c_str(), boundPort);
-        state_transition(State::IDLE);
+    if (portalResult == PortalResult::CANCELLED) {
+        inMenu = true;
+        menuLevel = MenuLevel::MAIN;
+        menuSelected = 0;
+        state_transition(State::MENU);
+        show_menu();
     } else {
-        mdns_start_advertise(deviceID, deviceName);
-        advertising = true;
-        state_transition(State::PAIR_READY);
+        http_setup_connect_endpoint();
+
+        String boundID = wifi_get_bound_desktop_id();
+        String boundIP = wifi_get_bound_desktop_ip();
+        uint16_t boundPort = wifi_get_bound_desktop_port();
+
+        if (boundIP.length() > 0) {
+            ESP_LOGI("main", "bound reconnect to %s:%d", boundIP.c_str(), boundPort);
+            ws_set_hello_data(deviceID, deviceName, boundID.c_str(), "");
+            ws_connect(boundIP.c_str(), boundPort);
+            state_transition(State::IDLE);
+        } else {
+            mdns_start_advertise(deviceID, deviceName);
+            advertising = true;
+            state_transition(State::PAIR_READY);
+        }
     }
 
     btn_on_ptt_press([]() {
@@ -94,30 +131,54 @@ void setup() {
             return;
         }
         if (inMenu) {
-            ESP_LOGI("main", "menu confirm: %s", menuItems[menuSelected]);
+            if (menuLevel == MenuLevel::LANGUAGE) {
+                if (menuSelected == 0) {
+                    lang_set(Lang::EN);
+                    ESP_LOGI("main", "language set to EN");
+                } else if (menuSelected == 1) {
+                    lang_set(Lang::ZH);
+                    ESP_LOGI("main", "language set to ZH");
+                }
+                // Back (index 2) simply returns to the main menu.
+                menuLevel = MenuLevel::MAIN;
+                menuSelected = 3; // Language
+                show_menu();
+                return;
+            }
+            ESP_LOGI("main", "menu confirm: %s", tr(mainMenuItems[menuSelected]));
             if (menuSelected == 0) {
                 // Choose WiFi: open captive portal to reconfigure network
                 inMenu = false;
                 state_transition(State::WIFI_SETUP);
-                if (wifi_portal_begin()) {
-                    String boundID = wifi_get_bound_desktop_id();
-                    String boundIP = wifi_get_bound_desktop_ip();
-                    uint16_t boundPort = wifi_get_bound_desktop_port();
-                    if (boundIP.length() > 0) {
-                        state_transition(State::IDLE);
-                        // Reconnect to the bound desktop if available
-                        ws_set_hello_data(deviceID, deviceName, boundID.c_str(), "");
-                        ws_connect(boundIP.c_str(), boundPort);
-                    } else {
-                        // No bound desktop yet: show the pairing screen.
-                        state_transition(State::PAIR_READY);
-                        if (!advertising) {
-                            mdns_start_advertise(deviceID, deviceName);
-                            advertising = true;
-                        }
-                    }
+                PortalResult pr = wifi_portal_begin();
+                if (pr == PortalResult::CANCELLED) {
+                    return;
+                }
+                if (pr == PortalResult::FAILED) {
+                    disp_error(tr(Str::WifiSetupFailed), deviceName);
+                    delay(2000);
+                    inMenu = true;
+                    menuLevel = MenuLevel::MAIN;
+                    menuSelected = 0;
+                    state_transition(State::MENU);
+                    show_menu();
+                    return;
+                }
+                String boundID = wifi_get_bound_desktop_id();
+                String boundIP = wifi_get_bound_desktop_ip();
+                uint16_t boundPort = wifi_get_bound_desktop_port();
+                if (boundIP.length() > 0) {
+                    state_transition(State::IDLE);
+                    // Reconnect to the bound desktop if available
+                    ws_set_hello_data(deviceID, deviceName, boundID.c_str(), "");
+                    ws_connect(boundIP.c_str(), boundPort);
                 } else {
-                    disp_error("WiFi setup failed", "Anya");
+                    // No bound desktop yet: show the pairing screen.
+                    state_transition(State::PAIR_READY);
+                    if (!advertising) {
+                        mdns_start_advertise(deviceID, deviceName);
+                        advertising = true;
+                    }
                 }
             } else if (menuSelected == 1) {
                 // Repair: clear binding and start fresh advertising
@@ -133,11 +194,15 @@ void setup() {
                 // Test Speaker: play a 1kHz tone for 1 second
                 ESP_LOGI("main", "menu: test speaker");
                 audio_play_test_tone();
-                disp_playing("Playing test tone...", deviceName);
+                disp_playing(tr(Str::PlayingTestTone), deviceName);
                 delay(1200);
-                state_transition(State::MENU);
-                disp_menu(deviceName, menuSelected, menuItems, menuCount, wifi_rssi(), wifi_connected(), ws_connected());
+                show_menu();
             } else if (menuSelected == 3) {
+                // Language: enter the second-level language menu
+                menuLevel = MenuLevel::LANGUAGE;
+                menuSelected = (lang_get() == Lang::EN) ? 0 : 1;
+                show_menu();
+            } else if (menuSelected == 4) {
                 // Back: return to normal idle screen
                 inMenu = false;
                 state_transition(State::IDLE);
@@ -175,12 +240,15 @@ void setup() {
         if (!inMenu) {
             ESP_LOGI("main", "enter menu");
             inMenu = true;
+            menuLevel = MenuLevel::MAIN;
             menuSelected = 0;
             state_transition(State::MENU);
+            show_menu();
         } else {
-            menuSelected = (menuSelected + 1) % menuCount;
+            int count = (menuLevel == MenuLevel::LANGUAGE) ? langMenuCount : mainMenuCount;
+            menuSelected = (menuSelected + 1) % count;
             ESP_LOGI("main", "menu next -> %d", menuSelected);
-            disp_menu(deviceName, menuSelected, menuItems, menuCount, wifi_rssi(), wifi_connected(), ws_connected());
+            show_menu();
         }
     });
 }

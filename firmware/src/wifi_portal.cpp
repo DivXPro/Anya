@@ -3,6 +3,8 @@
 #include "mascot.h"
 #include "layout.h"
 #include "elf_wifi.h"
+#include "state.h"
+#include "buttons.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
@@ -177,7 +179,7 @@ static void drawPortalScreen() {
         M5.Display.fillScreen(TFT_BLACK);
         M5.Display.setBrightness(255);
         portalDrawStatusBar();
-        portalCenterPrint("Connect to Anya", portalPromptY);
+        portalCenterPrint(tr(Str::ConnectToAnya), portalPromptY);
         portalDrawn = true;
     }
     portalDrawMascot();  // animate every call
@@ -192,13 +194,13 @@ static void drawConnectingScreen(const char* ssid) {
     portalDrawStatusBar();
     lastPortalDrawnFrame = -1;  // force redraw after screen clear
     mascot_draw(portalFrame, x, portalMascotY);
-    portalCenterPrint("Connecting...", portalPromptY);
+    portalCenterPrint(tr(Str::Connecting), portalPromptY);
 }
 
 // ── Main portal loop ────────────────────────────────────────
-bool wifi_portal_begin() {
+PortalResult wifi_portal_begin() {
     WiFi.mode(WIFI_AP);
-    if (!WiFi.softAP(kPortalSsid)) return false;
+    if (!WiFi.softAP(kPortalSsid)) return PortalResult::FAILED;
 
     WebServer server(80);
     DNSServer dns;
@@ -230,6 +232,13 @@ bool wifi_portal_begin() {
         for (int i = 0; i < 8; ++i) {
             dns.processNextRequest();
         }
+        btn_loop();
+        if (state_current() == State::MENU) {
+            server.stop();
+            dns.stop();
+            WiFi.softAPdisconnect(true);
+            return PortalResult::CANCELLED;
+        }
         drawPortalScreen();
         delay(10);
     }
@@ -239,5 +248,5 @@ bool wifi_portal_begin() {
     WiFi.softAPdisconnect(true);
     delay(200);
     drawConnectingScreen(submittedSsid.c_str());
-    return wifi_init();
+    return wifi_init() ? PortalResult::SUCCESS : PortalResult::FAILED;
 }

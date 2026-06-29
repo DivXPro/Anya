@@ -61,7 +61,7 @@ void state_transition(State s) {
         case State::PLAYING:
             break;
         case State::MENU:
-            disp_menu(agentName, 0, nullptr, 0, lastRssi, lastWifiConnected, lastWsConnected);
+            // Menu items are drawn by main.cpp after it sets the menu level.
             break;
         case State::UPDATING:
             disp_updating(0, "", agentName);
