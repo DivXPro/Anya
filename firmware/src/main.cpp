@@ -21,6 +21,7 @@
 static char deviceID[37];
 static char deviceName[32];
 static bool advertising = false;
+static bool httpStarted = false;
 
 static bool inMenu = false;
 enum class MenuLevel : uint8_t { MAIN, LANGUAGE };
@@ -77,6 +78,13 @@ void init_device_identity() {
     prefs.end();
 }
 
+static void ensure_http_server() {
+    if (!httpStarted) {
+        http_setup_connect_endpoint();
+        httpStarted = true;
+    }
+}
+
 static void resume_after_portal(PortalResult pr) {
     if (pr == PortalResult::CANCELLED) {
         return;
@@ -92,7 +100,7 @@ static void resume_after_portal(PortalResult pr) {
         return;
     }
 
-    http_setup_connect_endpoint();
+    ensure_http_server();
 
     String boundID = wifi_get_bound_desktop_id();
     String boundIP = wifi_get_bound_desktop_ip();
@@ -259,7 +267,7 @@ void setup() {
         state_transition(State::MENU);
         show_menu();
     } else {
-        http_setup_connect_endpoint();
+        ensure_http_server();
 
         String boundID = wifi_get_bound_desktop_id();
         String boundIP = wifi_get_bound_desktop_ip();
@@ -276,8 +284,6 @@ void setup() {
             state_transition(State::PAIR_READY);
         }
     }
-
-    register_button_callbacks();
 }
 
 void loop() {
