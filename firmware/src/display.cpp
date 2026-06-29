@@ -131,10 +131,8 @@ void disp_animate_mascot() {
 
 
 static void centerPrint(const char* s, int y) {
-    M5.Display.setTextDatum(textdatum_t::top_left);
-    int w = (int)strlen(s) * 6;
-    M5.Display.setCursor((M5.Display.width() - w) / 2, y);
-    M5.Display.print(s);
+    M5.Display.setTextDatum(textdatum_t::top_center);
+    M5.Display.drawString(s, M5.Display.width() / 2, y);
 }
 
 static void drawPrompt(const char* line1, const char* line2) {
