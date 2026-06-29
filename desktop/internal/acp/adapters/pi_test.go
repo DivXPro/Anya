@@ -20,7 +20,7 @@ func TestNewPiAdapterInfo(t *testing.T) {
 	if info.Name != "Pi" {
 		t.Fatalf("unexpected name: %s", info.Name)
 	}
-	if info.Command != "pi --mode rpc --no-session" {
+	if info.Command != "pi --mode rpc --no-session --exclude-tools ask_question" {
 		t.Fatalf("unexpected command: %s", info.Command)
 	}
 }

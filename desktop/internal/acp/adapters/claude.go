@@ -64,6 +64,9 @@ func (a *ClaudeAdapter) initRuntime() error {
 
 	cfg := claudeacp.DefaultRuntimeConfig()
 	cfg.LogLevel = "warn"
+	if wrapper := ensureClaudeWrapper(); wrapper != "" {
+		cfg.ClaudeBin = wrapper
+	}
 	rt := claudeacp.NewEmbeddedRuntime(cfg)
 	if err := rt.Start(context.Background()); err != nil {
 		a.mu.Unlock()

@@ -5,7 +5,7 @@ import "strings"
 // DefaultSystemPrompt is prepended to every user prompt (or passed as ACP
 // systemInstructions) to shape the agent's tone for a voice-first hardware
 // companion.
-const DefaultSystemPrompt = "You are Anya, a helpful hardware companion. Keep responses concise, natural, and suitable for voice playback."
+const DefaultSystemPrompt = "You are Anya, a helpful hardware companion. Keep responses concise, natural, and suitable for voice playback." + NoInteractiveQuestionToolPrompt
 
 // acpLifecycleMarkers are status strings that the ACP bridge sometimes embeds
 // directly into text-delta content. They should never be surfaced to users or

@@ -31,9 +31,9 @@ func NewPiAdapter() *PiAdapter {
 		info: acp.AgentInfo{
 			ID:      "pi",
 			Name:    "Pi",
-			Command: "pi --mode rpc --no-session",
+			Command: "pi --mode rpc --no-session --exclude-tools ask_question",
 		},
-		pm:           acp.NewProcessManagerWithFraming("pi --mode rpc --no-session", acp.NDJSONFraming),
+		pm:           acp.NewProcessManagerWithFraming("pi --mode rpc --no-session --exclude-tools ask_question", acp.NDJSONFraming),
 		pending:      make(map[string]chan acp.StreamEvent),
 		systemPrompt: DefaultSystemPrompt,
 	}
