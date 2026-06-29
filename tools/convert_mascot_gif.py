@@ -19,6 +19,8 @@ INPUT = Path(sys.argv[1]) if len(sys.argv) > 1 else SCRIPT_DIR / "../desktop/fro
 OUTPUT_H = Path(sys.argv[2]) if len(sys.argv) > 2 else SCRIPT_DIR / "../firmware/src/mascot_anim.h"
 OUTPUT_CPP = OUTPUT_H.with_suffix(".cpp")
 MAX_FRAMES = int(sys.argv[3]) if len(sys.argv) > 3 else 200
+CROP_W = int(sys.argv[4]) if len(sys.argv) > 4 else None
+CROP_H = int(sys.argv[5]) if len(sys.argv) > 5 else None
 BITS_PER_PIXEL = 2  # 1 = black/white, 2 = 4 gray levels, 4 = 16 gray levels
 DEFAULT_FRAME_MS = 40
 LAST_FRAME_HOLD_MS = 2000
@@ -119,6 +121,9 @@ def main() -> None:
     frames, durations = downsample(dedup_frames, dedup_durations, MAX_FRAMES)
     if durations:
         durations[-1] = max(durations[-1], LAST_FRAME_HOLD_MS)
+
+    if CROP_W and CROP_H:
+        frames = [f.crop((0, 0, min(CROP_W, f.width), min(CROP_H, f.height))) for f in frames]
 
     w, h = frames[0].size
     frame_count = len(frames)
