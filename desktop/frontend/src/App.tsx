@@ -16,8 +16,8 @@ function App() {
 
   useEffect(() => {
     const off = Events.On('navigate-to-working-directory', () => {
-      setActiveTab('settings');
-      // Wait for the next paint so SettingsTab is mounted and the DOM updated
+      setActiveTab('agent');
+      // Wait for the next paint so AgentTab is mounted and the DOM updated
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           workingDirectoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -33,9 +33,9 @@ function App() {
       <main className="relative flex-1 overflow-hidden bg-background/60">
         <div className="absolute inset-0 overflow-y-auto p-6">
           {activeTab === 'device' && <DeviceTab />}
-          {activeTab === 'agent' && <AgentTab />}
+          {activeTab === 'agent' && <AgentTab workingDirectoryRef={workingDirectoryRef} />}
           {activeTab === 'history' && <HistoryTab />}
-          {activeTab === 'settings' && <SettingsTab workingDirectoryRef={workingDirectoryRef} />}
+          {activeTab === 'settings' && <SettingsTab />}
         </div>
       </main>
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Events } from '@wailsio/runtime';
+import { Dialogs } from '@wailsio/runtime';
 import { App } from '../../bindings/desktop';
 import type { Agent } from '../../bindings/desktop/internal/store/models';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { RiCheckLine, RiLoader4Line } from '@remixicon/react';
+import { RiCheckLine, RiLoader4Line, RiFolderLine } from '@remixicon/react';
 import {
   DetectAgents,
   InstallAgent,
@@ -63,12 +64,17 @@ interface InstallEventData {
   error?: string;
 }
 
-function AgentTab() {
+interface AgentTabProps {
+  workingDirectoryRef: React.RefObject<HTMLDivElement>;
+}
+
+function AgentTab({ workingDirectoryRef }: AgentTabProps) {
   const { t } = useTranslation();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [installingIds, setInstallingIds] = useState<Set<string>>(new Set());
   const [missingPmAgent, setMissingPmAgent] = useState<Agent | null>(null);
   const [manualCommand, setManualCommand] = useState<string>('');
+  const [settings, setSettings] = useState<Record<string, string>>({});
 
   const refreshAgents = async () => {
     try {
@@ -182,11 +188,85 @@ function AgentTab() {
     }
   };
 
+  useEffect(() => {
+    App.GetSettings()
+      .then((v) => {
+        if (v) {
+          const s: Record<string, string> = {};
+          for (const [k, val] of Object.entries(v)) {
+            s[k] = val ?? '';
+          }
+          setSettings(s);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const updateSetting = async (key: string, value: string) => {
+    try {
+      await App.SetSetting(key, value);
+      setSettings((prev) => ({ ...prev, [key]: value }));
+    } catch (err) {
+      console.error('failed to set setting', err);
+      alert(t('agent.workingDirectory.saveFailed') || 'Failed to save setting');
+    }
+  };
+
+  const handlePickWorkingDirectory = async () => {
+    try {
+      const result = await Dialogs.OpenFile({
+        CanChooseDirectories: true,
+        CanChooseFiles: false,
+        Title: t('agent.workingDirectory.dialogTitle'),
+        ...(settings.agent_cwd ? { Directory: settings.agent_cwd } : {}),
+      });
+      if (result) {
+        const path = Array.isArray(result) ? result[0] : result;
+        if (path) {
+          await updateSetting('agent_cwd', path);
+        }
+      }
+    } catch (err) {
+      console.error('failed to pick working directory', err);
+    }
+  };
+
+  const handleResetWorkingDirectory = async () => {
+    await updateSetting('agent_cwd', '');
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">{t('tabs.agent')}</h1>
         <p className="text-sm text-muted-foreground">{t('agent.subtitle')}</p>
+      </div>
+
+      <div ref={workingDirectoryRef} className="space-y-3">
+        <h2 className="text-base font-semibold">{t('agent.workingDirectory.title')}</h2>
+        <div className="rounded-lg border bg-card">
+          <div className="flex items-center gap-2 border-b p-3">
+            <RiFolderLine className="h-4 w-4 text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              value={settings.agent_cwd || ''}
+              readOnly
+              placeholder={t('agent.workingDirectory.placeholder')}
+              className="flex-1 rounded-md border px-3 py-2 text-sm bg-background"
+            />
+            <Button onClick={handlePickWorkingDirectory}>
+              {t('agent.workingDirectory.browse')}
+            </Button>
+            {settings.agent_cwd && (
+              <Button variant="outline" onClick={handleResetWorkingDirectory}>
+                {t('agent.workingDirectory.reset')}
+              </Button>
+            )}
+          </div>
+          <p className="p-3 text-xs text-muted-foreground">
+            {t('agent.workingDirectory.description')}
+          </p>
+        </div>
       </div>
 
       <div className="rounded-lg border bg-card">

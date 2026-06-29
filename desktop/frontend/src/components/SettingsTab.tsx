@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Dialogs } from '@wailsio/runtime';
 import {
   RiTranslate,
   RiDashboardLine,
@@ -18,7 +17,6 @@ import {
   RiSunLine,
   RiMoonLine,
   RiUsbLine,
-  RiFolderLine,
 } from '@remixicon/react';
 import { useAppSettings, type Theme } from '@/hooks/useAppSettings';
 
@@ -29,11 +27,7 @@ function formatBytes(n: number): string {
   return `${(n / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
-interface SettingsTabProps {
-  workingDirectoryRef: React.RefObject<HTMLDivElement>;
-}
-
-function SettingsTab({ workingDirectoryRef }: SettingsTabProps) {
+function SettingsTab() {
   const { t } = useTranslation();
   const { theme, language, updateTheme, updateLanguage } = useAppSettings();
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -148,29 +142,6 @@ function SettingsTab({ workingDirectoryRef }: SettingsTabProps) {
       console.error('failed to set setting', err);
       alert(t('settings.error.saveFailed') || 'Failed to save setting');
     }
-  };
-
-  const handlePickWorkingDirectory = async () => {
-    try {
-      const result = await Dialogs.OpenFile({
-        CanChooseDirectories: true,
-        CanChooseFiles: false,
-        Title: t('settings.workingDirectory.dialogTitle'),
-        ...(settings.agent_cwd ? { Directory: settings.agent_cwd } : {}),
-      });
-      if (result) {
-        const path = Array.isArray(result) ? result[0] : result;
-        if (path) {
-          await updateSetting('agent_cwd', path);
-        }
-      }
-    } catch (err) {
-      console.error('failed to pick working directory', err);
-    }
-  };
-
-  const handleResetWorkingDirectory = async () => {
-    await updateSetting('agent_cwd', '');
   };
 
   const percent = progress.total > 0 ? Math.round((progress.downloaded / progress.total) * 100) : 0;
@@ -310,33 +281,6 @@ function SettingsTab({ workingDirectoryRef }: SettingsTabProps) {
               </SelectContent>
             </Select>
           </div>
-        </div>
-      </div>
-
-      <div ref={workingDirectoryRef} className="space-y-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg">
-        <h2 className="text-base font-semibold">{t('settings.workingDirectory.title')}</h2>
-        <div className="rounded-lg border bg-card">
-          <div className="flex items-center gap-2 border-b p-3">
-            <RiFolderLine className="h-4 w-4 text-muted-foreground shrink-0" />
-            <input
-              type="text"
-              value={settings.agent_cwd || ''}
-              readOnly
-              placeholder={t('settings.workingDirectory.placeholder') || undefined}
-              className="flex-1 rounded-md border px-3 py-2 text-sm bg-background"
-            />
-            <Button onClick={handlePickWorkingDirectory}>
-              {t('settings.workingDirectory.browse')}
-            </Button>
-            {settings.agent_cwd && (
-              <Button variant="outline" onClick={handleResetWorkingDirectory}>
-                {t('settings.workingDirectory.reset')}
-              </Button>
-            )}
-          </div>
-          <p className="p-3 text-xs text-muted-foreground">
-            {t('settings.workingDirectory.description')}
-          </p>
         </div>
       </div>
 
