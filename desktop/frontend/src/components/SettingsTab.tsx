@@ -54,7 +54,6 @@ function SettingsTab() {
   useEffect(() => {
     const off = Events.On('navigate-to-working-directory', () => {
       workingDirectoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      workingDirectoryRef.current?.focus();
     });
     return () => off();
   }, []);
@@ -146,9 +145,14 @@ function SettingsTab() {
     deviceVersion &&
     firmwareVersion !== deviceVersion;
 
-  const updateSetting = (key: string, value: string) => {
-    setSettings((prev) => ({ ...prev, [key]: value }));
-    App.SetSetting(key, value).catch(console.error);
+  const updateSetting = async (key: string, value: string) => {
+    try {
+      await App.SetSetting(key, value);
+      setSettings((prev) => ({ ...prev, [key]: value }));
+    } catch (err) {
+      console.error('failed to set setting', err);
+      alert(t('settings.error.saveFailed') || 'Failed to save setting');
+    }
   };
 
   const handlePickWorkingDirectory = async () => {
@@ -156,7 +160,7 @@ function SettingsTab() {
       const result = await Dialogs.OpenFile({
         CanChooseDirectories: true,
         CanChooseFiles: false,
-        Title: t('settings.workingDirectory.dialogTitle') || undefined,
+        Title: t('settings.workingDirectory.dialogTitle'),
         Directory: settings.agent_cwd || undefined,
       });
       if (result) {
@@ -314,7 +318,7 @@ function SettingsTab() {
         </div>
       </div>
 
-      <div ref={workingDirectoryRef} className="space-y-3" tabIndex={-1}>
+      <div ref={workingDirectoryRef} className="space-y-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg">
         <h2 className="text-base font-semibold">{t('settings.workingDirectory.title')}</h2>
         <div className="rounded-lg border bg-card">
           <div className="flex items-center gap-2 border-b p-3">
