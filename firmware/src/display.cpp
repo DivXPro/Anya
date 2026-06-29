@@ -209,14 +209,69 @@ void disp_processing(const char* agent) {
     drawPrompt(tr(Str::Thinking), nullptr);
 }
 
+static int utf8_char_len(const char* s) {
+    unsigned char c = static_cast<unsigned char>(*s);
+    if ((c & 0x80) == 0) return 1;
+    if ((c & 0xe0) == 0xc0) return 2;
+    if ((c & 0xf0) == 0xe0) return 3;
+    if ((c & 0xf8) == 0xf0) return 4;
+    return 1;
+}
+
+static void drawWrappedText(const char* text, int startY, int maxLines) {
+    if (!text || !text[0]) return;
+    M5.Display.setTextSize(1);
+    M5.Display.setTextDatum(textdatum_t::top_center);
+    const int lineH = 14;
+    const int margin = 4;
+    const int maxW = M5.Display.width() - margin * 2;
+    const int centerX = M5.Display.width() / 2;
+    int y = startY;
+    const char* p = text;
+    int lines = 0;
+
+    while (*p && lines < maxLines) {
+        String line;
+        while (*p) {
+            int charLen = utf8_char_len(p);
+            String candidate = line;
+            for (int i = 0; i < charLen; ++i) candidate += p[i];
+            if (line.length() > 0 && M5.Display.textWidth(candidate.c_str()) > maxW) {
+                break;
+            }
+            line = candidate;
+            p += charLen;
+        }
+        // Ensure progress if a single character exceeds the width.
+        if (line.length() == 0 && *p) {
+            int charLen = utf8_char_len(p);
+            for (int i = 0; i < charLen; ++i) line += p[i];
+            p += charLen;
+        }
+        // Truncate the last visible line if more text remains.
+        if (lines == maxLines - 1 && *p) {
+            String ellipsis = "...";
+            while (line.length() > 0 && M5.Display.textWidth((line + ellipsis).c_str()) > maxW) {
+                int idx = line.length() - 1;
+                while (idx > 0 && (line[idx] & 0xc0) == 0x80) idx--;
+                line = line.substring(0, idx);
+            }
+            line += ellipsis;
+        }
+        M5.Display.drawString(line.c_str(), centerX, y);
+        y += lineH;
+        lines++;
+    }
+}
+
 void disp_playing(const char* summary, const char* agent) {
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, true, agent);
     mascotVisible = false;
     M5.Display.setTextColor(TFT_WHITE);
-    M5.Display.setTextSize(1);
-    M5.Display.setCursor(4, promptY);
-    M5.Display.print(summary);
+    int maxLines = (M5.Display.height() - promptY - 4) / 14;
+    if (maxLines < 1) maxLines = 1;
+    drawWrappedText(summary, promptY, maxLines);
 }
 
 void disp_connecting(const char* desktopName, const char* agent) {
