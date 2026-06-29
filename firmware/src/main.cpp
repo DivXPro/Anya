@@ -138,14 +138,23 @@ static void register_button_callbacks() {
                 state_transition(State::WIFI_SETUP);
                 resume_after_portal(wifi_portal_begin());
             } else if (menuSelected == 1) {
-                // Repair: clear binding and start fresh advertising
+                // Repair: clear binding. Only start advertising if WiFi is available;
+                // otherwise show the disconnected idle screen.
                 inMenu = false;
                 wifi_clear_bound_desktop();
                 ws_disconnect();
-                state_transition(State::PAIR_READY);
-                if (!advertising) {
-                    mdns_start_advertise(deviceID, deviceName);
-                    advertising = true;
+                if (wifi_connected()) {
+                    state_transition(State::PAIR_READY);
+                    if (!advertising) {
+                        mdns_start_advertise(deviceID, deviceName);
+                        advertising = true;
+                    }
+                } else {
+                    if (advertising) {
+                        mdns_stop_advertise();
+                        advertising = false;
+                    }
+                    state_transition(State::IDLE);
                 }
             } else if (menuSelected == 2) {
                 // Test Speaker: play a 1kHz tone for 1 second
