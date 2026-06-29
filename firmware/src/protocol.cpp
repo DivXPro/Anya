@@ -123,7 +123,8 @@ void protocol_handle_message(const char* json) {
     } else if (strcmp(type, "tts_start") == 0) {
         // prepare for TTS audio
     } else if (strcmp(type, "tts_end") == 0) {
-        state_transition(State::IDLE);
+        // Keep the agent reply on screen after TTS finishes. The PLAYING screen
+        // is dismissed by the idle timeout in loop() or by a button press.
     }
 }
 

@@ -327,8 +327,8 @@ void loop() {
     disp_animate_mascot();
     disp_animate_text();
 
-    // Return to idle if the agent reply has been on screen for 5 minutes.
-    if (!ota_in_progress() && disp_text_showing_for(5UL * 60UL * 1000UL)) {
+    // Return to idle if the agent reply has been on screen for 1 minute.
+    if (!ota_in_progress() && disp_text_showing_for(60UL * 1000UL)) {
         state_force_idle();
     }
 

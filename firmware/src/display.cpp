@@ -268,9 +268,11 @@ static void drawScrollingText() {
     int areaH = textAreaHeight();
     int maxOffset = (canvasH > areaH) ? (canvasH - areaH) : 0;
     if (s_scrollOffset > maxOffset) s_scrollOffset = maxOffset;
-    int bottomY = textAreaBottom();
+    int topY = textAreaTop();
     for (size_t i = 0; i < s_textLines.size(); ++i) {
-        int y = bottomY - canvasH + (int)i * TEXT_LINE_H + s_scrollOffset;
+        // Top-anchored: the first line starts at the top of the text area, and
+        // the content scrolls upward (s_scrollOffset) only when it overflows.
+        int y = topY + (int)i * TEXT_LINE_H - s_scrollOffset;
         if (y + TEXT_LINE_H >= textAreaTop() && y <= M5.Display.height()) {
             M5.Display.drawString(s_textLines[i].c_str(), x, y);
         }
@@ -314,8 +316,25 @@ void disp_animate_text() {
     drawScrollingText();
 }
 
+static bool replyScrollFinished() {
+    if (s_textLines.empty()) return true;
+    int canvasH = (int)s_textLines.size() * TEXT_LINE_H;
+    int areaH = textAreaHeight();
+    int maxOffset = (canvasH > areaH) ? (canvasH - areaH) : 0;
+    return s_scrollOffset >= maxOffset;
+}
+
 bool disp_text_showing_for(unsigned long ms) {
-    return state_current() == State::PLAYING && (millis() - s_textShownAt) >= ms;
+    if (state_current() != State::PLAYING) return false;
+    // The idle countdown starts only after BOTH the TTS audio playback and the
+    // text scrolling have finished — whichever ends last. While either is still
+    // active, push the reference timestamp forward so the elapsed time is
+    // measured from the moment the later action completes.
+    if (M5.Speaker.isPlaying() || !replyScrollFinished()) {
+        s_textShownAt = millis();
+        return false;
+    }
+    return (millis() - s_textShownAt) >= ms;
 }
 
 void disp_connecting(const char* desktopName, const char* agent) {
