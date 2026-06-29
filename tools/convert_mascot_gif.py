@@ -36,20 +36,10 @@ def quantize_frame(frame: Image.Image) -> Image.Image:
 
 
 def downsample(frames, durations, max_frames):
-    """Evenly sample frames to at most max_frames while preserving timing."""
+    """Limit to the first max_frames while preserving each frame's timing."""
     if len(frames) <= max_frames:
         return frames, durations
-    step = len(frames) / max_frames
-    out_frames = []
-    out_durations = []
-    for i in range(max_frames):
-        start = int(round(i * step))
-        end = int(round((i + 1) * step))
-        end = min(end, len(frames))
-        idx = min((start + end) // 2, len(frames) - 1)
-        out_frames.append(frames[idx])
-        out_durations.append(sum(durations[start:end]))
-    return out_frames, out_durations
+    return frames[:max_frames], durations[:max_frames]
 
 
 def pack_pixels(values, bpp):
