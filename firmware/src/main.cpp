@@ -77,6 +77,39 @@ void init_device_identity() {
     prefs.end();
 }
 
+static void resume_after_portal(PortalResult pr) {
+    if (pr == PortalResult::CANCELLED) {
+        return;
+    }
+    if (pr == PortalResult::FAILED) {
+        disp_error(tr(Str::WifiSetupFailed), deviceName);
+        delay(2000);
+        inMenu = true;
+        menuLevel = MenuLevel::MAIN;
+        menuSelected = 0;
+        state_transition(State::MENU);
+        show_menu();
+        return;
+    }
+
+    http_setup_connect_endpoint();
+
+    String boundID = wifi_get_bound_desktop_id();
+    String boundIP = wifi_get_bound_desktop_ip();
+    uint16_t boundPort = wifi_get_bound_desktop_port();
+    if (boundIP.length() > 0) {
+        state_transition(State::IDLE);
+        ws_set_hello_data(deviceID, deviceName, boundID.c_str(), "");
+        ws_connect(boundIP.c_str(), boundPort);
+    } else {
+        state_transition(State::PAIR_READY);
+        if (!advertising) {
+            mdns_start_advertise(deviceID, deviceName);
+            advertising = true;
+        }
+    }
+}
+
 static void register_button_callbacks() {
     btn_on_ptt_press([]() {
         if (ota_in_progress()) {
@@ -103,36 +136,7 @@ static void register_button_callbacks() {
                 // Choose WiFi: open captive portal to reconfigure network
                 inMenu = false;
                 state_transition(State::WIFI_SETUP);
-                PortalResult pr = wifi_portal_begin();
-                if (pr == PortalResult::CANCELLED) {
-                    return;
-                }
-                if (pr == PortalResult::FAILED) {
-                    disp_error(tr(Str::WifiSetupFailed), deviceName);
-                    delay(2000);
-                    inMenu = true;
-                    menuLevel = MenuLevel::MAIN;
-                    menuSelected = 0;
-                    state_transition(State::MENU);
-                    show_menu();
-                    return;
-                }
-                String boundID = wifi_get_bound_desktop_id();
-                String boundIP = wifi_get_bound_desktop_ip();
-                uint16_t boundPort = wifi_get_bound_desktop_port();
-                if (boundIP.length() > 0) {
-                    state_transition(State::IDLE);
-                    // Reconnect to the bound desktop if available
-                    ws_set_hello_data(deviceID, deviceName, boundID.c_str(), "");
-                    ws_connect(boundIP.c_str(), boundPort);
-                } else {
-                    // No bound desktop yet: show the pairing screen.
-                    state_transition(State::PAIR_READY);
-                    if (!advertising) {
-                        mdns_start_advertise(deviceID, deviceName);
-                        advertising = true;
-                    }
-                }
+                resume_after_portal(wifi_portal_begin());
             } else if (menuSelected == 1) {
                 // Repair: clear binding and start fresh advertising
                 inMenu = false;
@@ -159,10 +163,11 @@ static void register_button_callbacks() {
                 // Back: return to the screen we were on before opening the menu.
                 inMenu = false;
                 State target = menuReturnState;
-                if (target == State::WIFI_SETUP) {
-                    target = State::IDLE;
-                }
                 state_transition(target);
+                if (target == State::WIFI_SETUP) {
+                    // Resume the captive portal so the user can keep configuring WiFi.
+                    resume_after_portal(wifi_portal_begin());
+                }
             }
             return;
         }
@@ -240,7 +245,7 @@ void setup() {
         inMenu = true;
         menuLevel = MenuLevel::MAIN;
         menuSelected = 0;
-        menuReturnState = State::IDLE;
+        menuReturnState = State::WIFI_SETUP;
         state_transition(State::MENU);
         show_menu();
     } else {
