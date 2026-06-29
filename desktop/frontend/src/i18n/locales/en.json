@@ -41,6 +41,14 @@
       "speedNormal": "Normal",
       "speedFast": "Fast"
     },
+    "workingDirectory": {
+      "title": "Working Directory",
+      "browse": "Browse",
+      "reset": "Reset",
+      "placeholder": "No working directory set",
+      "description": "The default working directory used when Agent executes tasks. Falls back to system default if not set.",
+      "dialogTitle": "Select Working Directory"
+    },
     "firmware": {
       "title": "Device Firmware",
       "currentVersion": "Current Version",

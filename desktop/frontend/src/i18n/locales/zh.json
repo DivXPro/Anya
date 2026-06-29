@@ -41,6 +41,14 @@
       "speedNormal": "正常",
       "speedFast": "快速"
     },
+    "workingDirectory": {
+      "title": "工作目录",
+      "browse": "浏览",
+      "reset": "重置",
+      "placeholder": "未设置工作目录",
+      "description": "Agent 执行任务时使用的默认工作目录。未设置时将使用系统默认目录。",
+      "dialogTitle": "选择工作目录"
+    },
     "firmware": {
       "title": "设备固件",
       "currentVersion": "当前版本",
