@@ -94,7 +94,7 @@ func (a *App) trayText(key string) string {
 		case "workingDirectory":
 			return "Working Directory"
 		case "defaultWorkingDirectory":
-			return "Default Working Directory"
+			return "📁 Default Working Directory"
 		}
 		return key
 	}
@@ -110,7 +110,7 @@ func (a *App) trayText(key string) string {
 	case "workingDirectory":
 		return "工作目录"
 	case "defaultWorkingDirectory":
-		return "默认工作目录"
+		return "📁 默认工作目录"
 	}
 	return key
 }
@@ -212,6 +212,8 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	// 1.1 Load agent working directory
 	if cwd, err := store.GetSetting(a.db, "agent_cwd"); err == nil {
 		a.agentCWD = cwd
+	} else {
+		log.Printf("[elf] failed to load agent_cwd setting: %v", err)
 	}
 
 	// 1.5 Generate or load desktop identity

@@ -96,7 +96,9 @@ func (r *Router) SetCWD(cwd string) {
 	r.mu.RUnlock()
 
 	for _, a := range adapters {
-		a.SetCWD(cwd)
+		if a != nil {
+			a.SetCWD(cwd)
+		}
 	}
 }
 

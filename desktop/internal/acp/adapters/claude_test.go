@@ -2,6 +2,8 @@ package adapters
 
 import (
 	"testing"
+
+	"desktop/internal/acp"
 )
 
 func TestIsClaudeCliInstalled(t *testing.T) {
@@ -23,6 +25,10 @@ func TestNewClaudeAdapterInfo(t *testing.T) {
 	}
 }
 
+func TestClaudeAdapterImplementsInterface(t *testing.T) {
+	var _ acp.ACPAdapter = (*ClaudeAdapter)(nil)
+}
+
 func TestClaudeAdapterSetCWD(t *testing.T) {
 	a := &ClaudeAdapter{}
 
@@ -41,5 +47,15 @@ func TestClaudeAdapterSetCWD(t *testing.T) {
 	a.SetCWD("")
 	if got := a.effectiveCWD(); got != "." {
 		t.Fatalf("expected default cwd '.', got %q", got)
+	}
+}
+
+func TestClaudeAdapterResetPending(t *testing.T) {
+	a := &ClaudeAdapter{}
+
+	// SetCWD should set resetPending flag
+	a.SetCWD("/tmp/new")
+	if !a.resetPending {
+		t.Fatal("expected resetPending to be true after SetCWD")
 	}
 }
