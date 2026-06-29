@@ -24,7 +24,7 @@ void protocol_init() {
 }
 
 void protocol_handle_message(const char* json) {
-    StaticJsonDocument<512> doc;
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return;
 
@@ -98,6 +98,28 @@ void protocol_handle_message(const char* json) {
         ota_abort();
         state_force_idle();
         ws_send_text("{\"type\":\"firmware_update_cancelled\"}");
+    } else if (strcmp(type, "confirm") == 0) {
+        const char* requestId = doc["payload"]["request_id"] | "";
+        const char* text = doc["payload"]["text"] | "";
+        JsonArray opts = doc["payload"]["options"];
+        ConfirmOption options[8];
+        int count = 0;
+        for (JsonObject opt : opts) {
+            if (count >= 8) break;
+            const char* id = opt["id"] | "";
+            const char* label = opt["label"] | "";
+            strncpy(options[count].id, id, sizeof(options[count].id) - 1);
+            options[count].id[sizeof(options[count].id) - 1] = '\0';
+            strncpy(options[count].label, label, sizeof(options[count].label) - 1);
+            options[count].label[sizeof(options[count].label) - 1] = '\0';
+            count++;
+        }
+        if (count > 0) {
+            state_set_confirm(requestId, text, options, count);
+            state_transition(State::CONFIRM);
+        }
+    } else if (strcmp(type, "confirm_cancel") == 0) {
+        state_force_idle();
     } else if (strcmp(type, "tts_start") == 0) {
         // prepare for TTS audio
     } else if (strcmp(type, "tts_end") == 0) {

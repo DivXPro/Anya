@@ -19,3 +19,19 @@ func (e StreamEvent) String() string {
 	}
 	return fmt.Sprintf("StreamEvent{%s, len=%d}", e.Type, len(e.Content))
 }
+
+type PermissionOption struct {
+	ID    string
+	Label string
+}
+
+type PermissionRequest struct {
+	ID      string
+	Prompt  string
+	Options []PermissionOption
+}
+
+type PermissionResponder interface {
+	PermissionRequests() <-chan PermissionRequest
+	RespondPermission(requestID, optionID string) error
+}

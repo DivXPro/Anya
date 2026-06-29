@@ -124,6 +124,19 @@ static void register_button_callbacks() {
             ESP_LOGI("main", "PTT press ignored: OTA in progress");
             return;
         }
+        if (state_current() == State::CONFIRM) {
+            const ConfirmState& cs = state_confirm_state();
+            if (cs.active && cs.optionCount > 0 && cs.selected >= 0 && cs.selected < cs.optionCount) {
+                const char* optionId = cs.options[cs.selected].id;
+                char json[256];
+                snprintf(json, sizeof(json), "{\"type\":\"confirm_response\",\"payload\":{\"request_id\":\"%s\",\"option_id\":\"%s\"}}", cs.requestId, optionId);
+                ws_send_text(json);
+                ESP_LOGI("main", "confirm response: %s -> %s", cs.requestId, optionId);
+            }
+            state_confirm_select();
+            state_transition(State::IDLE);
+            return;
+        }
         if (inMenu) {
             if (menuLevel == MenuLevel::LANGUAGE) {
                 if (menuSelected == 0) {
@@ -202,6 +215,7 @@ static void register_button_callbacks() {
     btn_on_ptt_release([]() {
         if (ota_in_progress()) return;
         if (inMenu) return;
+        if (state_current() == State::CONFIRM) return;
         if (!ws_connected()) {
             ESP_LOGI("main", "PTT release ignored: not connected");
             return;
@@ -215,6 +229,18 @@ static void register_button_callbacks() {
     btn_on_next([]() {
         if (ota_in_progress()) {
             ESP_LOGI("main", "menu navigation ignored: OTA in progress");
+            return;
+        }
+        if (state_current() == State::CONFIRM) {
+            state_confirm_next();
+            const ConfirmState& cs = state_confirm_state();
+            if (cs.active && cs.optionCount > 0) {
+                const char* opts[8];
+                for (int i = 0; i < cs.optionCount; i++) {
+                    opts[i] = cs.options[i].label;
+                }
+                disp_confirm(deviceName, cs.prompt, opts, cs.optionCount, cs.selected);
+            }
             return;
         }
         if (!inMenu) {

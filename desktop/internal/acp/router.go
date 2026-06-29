@@ -87,6 +87,13 @@ func (r *Router) GetAgent(id string) (AgentInfo, bool) {
 	return a.Info(), true
 }
 
+func (r *Router) GetAdapter(id string) (ACPAdapter, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	a, ok := r.adapters[id]
+	return a, ok
+}
+
 func (r *Router) idleReaper() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()

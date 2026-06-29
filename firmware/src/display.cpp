@@ -421,3 +421,45 @@ void disp_menu(const char* agent, int selected, const Str* items, int count, int
         }
     }
 }
+
+// ── Confirmation ──────────────────────────────────────────────
+void disp_confirm(const char* agent, const char* prompt, const char* const* options, int count, int selected) {
+    M5.Display.fillScreen(TFT_BLACK);
+    disp_status_bar(-1, true, true, agent);
+    mascotVisible = false;
+
+    M5.Display.setTextSize(1);
+    M5.Display.setTextDatum(textdatum_t::top_center);
+    M5.Display.setTextColor(TFT_WHITE);
+
+    // Prompt at the top, below the status bar.
+    int margin = 4;
+    int promptY = STATUS_BAR_H + margin;
+    int maxPromptH = 40;
+    M5.Display.setClipRect(0, promptY, M5.Display.width(), maxPromptH);
+    M5.Display.drawString(String(prompt), M5.Display.width() / 2, promptY);
+    M5.Display.clearClipRect();
+
+    // Options listed below the prompt.
+    int lineH = 18;
+    int startY = promptY + maxPromptH + 4;
+    int availableH = M5.Display.height() - startY;
+    int visibleCount = min(count, availableH / lineH);
+    int offset = 0;
+    if (selected >= visibleCount && count > visibleCount) {
+        offset = selected - visibleCount + 1;
+    }
+
+    M5.Display.setTextDatum(textdatum_t::middle_center);
+    for (int i = 0; i < visibleCount && (offset + i) < count; i++) {
+        int idx = offset + i;
+        int y = startY + i * lineH + lineH / 2;
+        if (idx == selected) {
+            M5.Display.setTextColor(TFT_GREEN);
+            M5.Display.drawString("> " + String(options[idx]) + " <", M5.Display.width() / 2, y);
+        } else {
+            M5.Display.setTextColor(TFT_WHITE);
+            M5.Display.drawString(options[idx], M5.Display.width() / 2, y);
+        }
+    }
+}

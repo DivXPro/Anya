@@ -63,6 +63,17 @@ void state_transition(State s) {
         case State::MENU:
             // Menu items are drawn by main.cpp after it sets the menu level.
             break;
+        case State::CONFIRM: {
+            const ConfirmState& cs = state_confirm_state();
+            if (cs.active && cs.optionCount > 0) {
+                const char* opts[8];
+                for (int i = 0; i < cs.optionCount; i++) {
+                    opts[i] = cs.options[i].label;
+                }
+                disp_confirm(agentName, cs.prompt, opts, cs.optionCount, cs.selected);
+            }
+            break;
+        }
         case State::UPDATING:
             disp_updating(0, "", agentName);
             break;
@@ -126,3 +137,32 @@ void state_set_ota_progress(int8_t percent, const char* version) {
 }
 
 State state_current() { return current; }
+
+static ConfirmState confirmState;
+
+void state_set_confirm(const char* requestId, const char* prompt, const ConfirmOption* options, int optionCount) {
+    confirmState.active = true;
+    strncpy(confirmState.requestId, requestId ? requestId : "", sizeof(confirmState.requestId) - 1);
+    confirmState.requestId[sizeof(confirmState.requestId) - 1] = '\0';
+    strncpy(confirmState.prompt, prompt ? prompt : "", sizeof(confirmState.prompt) - 1);
+    confirmState.prompt[sizeof(confirmState.prompt) - 1] = '\0';
+    confirmState.optionCount = constrain(optionCount, 0, 8);
+    for (int i = 0; i < confirmState.optionCount; i++) {
+        strncpy(confirmState.options[i].id, options[i].id, sizeof(confirmState.options[i].id) - 1);
+        confirmState.options[i].id[sizeof(confirmState.options[i].id) - 1] = '\0';
+        strncpy(confirmState.options[i].label, options[i].label, sizeof(confirmState.options[i].label) - 1);
+        confirmState.options[i].label[sizeof(confirmState.options[i].label) - 1] = '\0';
+    }
+    confirmState.selected = 0;
+}
+
+const ConfirmState& state_confirm_state() { return confirmState; }
+
+void state_confirm_next() {
+    if (!confirmState.active || confirmState.optionCount <= 0) return;
+    confirmState.selected = (confirmState.selected + 1) % confirmState.optionCount;
+}
+
+void state_confirm_select() {
+    confirmState.active = false;
+}

@@ -21,6 +21,7 @@ void disp_processing(const char* agent);
 void disp_playing(const char* summary, const char* agent);
 void disp_error(const char* msg, const char* agent);
 void disp_menu(const char* agent, int selected, const Str* items, int count, int8_t rssi, bool wifiConnected, bool wsConnected);
+void disp_confirm(const char* agent, const char* prompt, const char* const* options, int count, int selected);
 void disp_updating(int8_t percent, const char* version, const char* agent);
 void disp_updating_progress(int8_t percent);
 

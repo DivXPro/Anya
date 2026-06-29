@@ -51,6 +51,9 @@ type App struct {
 	flashMgr       *firmware.Manager
 	otaMgr         *firmware.OTAManager
 	agentInstaller *agentinstall.Installer
+
+	confirmMu    sync.Mutex
+	confirmWaits map[string]chan string
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
@@ -168,6 +171,7 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 
 	// 2. Init ACP router + register all adapters
 	a.router = acp.NewRouter()
+	a.confirmWaits = make(map[string]chan string)
 	a.router.Register(adapters.NewClaudeAdapter())
 	a.router.Register(adapters.NewOpenCodeAdapter())
 	a.router.Register(adapters.NewKimiAdapter())
@@ -490,6 +494,8 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 				go a.processVoiceRequest(dev, sessionID, audioBuffer)
 			case "button":
 				log.Printf("[elf] button: %s", evt.Action)
+			case "confirm_response":
+				a.handleConfirmResponse(evt.Payload)
 			case "ping":
 				dev.SendText(gateway.StatusMessage("connected"))
 			}
@@ -504,6 +510,76 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 			store.CloseSession(a.db, sessionID)
 			return
 		}
+	}
+}
+
+func (a *App) handleConfirmResponse(payload map[string]interface{}) {
+	reqID, _ := payload["request_id"].(string)
+	optionID, _ := payload["option_id"].(string)
+	if reqID == "" {
+		return
+	}
+	a.confirmMu.Lock()
+	ch := a.confirmWaits[reqID]
+	a.confirmMu.Unlock()
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- optionID:
+	default:
+	}
+}
+
+func (a *App) handlePermissionRequests(ctx context.Context, dev gateway.DeviceAdapter, responder acp.PermissionResponder) {
+	for {
+		select {
+		case req, ok := <-responder.PermissionRequests():
+			if !ok {
+				return
+			}
+			go a.runConfirm(ctx, dev, responder, req)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (a *App) runConfirm(ctx context.Context, dev gateway.DeviceAdapter, responder acp.PermissionResponder, req acp.PermissionRequest) {
+	opts := make([]gateway.ConfirmOption, len(req.Options))
+	for i, o := range req.Options {
+		opts[i] = gateway.ConfirmOption{ID: o.ID, Label: o.Label}
+	}
+	if err := dev.SendText(gateway.ConfirmMessage(req.ID, req.Prompt, opts)); err != nil {
+		log.Printf("[elf] send confirm message error: %v", err)
+		_ = responder.RespondPermission(req.ID, "")
+		return
+	}
+
+	ch := make(chan string, 1)
+	a.confirmMu.Lock()
+	a.confirmWaits[req.ID] = ch
+	a.confirmMu.Unlock()
+	defer func() {
+		a.confirmMu.Lock()
+		delete(a.confirmWaits, req.ID)
+		a.confirmMu.Unlock()
+	}()
+
+	const confirmTimeout = 5 * time.Minute
+	select {
+	case optionID := <-ch:
+		if err := responder.RespondPermission(req.ID, optionID); err != nil {
+			log.Printf("[elf] respond permission error: %v", err)
+		}
+	case <-ctx.Done():
+		log.Printf("[elf] confirmation cancelled because turn ended: %s", req.ID)
+		_ = dev.SendText(gateway.ConfirmCancelMessage(req.ID))
+		_ = responder.RespondPermission(req.ID, "")
+	case <-time.After(confirmTimeout):
+		log.Printf("[elf] confirmation timed out: %s", req.ID)
+		_ = dev.SendText(gateway.ConfirmCancelMessage(req.ID))
+		_ = responder.RespondPermission(req.ID, "")
 	}
 }
 
@@ -557,6 +633,15 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 	if err != nil {
 		dev.SendText(gateway.SummaryMessage("Agent 调用失败"))
 		return
+	}
+
+	// Watch for ACP permission requests during this turn and surface them on the device.
+	if adapter, ok := a.router.GetAdapter(session.AgentID); ok {
+		if responder, ok := adapter.(acp.PermissionResponder); ok {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go a.handlePermissionRequests(ctx, dev, responder)
+		}
 	}
 
 	// Persist the ACP session ID so the conversation can be recovered later.

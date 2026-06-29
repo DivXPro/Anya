@@ -86,3 +86,32 @@ func FirmwareCommitMessage() DeviceMessage {
 func FirmwareUpdateCancelMessage() DeviceMessage {
 	return DeviceMessage{Type: "firmware_update_cancel"}
 }
+
+type ConfirmOption struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+func ConfirmMessage(requestID, text string, options []ConfirmOption) DeviceMessage {
+	opts := make([]map[string]interface{}, len(options))
+	for i, o := range options {
+		opts[i] = map[string]interface{}{"id": o.ID, "label": o.Label}
+	}
+	return DeviceMessage{
+		Type: "confirm",
+		Payload: map[string]interface{}{
+			"request_id": requestID,
+			"text":       text,
+			"options":    opts,
+		},
+	}
+}
+
+func ConfirmCancelMessage(requestID string) DeviceMessage {
+	return DeviceMessage{
+		Type: "confirm_cancel",
+		Payload: map[string]interface{}{
+			"request_id": requestID,
+		},
+	}
+}

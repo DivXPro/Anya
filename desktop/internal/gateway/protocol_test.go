@@ -32,6 +32,8 @@ func TestAllMessageTypes(t *testing.T) {
 		FirmwareUpdateMessage("1.0.0", 1234, "abcd", 4096),
 		FirmwareCommitMessage(),
 		FirmwareUpdateCancelMessage(),
+		ConfirmMessage("req-1", "Allow access?", []ConfirmOption{{ID: "accept", Label: "Allow"}}),
+		ConfirmCancelMessage("req-1"),
 	}
 
 	for i, msg := range msgs {

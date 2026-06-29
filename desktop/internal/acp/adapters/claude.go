@@ -34,6 +34,7 @@ type ClaudeAdapter struct {
 	streamMu     sync.RWMutex
 	stopSub      func()
 	systemPrompt string
+	permCh       chan acp.PermissionRequest
 }
 
 func NewClaudeAdapter() *ClaudeAdapter {
@@ -44,6 +45,7 @@ func NewClaudeAdapter() *ClaudeAdapter {
 			Command: "claude",
 		},
 		systemPrompt: DefaultSystemPrompt,
+		permCh:       make(chan acp.PermissionRequest, 8),
 	}
 }
 
@@ -318,6 +320,10 @@ func (a *ClaudeAdapter) clientRequest(id int, method string, params map[string]a
 
 func (a *ClaudeAdapter) dispatchUpdates(updates <-chan claudeacp.RPCMessage) {
 	for msg := range updates {
+		if msg.Method == "session/request_permission" {
+			a.handlePermissionRequest(msg)
+			continue
+		}
 		if msg.Method != "session/update" {
 			continue
 		}
@@ -379,6 +385,93 @@ func (a *ClaudeAdapter) dispatchUpdates(updates <-chan claudeacp.RPCMessage) {
 		default:
 		}
 	}
+}
+
+func (a *ClaudeAdapter) handlePermissionRequest(msg claudeacp.RPCMessage) {
+	var payload struct {
+		Options []struct {
+			OptionID string `json:"optionId"`
+			Name     string `json:"name"`
+			Kind     string `json:"kind"`
+		} `json:"options"`
+		ToolCall *struct {
+			Title string `json:"title"`
+		} `json:"toolCall"`
+		Approval string   `json:"approval"`
+		Command  string   `json:"command"`
+		Files    []string `json:"files"`
+		Host     string   `json:"host"`
+	}
+	if err := json.Unmarshal(msg.Params, &payload); err != nil {
+		log.Printf("[claude] permission request parse error: %v", err)
+		return
+	}
+
+	req := acp.PermissionRequest{Options: make([]acp.PermissionOption, 0, len(payload.Options))}
+	if msg.ID != nil {
+		req.ID = string(*msg.ID)
+	}
+	if payload.ToolCall != nil && payload.ToolCall.Title != "" {
+		req.Prompt = payload.ToolCall.Title
+	} else if payload.Approval != "" {
+		req.Prompt = payload.Approval
+	} else if payload.Command != "" {
+		req.Prompt = payload.Command
+	} else if payload.Host != "" {
+		req.Prompt = payload.Host
+	} else if len(payload.Files) > 0 {
+		req.Prompt = payload.Files[0]
+	} else {
+		req.Prompt = "Permission required"
+	}
+	for _, o := range payload.Options {
+		req.Options = append(req.Options, acp.PermissionOption{
+			ID:    o.OptionID,
+			Label: o.Name,
+		})
+	}
+	if len(req.Options) == 0 {
+		req.Options = append(req.Options,
+			acp.PermissionOption{ID: "accept", Label: "Allow"},
+			acp.PermissionOption{ID: "decline", Label: "Deny"},
+		)
+	}
+
+	a.mu.Lock()
+	ch := a.permCh
+	a.mu.Unlock()
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- req:
+	default:
+		log.Printf("[claude] permission request dropped (channel full): %s", req.ID)
+	}
+}
+
+func (a *ClaudeAdapter) PermissionRequests() <-chan acp.PermissionRequest {
+	return a.permCh
+}
+
+func (a *ClaudeAdapter) RespondPermission(requestID, optionID string) error {
+	if requestID == "" {
+		return fmt.Errorf("request id is required")
+	}
+	a.mu.Lock()
+	rt := a.rt
+	a.mu.Unlock()
+	if rt == nil {
+		return fmt.Errorf("runtime not initialized")
+	}
+
+	decision := claudeacp.PermissionDecision{}
+	if optionID != "" {
+		decision.SelectedOptionID = optionID
+	} else {
+		decision.Outcome = "cancelled"
+	}
+	return rt.RespondPermission(context.Background(), json.RawMessage(requestID), decision)
 }
 
 var _ acp.ACPAdapter = (*ClaudeAdapter)(nil)
