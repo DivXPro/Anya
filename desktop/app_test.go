@@ -72,7 +72,7 @@ func TestAppStartupSyncsCWDToRouter(t *testing.T) {
 	a.router.SetCWD(a.agentCWD)
 	a.router.Register(adapters.NewClaudeAdapter())
 
-	// Verify the adapter received the cwd
+	// Verify the adapter received the cwd via effectiveCWD
 	info, ok := a.router.GetAgent("claude-code")
 	if !ok {
 		t.Fatal("claude adapter not registered")

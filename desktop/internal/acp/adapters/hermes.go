@@ -85,7 +85,7 @@ func (a *HermesAdapter) ensureInit() error {
 	}
 
 	params := map[string]any{
-		"cwd":        a.effectiveCWD(),
+		"cwd":        a.effectiveCWDLocked(),
 		"mcpServers": []any{},
 	}
 	if a.systemPrompt != "" {
@@ -174,18 +174,38 @@ func (a *HermesAdapter) CurrentSessionID() string {
 func (a *HermesAdapter) Info() acp.AgentInfo { return a.info }
 
 func (a *HermesAdapter) IsRunning() bool { return a.pm.IsRunning() }
-func (a *HermesAdapter) Stop() error     { return a.pm.Stop() }
+func (a *HermesAdapter) Stop() error {
+	a.mu.Lock()
+	a.resetPending = false
+	a.mu.Unlock()
+	return a.pm.Stop()
+}
 
 func (a *HermesAdapter) SetCWD(cwd string) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	a.cwd = cwd
+	// Check if there's an active stream; if not, stop immediately.
+	a.streamMu.RLock()
+	hasActive := a.activeStream != nil
+	a.streamMu.RUnlock()
+	if !hasActive {
+		a.mu.Unlock()
+		if err := a.Stop(); err != nil {
+			log.Printf("[hermes] immediate stop after SetCWD failed: %v", err)
+		}
+		return
+	}
 	a.resetPending = true
+	a.mu.Unlock()
 }
 
 func (a *HermesAdapter) effectiveCWD() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	return a.effectiveCWDLocked()
+}
+
+func (a *HermesAdapter) effectiveCWDLocked() string {
 	if a.cwd == "" {
 		return "."
 	}

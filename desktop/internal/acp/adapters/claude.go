@@ -108,7 +108,7 @@ func (a *ClaudeAdapter) newSession() error {
 	a.mu.Unlock()
 
 	params := map[string]any{
-		"cwd":        a.effectiveCWD(),
+		"cwd":        a.effectiveCWDLocked(),
 		"mcpServers": []any{},
 	}
 	if systemPrompt != "" {
@@ -276,6 +276,7 @@ func (a *ClaudeAdapter) Stop() error {
 	a.rt = nil
 	a.initDone = false
 	a.sessionID = ""
+	a.resetPending = false
 	if a.stopSub != nil {
 		a.stopSub()
 		a.stopSub = nil
@@ -296,14 +297,29 @@ func (a *ClaudeAdapter) Stop() error {
 
 func (a *ClaudeAdapter) SetCWD(cwd string) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	a.cwd = cwd
+	// Check if there's an active stream; if not, stop immediately.
+	a.streamMu.RLock()
+	hasActive := a.activeStream != nil
+	a.streamMu.RUnlock()
+	if !hasActive {
+		a.mu.Unlock()
+		if err := a.Stop(); err != nil {
+			log.Printf("[claude] immediate stop after SetCWD failed: %v", err)
+		}
+		return
+	}
 	a.resetPending = true
+	a.mu.Unlock()
 }
 
 func (a *ClaudeAdapter) effectiveCWD() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	return a.effectiveCWDLocked()
+}
+
+func (a *ClaudeAdapter) effectiveCWDLocked() string {
 	if a.cwd == "" {
 		return "."
 	}

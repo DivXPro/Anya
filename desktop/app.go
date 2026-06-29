@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"desktop/internal/acp"
 	"desktop/internal/acp/adapters"
@@ -158,8 +159,9 @@ func (a *App) refreshTrayCWD() {
 	if path == "" {
 		label = a.trayText("defaultWorkingDirectory")
 	} else {
-		if len(path) > 40 {
-			path = "..." + path[len(path)-37:]
+		if utf8.RuneCountInString(path) > 40 {
+			runes := []rune(path)
+			path = "..." + string(runes[len(runes)-37:])
 		}
 		label = "📁 " + path
 	}
@@ -213,7 +215,7 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	if cwd, err := store.GetSetting(a.db, "agent_cwd"); err == nil {
 		a.agentCWD = cwd
 	} else {
-		log.Printf("[elf] failed to load agent_cwd setting: %v", err)
+		log.Printf("[elf] agent_cwd setting not found, using default")
 	}
 
 	// 1.5 Generate or load desktop identity

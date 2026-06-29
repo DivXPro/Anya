@@ -52,6 +52,8 @@ function SettingsTab() {
   const workingDirectoryRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // TODO: switch to the Settings tab before scrolling if the user is on another tab.
+    // Currently SettingsTab does not receive the activeTab setter from App.tsx.
     const off = Events.On('navigate-to-working-directory', () => {
       workingDirectoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
@@ -161,7 +163,7 @@ function SettingsTab() {
         CanChooseDirectories: true,
         CanChooseFiles: false,
         Title: t('settings.workingDirectory.dialogTitle'),
-        Directory: settings.agent_cwd || undefined,
+        ...(settings.agent_cwd ? { Directory: settings.agent_cwd } : {}),
       });
       if (result) {
         const path = Array.isArray(result) ? result[0] : result;

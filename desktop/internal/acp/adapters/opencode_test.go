@@ -6,31 +6,26 @@ import (
 	"desktop/internal/acp"
 )
 
-func TestIsHermesCliInstalled(t *testing.T) {
-	// Result depends on the test environment; just ensure it does not panic.
-	_ = IsHermesCliInstalled()
-}
-
-func TestNewHermesAdapterInfo(t *testing.T) {
-	a := NewHermesAdapter()
+func TestNewOpenCodeAdapterInfo(t *testing.T) {
+	a := NewOpenCodeAdapter()
 	info := a.Info()
-	if info.ID != "hermes" {
+	if info.ID != "opencode" {
 		t.Fatalf("unexpected id: %s", info.ID)
 	}
-	if info.Name != "Hermes" {
+	if info.Name != "OpenCode" {
 		t.Fatalf("unexpected name: %s", info.Name)
 	}
-	if info.Command != "hermes acp" {
+	if info.Command != "opencode acp" {
 		t.Fatalf("unexpected command: %s", info.Command)
 	}
 }
 
-func TestHermesAdapterImplementsInterface(t *testing.T) {
-	var _ acp.ACPAdapter = (*HermesAdapter)(nil)
+func TestOpenCodeAdapterImplementsInterface(t *testing.T) {
+	var _ acp.ACPAdapter = (*OpenCodeAdapter)(nil)
 }
 
-func TestHermesAdapterResetPending(t *testing.T) {
-	a := NewHermesAdapter()
+func TestOpenCodeAdapterResetPending(t *testing.T) {
+	a := NewOpenCodeAdapter()
 
 	// SetCWD should set resetPending flag when no active stream (pm not running, so immediate stop is no-op)
 	a.SetCWD("/tmp/new")
