@@ -1,15 +1,7 @@
 #include "display.h"
 #include "mascot.h"
+#include "layout.h"
 #include <cstring>
-
-// Layout — portrait 135×240 (M5StickC S3 native)
-//   0-16     status bar
-//   16-?     mascot area (original GIF size, centred)
-//   ?-?      prompt text (bottom)
-static const int STATUS_BAR_H = 16;
-static const int MASCOT_GAP   = 24;  // space between mascot and prompt text
-static const int MASCOT_TOP_BIAS = -16; // shift mascot up from vertical centre
-static const int PROMPT_H     = 12;
 
 static const char* abbreviate_agent(const char* name) {
     static char buf[32];
@@ -32,12 +24,7 @@ void disp_init() {
     M5.Display.setTextColor(TFT_WHITE);
 
     // Layout must be computed after M5.begin() so width()/height() are valid.
-    // Centre the content vertically, then shift the mascot upward so it sits
-    // higher on the screen and leaves more room below the prompt.
-    mascotY = STATUS_BAR_H +
-              (M5.Display.height() - STATUS_BAR_H - MASCOT_IMG_H - PROMPT_H - MASCOT_GAP) / 2 +
-              MASCOT_TOP_BIAS;
-    promptY = mascotY + MASCOT_IMG_H + MASCOT_GAP;
+    computeMascotLayout(M5.Display.height(), MASCOT_IMG_H, mascotY, promptY);
 
     mascot_init();
 }

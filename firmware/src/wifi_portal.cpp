@@ -1,6 +1,7 @@
 #include "wifi_portal.h"
 #include "display.h"
 #include "mascot.h"
+#include "layout.h"
 #include "elf_wifi.h"
 #include <WiFi.h>
 #include <WebServer.h>
@@ -118,11 +119,7 @@ static String buildScanJson() {
 }
 
 // ── Screen drawing (135×240 portrait, matches display.cpp) ──
-static const int P_STATUS_BAR_H = 16;
-static const int P_GAP          = 24;  // space between mascot and prompt text
-static const int P_TOP_BIAS     = -16; // shift mascot up from vertical centre
 static const int P_LINE_SPACING = 18;
-static const int P_PROMPT_H     = 12;
 static int portalMascotY = 0;   // computed at runtime after M5.begin()
 static int portalPromptY = 0;
 static bool portalDrawn = false;
@@ -131,17 +128,17 @@ static int  lastPortalDrawnFrame = -1;
 static unsigned long portalFrameStart = 0;
 
 static void portalDrawStatusBar() {
-    M5.Display.fillRect(0, 0, M5.Display.width(), P_STATUS_BAR_H, TFT_BLACK);
-    M5.Display.drawFastHLine(0, P_STATUS_BAR_H, M5.Display.width(), TFT_DARKGREY);
+    M5.Display.fillRect(0, 0, M5.Display.width(), STATUS_BAR_H, TFT_BLACK);
+    M5.Display.drawFastHLine(0, STATUS_BAR_H, M5.Display.width(), TFT_DARKGREY);
 
     // Connection dot (portal mode = not connected)
-    M5.Display.drawCircle(6, P_STATUS_BAR_H / 2, 3, TFT_DARKGREY);
+    M5.Display.drawCircle(6, STATUS_BAR_H / 2, 3, TFT_DARKGREY);
 
     // Title centred in the status bar
     M5.Display.setTextSize(1);
     M5.Display.setTextColor(TFT_WHITE);
     M5.Display.setTextDatum(textdatum_t::middle_center);
-    M5.Display.drawString("Anya", M5.Display.width() / 2, P_STATUS_BAR_H / 2);
+    M5.Display.drawString("Anya", M5.Display.width() / 2, STATUS_BAR_H / 2);
 }
 
 static void portalCenterPrint(const char* s, int y) {
@@ -153,10 +150,7 @@ static void portalCenterPrint(const char* s, int y) {
 }
 
 static void updatePortalLayout() {
-    portalMascotY = P_STATUS_BAR_H +
-                    (M5.Display.height() - P_STATUS_BAR_H - MASCOT_IMG_H - P_PROMPT_H - P_GAP) / 2 +
-                    P_TOP_BIAS;
-    portalPromptY = portalMascotY + MASCOT_IMG_H + P_GAP;
+    computeMascotLayout(M5.Display.height(), MASCOT_IMG_H, portalMascotY, portalPromptY);
 }
 
 static void portalDrawMascot() {
