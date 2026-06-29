@@ -76,55 +76,7 @@ void init_device_identity() {
     prefs.end();
 }
 
-void setup() {
-    auto cfg = M5.config();
-    M5.begin(cfg);
-    M5.Display.setFont(&fonts::efontCN_12);
-    lang_init();
-    ESP_LOGI("elf", "firmware setup start, version=%s", FIRMWARE_VERSION);
-    init_device_identity();
-
-    state_init();
-    audio_init();
-    btn_init();
-    ws_init();
-    protocol_init();
-
-    bool wifiOK = wifi_init();
-    PortalResult portalResult = PortalResult::SUCCESS;
-    if (!wifiOK) {
-        state_transition(State::WIFI_SETUP);
-        portalResult = wifi_portal_begin();
-    }
-    if (portalResult == PortalResult::FAILED) {
-        disp_error(tr(Str::WifiSetupFailed), deviceName);
-        return;
-    }
-    if (portalResult == PortalResult::CANCELLED) {
-        inMenu = true;
-        menuLevel = MenuLevel::MAIN;
-        menuSelected = 0;
-        state_transition(State::MENU);
-        show_menu();
-    } else {
-        http_setup_connect_endpoint();
-
-        String boundID = wifi_get_bound_desktop_id();
-        String boundIP = wifi_get_bound_desktop_ip();
-        uint16_t boundPort = wifi_get_bound_desktop_port();
-
-        if (boundIP.length() > 0) {
-            ESP_LOGI("main", "bound reconnect to %s:%d", boundIP.c_str(), boundPort);
-            ws_set_hello_data(deviceID, deviceName, boundID.c_str(), "");
-            ws_connect(boundIP.c_str(), boundPort);
-            state_transition(State::IDLE);
-        } else {
-            mdns_start_advertise(deviceID, deviceName);
-            advertising = true;
-            state_transition(State::PAIR_READY);
-        }
-    }
-
+static void register_button_callbacks() {
     btn_on_ptt_press([]() {
         if (ota_in_progress()) {
             ESP_LOGI("main", "PTT press ignored: OTA in progress");
@@ -251,6 +203,59 @@ void setup() {
             show_menu();
         }
     });
+}
+
+void setup() {
+    auto cfg = M5.config();
+    M5.begin(cfg);
+    M5.Display.setFont(&fonts::efontCN_12);
+    lang_init();
+    ESP_LOGI("elf", "firmware setup start, version=%s", FIRMWARE_VERSION);
+    init_device_identity();
+
+    state_init();
+    audio_init();
+    btn_init();
+    ws_init();
+    protocol_init();
+    register_button_callbacks();
+
+    bool wifiOK = wifi_init();
+    PortalResult portalResult = PortalResult::SUCCESS;
+    if (!wifiOK) {
+        state_transition(State::WIFI_SETUP);
+        portalResult = wifi_portal_begin();
+    }
+    if (portalResult == PortalResult::FAILED) {
+        disp_error(tr(Str::WifiSetupFailed), deviceName);
+        return;
+    }
+    if (portalResult == PortalResult::CANCELLED) {
+        inMenu = true;
+        menuLevel = MenuLevel::MAIN;
+        menuSelected = 0;
+        state_transition(State::MENU);
+        show_menu();
+    } else {
+        http_setup_connect_endpoint();
+
+        String boundID = wifi_get_bound_desktop_id();
+        String boundIP = wifi_get_bound_desktop_ip();
+        uint16_t boundPort = wifi_get_bound_desktop_port();
+
+        if (boundIP.length() > 0) {
+            ESP_LOGI("main", "bound reconnect to %s:%d", boundIP.c_str(), boundPort);
+            ws_set_hello_data(deviceID, deviceName, boundID.c_str(), "");
+            ws_connect(boundIP.c_str(), boundPort);
+            state_transition(State::IDLE);
+        } else {
+            mdns_start_advertise(deviceID, deviceName);
+            advertising = true;
+            state_transition(State::PAIR_READY);
+        }
+    }
+
+    register_button_callbacks();
 }
 
 void loop() {

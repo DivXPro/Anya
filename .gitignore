@@ -9,6 +9,7 @@ desktop/frontend/dist/
 .worktrees/
 firmware/.pio/
 firmware/.vscode/
+firmware/.idea/
 # Embedded firmware assets are rebuilt by build.sh; keep the placeholders only.
 desktop/internal/firmware/assets/firmware.bin
 desktop/internal/firmware/assets/version.txt
