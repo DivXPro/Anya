@@ -24,6 +24,8 @@ type OpenCodeAdapter struct {
 	initDone        bool
 	lastPromptReqID int
 	systemPrompt    string
+	cwd             string
+	resetPending    bool
 }
 
 func NewOpenCodeAdapter() *OpenCodeAdapter {
@@ -83,7 +85,7 @@ func (a *OpenCodeAdapter) ensureInit() error {
 	}
 
 	params := map[string]any{
-		"cwd":        ".",
+		"cwd":        a.effectiveCWDLocked(),
 		"mcpServers": []any{},
 	}
 	if a.systemPrompt != "" {
@@ -172,7 +174,47 @@ func (a *OpenCodeAdapter) CurrentSessionID() string {
 func (a *OpenCodeAdapter) Info() acp.AgentInfo { return a.info }
 
 func (a *OpenCodeAdapter) IsRunning() bool { return a.pm.IsRunning() }
-func (a *OpenCodeAdapter) Stop() error     { return a.pm.Stop() }
+func (a *OpenCodeAdapter) Stop() error {
+	a.mu.Lock()
+	a.resetPending = false
+	a.mu.Unlock()
+	return a.pm.Stop()
+}
+func (a *OpenCodeAdapter) stopLocked() error {
+	a.resetPending = false
+	return a.pm.Stop()
+}
+
+func (a *OpenCodeAdapter) SetCWD(cwd string) {
+	a.mu.Lock()
+	a.cwd = cwd
+	// Check if there's an active stream; if not, stop immediately.
+	a.streamMu.RLock()
+	hasActive := a.activeStream != nil
+	a.streamMu.RUnlock()
+	if !hasActive {
+		a.mu.Unlock()
+		if err := a.Stop(); err != nil {
+			log.Printf("[opencode] immediate stop after SetCWD failed: %v", err)
+		}
+		return
+	}
+	a.resetPending = true
+	a.mu.Unlock()
+}
+
+func (a *OpenCodeAdapter) effectiveCWD() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.effectiveCWDLocked()
+}
+
+func (a *OpenCodeAdapter) effectiveCWDLocked() string {
+	if a.cwd == "" {
+		return "."
+	}
+	return a.cwd
+}
 
 func (a *OpenCodeAdapter) dispatchLoop(pm *acp.ProcessManager) {
 	defer func() {
@@ -189,9 +231,9 @@ func (a *OpenCodeAdapter) dispatchLoop(pm *acp.ProcessManager) {
 				return
 			}
 			var msg struct {
-				ID     int            `json:"id"`
-				Method string         `json:"method"`
-				Result map[string]any `json:"result"`
+				ID     int                       `json:"id"`
+				Method string                    `json:"method"`
+				Result map[string]any            `json:"result"`
 				Error  *struct{ Message string } `json:"error"`
 				Params struct {
 					SessionID string `json:"sessionId"`
@@ -302,6 +344,15 @@ func (a *OpenCodeAdapter) dispatchLoop(pm *acp.ProcessManager) {
 			}
 
 		case <-done:
+			// Check for pending reset after stream completes
+			a.mu.Lock()
+			if a.resetPending {
+				a.resetPending = false
+				if err := a.stopLocked(); err != nil {
+					log.Printf("[opencode] delayed stop after reset failed: %v", err)
+				}
+			}
+			a.mu.Unlock()
 			return
 		}
 	}

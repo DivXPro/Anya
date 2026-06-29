@@ -35,6 +35,8 @@ type ClaudeAdapter struct {
 	stopSub      func()
 	systemPrompt string
 	permCh       chan acp.PermissionRequest
+	cwd          string
+	resetPending bool
 }
 
 func NewClaudeAdapter() *ClaudeAdapter {
@@ -111,7 +113,7 @@ func (a *ClaudeAdapter) newSession() error {
 	a.mu.Unlock()
 
 	params := map[string]any{
-		"cwd":        ".",
+		"cwd":        a.effectiveCWDLocked(),
 		"mcpServers": []any{},
 	}
 	if systemPrompt != "" {
@@ -198,7 +200,19 @@ func (a *ClaudeAdapter) Send(prompt string, history []acp.Message) (<-chan acp.S
 		default:
 		}
 		close(active)
+		a.streamMu.Lock()
 		a.activeStream = nil
+		a.streamMu.Unlock()
+
+		// Check for pending reset after stream completes
+		a.mu.Lock()
+		if a.resetPending {
+			a.resetPending = false
+			if err := a.stopLocked(); err != nil {
+				log.Printf("[claude] delayed stop after reset failed: %v", err)
+			}
+		}
+		a.mu.Unlock()
 	}()
 
 	return ch, nil
@@ -263,10 +277,17 @@ func (a *ClaudeAdapter) IsRunning() bool {
 
 func (a *ClaudeAdapter) Stop() error {
 	a.mu.Lock()
+	err := a.stopLocked()
+	a.mu.Unlock()
+	return err
+}
+
+func (a *ClaudeAdapter) stopLocked() error {
 	rt := a.rt
 	a.rt = nil
 	a.initDone = false
 	a.sessionID = ""
+	a.resetPending = false
 	if a.stopSub != nil {
 		a.stopSub()
 		a.stopSub = nil
@@ -277,12 +298,42 @@ func (a *ClaudeAdapter) Stop() error {
 		a.activeStream = nil
 	}
 	a.streamMu.Unlock()
-	a.mu.Unlock()
 
 	if rt != nil {
 		return rt.Close()
 	}
 	return nil
+}
+
+func (a *ClaudeAdapter) SetCWD(cwd string) {
+	a.mu.Lock()
+	a.cwd = cwd
+	// Check if there's an active stream; if not, stop immediately.
+	a.streamMu.RLock()
+	hasActive := a.activeStream != nil
+	a.streamMu.RUnlock()
+	if !hasActive {
+		a.mu.Unlock()
+		if err := a.Stop(); err != nil {
+			log.Printf("[claude] immediate stop after SetCWD failed: %v", err)
+		}
+		return
+	}
+	a.resetPending = true
+	a.mu.Unlock()
+}
+
+func (a *ClaudeAdapter) effectiveCWD() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.effectiveCWDLocked()
+}
+
+func (a *ClaudeAdapter) effectiveCWDLocked() string {
+	if a.cwd == "" {
+		return "."
+	}
+	return a.cwd
 }
 
 func (a *ClaudeAdapter) clientRequest(id int, method string, params map[string]any) (map[string]any, error) {

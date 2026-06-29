@@ -25,6 +25,8 @@ type HermesAdapter struct {
 	initDone        bool
 	lastPromptReqID int
 	systemPrompt    string
+	cwd             string
+	resetPending    bool
 }
 
 func NewHermesAdapter() *HermesAdapter {
@@ -83,7 +85,7 @@ func (a *HermesAdapter) ensureInit() error {
 	}
 
 	params := map[string]any{
-		"cwd":        ".",
+		"cwd":        a.effectiveCWDLocked(),
 		"mcpServers": []any{},
 	}
 	if a.systemPrompt != "" {
@@ -172,7 +174,47 @@ func (a *HermesAdapter) CurrentSessionID() string {
 func (a *HermesAdapter) Info() acp.AgentInfo { return a.info }
 
 func (a *HermesAdapter) IsRunning() bool { return a.pm.IsRunning() }
-func (a *HermesAdapter) Stop() error     { return a.pm.Stop() }
+func (a *HermesAdapter) Stop() error {
+	a.mu.Lock()
+	a.resetPending = false
+	a.mu.Unlock()
+	return a.pm.Stop()
+}
+func (a *HermesAdapter) stopLocked() error {
+	a.resetPending = false
+	return a.pm.Stop()
+}
+
+func (a *HermesAdapter) SetCWD(cwd string) {
+	a.mu.Lock()
+	a.cwd = cwd
+	// Check if there's an active stream; if not, stop immediately.
+	a.streamMu.RLock()
+	hasActive := a.activeStream != nil
+	a.streamMu.RUnlock()
+	if !hasActive {
+		a.mu.Unlock()
+		if err := a.Stop(); err != nil {
+			log.Printf("[hermes] immediate stop after SetCWD failed: %v", err)
+		}
+		return
+	}
+	a.resetPending = true
+	a.mu.Unlock()
+}
+
+func (a *HermesAdapter) effectiveCWD() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.effectiveCWDLocked()
+}
+
+func (a *HermesAdapter) effectiveCWDLocked() string {
+	if a.cwd == "" {
+		return "."
+	}
+	return a.cwd
+}
 
 func (a *HermesAdapter) dispatchLoop(pm *acp.ProcessManager) {
 	defer func() {
@@ -189,9 +231,9 @@ func (a *HermesAdapter) dispatchLoop(pm *acp.ProcessManager) {
 				return
 			}
 			var msg struct {
-				ID     int            `json:"id"`
-				Method string         `json:"method"`
-				Result map[string]any `json:"result"`
+				ID     int                       `json:"id"`
+				Method string                    `json:"method"`
+				Result map[string]any            `json:"result"`
 				Error  *struct{ Message string } `json:"error"`
 				Params struct {
 					SessionID string `json:"sessionId"`
@@ -299,6 +341,15 @@ func (a *HermesAdapter) dispatchLoop(pm *acp.ProcessManager) {
 			}
 
 		case <-done:
+			// Check for pending reset after stream completes
+			a.mu.Lock()
+			if a.resetPending {
+				a.resetPending = false
+				if err := a.stopLocked(); err != nil {
+					log.Printf("[hermes] delayed stop after reset failed: %v", err)
+				}
+			}
+			a.mu.Unlock()
 			return
 		}
 	}

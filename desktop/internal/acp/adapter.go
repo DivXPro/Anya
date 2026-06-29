@@ -7,6 +7,7 @@ type ACPAdapter interface {
 	Info() AgentInfo
 	IsRunning() bool
 	Stop() error
+	SetCWD(cwd string) // NEW
 }
 
 type AgentInfo struct {

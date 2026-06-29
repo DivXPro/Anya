@@ -18,10 +18,11 @@ func (m *mockAdapter) Send(prompt string, history []Message) (<-chan StreamEvent
 	return ch, nil
 }
 func (m *mockAdapter) LoadSession(acpSessionID string, history []Message) error { return nil }
-func (m *mockAdapter) CurrentSessionID() string { return "" }
-func (m *mockAdapter) Info() AgentInfo { return AgentInfo{ID: "mock", Name: "Mock", Command: "mock"} }
-func (m *mockAdapter) IsRunning() bool  { return true }
-func (m *mockAdapter) Stop() error      { return nil }
+func (m *mockAdapter) CurrentSessionID() string                                 { return "" }
+func (m *mockAdapter) Info() AgentInfo                                          { return AgentInfo{ID: "mock", Name: "Mock", Command: "mock"} }
+func (m *mockAdapter) IsRunning() bool                                          { return true }
+func (m *mockAdapter) Stop() error                                              { return nil }
+func (m *mockAdapter) SetCWD(cwd string)                                        {}
 
 func TestRouterRoute(t *testing.T) {
 	r := NewRouter()

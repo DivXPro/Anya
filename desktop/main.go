@@ -72,6 +72,15 @@ func main() {
 	deviceItem.SetEnabled(false)
 	menu.AddSeparator()
 
+	// Working directory item
+	cwdItem := menu.Add("")
+	cwdItem.OnClick(func(_ *application.Context) {
+		mainWindow.Show()
+		mainWindow.Focus()
+		wailsApp.Event.Emit("navigate-to-working-directory", nil)
+	})
+	menu.AddSeparator()
+
 	// Agent submenu: shows available agents and lets the user pick the active one.
 	agentMenu := menu.AddSubmenu("Agent")
 	menu.AddSeparator()
@@ -92,6 +101,7 @@ func main() {
 
 	// Give App access to update tray menus
 	elfApp.SetTrayDeviceItem(deviceItem)
+	elfApp.SetTrayCWDItem(cwdItem)
 	elfApp.SetTrayAgentMenu(agentMenu)
 	elfApp.SetTrayOpenItem(openItem)
 	elfApp.SetTrayQuitItem(quitItem)

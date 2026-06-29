@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"desktop/internal/acp"
 	"desktop/internal/acp/adapters"
@@ -46,8 +47,10 @@ type App struct {
 	trayAgentMenu  *application.Menu
 	trayOpenItem   *application.MenuItem
 	trayQuitItem   *application.MenuItem
+	trayCWDItem    *application.MenuItem
 	trayDeviceName string
 	trayUILanguage string
+	agentCWD       string
 	flashMgr       *firmware.Manager
 	otaMgr         *firmware.OTAManager
 	agentInstaller *agentinstall.Installer
@@ -76,6 +79,11 @@ func (a *App) SetTrayQuitItem(item *application.MenuItem) {
 	a.refreshTrayQuitItem()
 }
 
+func (a *App) SetTrayCWDItem(item *application.MenuItem) {
+	a.trayCWDItem = item
+	a.refreshTrayCWD()
+}
+
 func (a *App) trayText(key string) string {
 	if a.trayUILanguage == "en" {
 		switch key {
@@ -87,6 +95,10 @@ func (a *App) trayText(key string) string {
 			return "Open Anya"
 		case "quit":
 			return "Quit"
+		case "workingDirectory":
+			return "Working Directory"
+		case "defaultWorkingDirectory":
+			return "📁 Default Working Directory"
 		}
 		return key
 	}
@@ -99,6 +111,10 @@ func (a *App) trayText(key string) string {
 		return "打开 Anya"
 	case "quit":
 		return "退出"
+	case "workingDirectory":
+		return "工作目录"
+	case "defaultWorkingDirectory":
+		return "📁 默认工作目录"
 	}
 	return key
 }
@@ -134,6 +150,45 @@ func (a *App) refreshTrayLanguage() {
 	a.refreshTrayDeviceStatus()
 	a.refreshTrayOpenItem()
 	a.refreshTrayQuitItem()
+	a.refreshTrayCWD()
+}
+
+func (a *App) refreshTrayCWD() {
+	if a.trayCWDItem == nil {
+		return
+	}
+	path := a.agentCWD
+	label := a.trayText("workingDirectory")
+	if path == "" {
+		label = a.trayText("defaultWorkingDirectory")
+	} else {
+		if utf8.RuneCountInString(path) > 40 {
+			runes := []rune(path)
+			path = "..." + string(runes[len(runes)-37:])
+		}
+		label = "📁 " + path
+	}
+	a.trayCWDItem.SetLabel(label)
+	if a.agentCWD != "" {
+		a.trayCWDItem.SetTooltip(a.agentCWD)
+	}
+}
+
+func validateWorkingDirectory(path string) error {
+	if path == "" {
+		return nil
+	}
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("working directory must be an absolute path: %q", path)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("invalid working directory %q: %w", path, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("working directory is not a directory: %q", path)
+	}
+	return nil
 }
 
 func NewApp() *App {
@@ -162,6 +217,13 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 	}
 	a.db = db
 
+	// 1.1 Load agent working directory
+	if cwd, err := store.GetSetting(a.db, "agent_cwd"); err == nil {
+		a.agentCWD = cwd
+	} else {
+		log.Printf("[elf] agent_cwd setting not found, using default")
+	}
+
 	// 1.5 Generate or load desktop identity
 	a.desktopID, _ = store.GetSetting(a.db, "desktop_id")
 	if a.desktopID == "" {
@@ -171,6 +233,7 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 
 	// 2. Init ACP router + register all adapters
 	a.router = acp.NewRouter()
+	a.router.SetCWD(a.agentCWD)
 	a.confirmWaits = make(map[string]chan string)
 	a.router.Register(adapters.NewClaudeAdapter())
 	a.router.Register(adapters.NewOpenCodeAdapter())
@@ -828,6 +891,22 @@ func (a *App) GetSettings() (map[string]string, error) {
 }
 
 func (a *App) SetSetting(key, value string) error {
+	if key == "agent_cwd" {
+		if value != "" {
+			if err := validateWorkingDirectory(value); err != nil {
+				return err
+			}
+		}
+		if err := store.SetSetting(a.db, key, value); err != nil {
+			return err
+		}
+		a.agentCWD = value
+		a.refreshTrayCWD()
+		if a.router != nil {
+			a.router.SetCWD(value)
+		}
+		return nil
+	}
 	if key == "stt_language" {
 		old, _ := store.GetSetting(a.db, key)
 		if old != value {
