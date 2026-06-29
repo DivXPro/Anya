@@ -138,8 +138,8 @@ static void register_button_callbacks() {
                 state_transition(State::WIFI_SETUP);
                 resume_after_portal(wifi_portal_begin());
             } else if (menuSelected == 1) {
-                // Repair: clear binding. Only start advertising if WiFi is available;
-                // otherwise show the disconnected idle screen.
+                // Repair: clear binding. If WiFi is available, start advertising;
+                // otherwise open the captive portal so the user can configure it first.
                 inMenu = false;
                 wifi_clear_bound_desktop();
                 ws_disconnect();
@@ -154,7 +154,8 @@ static void register_button_callbacks() {
                         mdns_stop_advertise();
                         advertising = false;
                     }
-                    state_transition(State::IDLE);
+                    state_transition(State::WIFI_SETUP);
+                    resume_after_portal(wifi_portal_begin());
                 }
             } else if (menuSelected == 2) {
                 // Test Speaker: play a 1kHz tone for 1 second
