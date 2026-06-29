@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"desktop/internal/acp"
@@ -327,15 +328,23 @@ func (a *ClaudeAdapter) dispatchUpdates(updates <-chan claudeacp.RPCMessage) {
 		if msg.Method != "session/update" {
 			continue
 		}
+		type textContent struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		type toolCallContentItem struct {
+			Type    string       `json:"type"`
+			Content *textContent `json:"content,omitempty"`
+		}
 		var payload struct {
 			SessionID string `json:"sessionId"`
 			Update    struct {
-				SessionUpdate string `json:"sessionUpdate"`
-				MessageID     string `json:"messageId"`
-				Content       struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
+				SessionUpdate  string          `json:"sessionUpdate"`
+				MessageID      string          `json:"messageId"`
+				Title          string          `json:"title,omitempty"`
+				ToolCallID     string          `json:"toolCallId,omitempty"`
+				Content        json.RawMessage `json:"content"`
+				ToolCallContent []toolCallContentItem `json:"toolCallContent,omitempty"`
 			} `json:"update"`
 		}
 		if err := json.Unmarshal(msg.Params, &payload); err != nil {
@@ -348,28 +357,45 @@ func (a *ClaudeAdapter) dispatchUpdates(updates <-chan claudeacp.RPCMessage) {
 
 		evt := acp.StreamEvent{}
 		switch payload.Update.SessionUpdate {
-		case "agent_message_chunk":
-			text, ok := sanitizeACPText(payload.Update.Content.Text)
-			if !ok {
+		case "agent_message_chunk", "agent_thought_chunk":
+			var tc textContent
+			if err := json.Unmarshal(payload.Update.Content, &tc); err != nil {
 				continue
 			}
-			evt.Type = "text_delta"
-			evt.Content = text
-		case "agent_thought_chunk":
-			// Surface thinking chunks as text so callers can see progress.
-			text, ok := sanitizeACPText(payload.Update.Content.Text)
+			text, ok := sanitizeACPText(tc.Text)
 			if !ok {
 				continue
 			}
 			evt.Type = "text_delta"
 			evt.Content = text
 		case "tool_call_update":
-			text, ok := sanitizeACPText(payload.Update.Content.Text)
+			var text string
+			// Tool call content may be in the top-level ToolCallContent array.
+			for _, item := range payload.Update.ToolCallContent {
+				if item.Content != nil {
+					text += item.Content.Text
+				}
+			}
+			// Fall back to the legacy single content object.
+			if text == "" {
+				var tc textContent
+				if err := json.Unmarshal(payload.Update.Content, &tc); err == nil {
+					text = tc.Text
+				}
+			}
+			text, ok := sanitizeACPText(text)
 			if !ok {
 				continue
 			}
-			evt.Type = "tool_use"
-			evt.Content = text
+			evt.ToolCallID = payload.Update.ToolCallID
+			evt.ToolName = payload.Update.Title
+			if isAskUserTool(payload.Update.Title, text) {
+				evt.Type = "ask_user"
+				evt.Content = text
+			} else {
+				evt.Type = "tool_use"
+				evt.Content = text
+			}
 		default:
 			continue
 		}
@@ -385,6 +411,22 @@ func (a *ClaudeAdapter) dispatchUpdates(updates <-chan claudeacp.RPCMessage) {
 		default:
 		}
 	}
+}
+
+func isAskUserTool(toolName, text string) bool {
+	name := strings.ToLower(toolName)
+	askNames := []string{"ask_user", "ask-user", "askuser", "request_user_input", "user_input", "askuser", "user_input_request"}
+	for _, n := range askNames {
+		if name == n {
+			return true
+		}
+	}
+	// Heuristic: if the tool has no recognizable name but its text is a direct
+	// question, surface it to the user as well.
+	if toolName == "" && strings.Contains(text, "?") {
+		return true
+	}
+	return false
 }
 
 func (a *ClaudeAdapter) handlePermissionRequest(msg claudeacp.RPCMessage) {
