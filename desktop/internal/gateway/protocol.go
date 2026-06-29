@@ -115,32 +115,3 @@ func ConfirmCancelMessage(requestID string) DeviceMessage {
 		},
 	}
 }
-
-type AskOption struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-}
-
-func AskMessage(requestID, text string, options []AskOption) DeviceMessage {
-	opts := make([]map[string]interface{}, len(options))
-	for i, o := range options {
-		opts[i] = map[string]interface{}{"id": o.ID, "label": o.Label}
-	}
-	return DeviceMessage{
-		Type: "ask",
-		Payload: map[string]interface{}{
-			"request_id": requestID,
-			"text":       text,
-			"options":    opts,
-		},
-	}
-}
-
-func AskCancelMessage(requestID string) DeviceMessage {
-	return DeviceMessage{
-		Type: "ask_cancel",
-		Payload: map[string]interface{}{
-			"request_id": requestID,
-		},
-	}
-}

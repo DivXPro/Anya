@@ -3,18 +3,15 @@ package acp
 import "fmt"
 
 type StreamEvent struct {
-	Type       string `json:"type"`
-	Content    string `json:"content"`
-	ToolCallID string `json:"toolCallId,omitempty"`
-	ToolName   string `json:"toolName,omitempty"`
-	Error      error  `json:"-"`
+	Type    string `json:"type"`
+	Content string `json:"content"`
+	Error   error  `json:"-"`
 }
 
-func (e StreamEvent) IsContent() bool   { return e.Type == "text_delta" || e.Type == "ask_user" }
+func (e StreamEvent) IsContent() bool   { return e.Type == "text_delta" }
 func (e StreamEvent) IsDone() bool      { return e.Type == "done" }
 func (e StreamEvent) IsError() bool     { return e.Type == "error" }
 func (e StreamEvent) IsSkippable() bool { return e.Type == "thinking" || e.Type == "tool_use" }
-func (e StreamEvent) IsAskUser() bool   { return e.Type == "ask_user" }
 
 func (e StreamEvent) String() string {
 	if e.Error != nil {
@@ -37,22 +34,4 @@ type PermissionRequest struct {
 type PermissionResponder interface {
 	PermissionRequests() <-chan PermissionRequest
 	RespondPermission(requestID, optionID string) error
-}
-
-type AskUserOption struct {
-	ID    string
-	Label string
-}
-
-type AskUserRequest struct {
-	ID         string
-	Prompt     string
-	QuestionID string
-	ToolCallID string
-	Options    []AskUserOption
-}
-
-type AskUserResponder interface {
-	AskUserRequests() <-chan AskUserRequest
-	RespondAskUser(requestID string, answers map[string]string) error
 }
