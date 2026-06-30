@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -50,13 +51,15 @@ type App struct {
 	trayOpenItem   *application.MenuItem
 	trayQuitItem   *application.MenuItem
 	trayCWDItem    *application.MenuItem
-	trayDeviceName string
-	trayUILanguage string
-	agentCWD       string
-	flashMgr       *firmware.Manager
-	otaMgr         *firmware.OTAManager
-	agentInstaller *agentinstall.Installer
-	updater        *appupdate.Manager
+	// menuCheckUpdateItem is the "Check for Updates" item in the macOS menu bar.
+	menuCheckUpdateItem *application.MenuItem
+	trayDeviceName      string
+	trayUILanguage      string
+	agentCWD            string
+	flashMgr            *firmware.Manager
+	otaMgr              *firmware.OTAManager
+	agentInstaller      *agentinstall.Installer
+	updater             *appupdate.Manager
 
 	confirmMu    sync.Mutex
 	confirmWaits map[string]chan string
@@ -81,11 +84,98 @@ func (a *App) CheckForUpdate() (*appupdate.UpdateInfo, error) {
 }
 
 // DownloadAndApplyUpdate downloads, verifies, applies the update and relaunches.
+// While a download is in flight the "Check for Updates" menu item is disabled so
+// the user can't kick off a second check/download; it is re-enabled only if this
+// call owned the download and it failed (on success the app relaunches).
 func (a *App) DownloadAndApplyUpdate() error {
 	if a.updater == nil {
 		return fmt.Errorf("self-update unavailable in this build")
 	}
-	return a.updater.DownloadAndApply(a.ctx)
+	a.setCheckUpdateMenuEnabled(false)
+	err := a.updater.DownloadAndApply(a.ctx)
+	if err != nil && !errors.Is(err, appupdate.ErrUpdateInProgress) {
+		a.setCheckUpdateMenuEnabled(true)
+	}
+	return err
+}
+
+// setCheckUpdateMenuEnabled toggles the macOS menu bar "Check for Updates" item.
+func (a *App) setCheckUpdateMenuEnabled(enabled bool) {
+	if a.menuCheckUpdateItem != nil {
+		a.menuCheckUpdateItem.SetEnabled(enabled)
+	}
+}
+
+// AvailableUpdate returns the update found by the most recent check (cached, no
+// network). The frontend calls this on mount so a late-subscribing window can
+// still render the "update available" tag for a background-detected release.
+func (a *App) AvailableUpdate() *appupdate.UpdateInfo {
+	if a.updater == nil {
+		return nil
+	}
+	return a.updater.Available()
+}
+
+// CheckForUpdateInteractive runs a check from the native menu bar and shows a
+// native dialog with the result: a confirm-to-update prompt when a newer
+// version exists, otherwise an "up to date" / error notice. Run it in a
+// goroutine — it performs network I/O.
+func (a *App) CheckForUpdateInteractive() {
+	en := a.trayUILanguage == "en"
+	if a.updater == nil {
+		a.showUpdateInfo(a.trayText("updateUnavailableTitle"), a.trayText("updateUnavailableMsg"), true)
+		return
+	}
+	info, err := a.updater.CheckForUpdate(a.ctx)
+	if err != nil {
+		a.showUpdateInfo(a.trayText("updateCheckFailedTitle"), err.Error(), true)
+		return
+	}
+	if info == nil {
+		a.showUpdateInfo(a.trayText("upToDateTitle"), a.trayText("upToDateMsg"), false)
+		return
+	}
+
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	dialog := app.Dialog.Question()
+	dialog.SetTitle(a.trayText("updateAvailableTitle"))
+	if en {
+		dialog.SetMessage(fmt.Sprintf("Version %s is available. Update now?", info.Version))
+	} else {
+		dialog.SetMessage(fmt.Sprintf("发现新版本 %s，是否立即更新？", info.Version))
+	}
+	confirm := dialog.AddButton(a.trayText("updateNow"))
+	cancel := dialog.AddButton(a.trayText("later"))
+	confirm.OnClick(func() {
+		go func() {
+			if err := a.DownloadAndApplyUpdate(); err != nil {
+				log.Printf("[update] interactive download failed: %v", err)
+			}
+		}()
+	})
+	cancel.SetAsCancel()
+	dialog.SetDefaultButton(confirm)
+	dialog.Show()
+}
+
+// showUpdateInfo shows a simple native message dialog (info or error styled).
+func (a *App) showUpdateInfo(title, message string, isError bool) {
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	var dialog *application.MessageDialog
+	if isError {
+		dialog = app.Dialog.Error()
+	} else {
+		dialog = app.Dialog.Info()
+	}
+	dialog.SetTitle(title)
+	dialog.SetMessage(message)
+	dialog.Show()
 }
 
 func (a *App) backgroundUpdateCheck() {
@@ -142,6 +232,19 @@ func (a *App) SetTrayCWDItem(item *application.MenuItem) {
 	a.refreshTrayCWD()
 }
 
+// SetMenuCheckUpdateItem registers the macOS menu bar "Check for Updates" item
+// so its label can follow the UI language.
+func (a *App) SetMenuCheckUpdateItem(item *application.MenuItem) {
+	a.menuCheckUpdateItem = item
+	a.refreshMenuCheckUpdateItem()
+}
+
+func (a *App) refreshMenuCheckUpdateItem() {
+	if a.menuCheckUpdateItem != nil {
+		a.menuCheckUpdateItem.SetLabel(a.trayText("checkUpdate"))
+	}
+}
+
 func (a *App) trayText(key string) string {
 	if a.trayUILanguage == "en" {
 		switch key {
@@ -157,6 +260,24 @@ func (a *App) trayText(key string) string {
 			return "Working Directory"
 		case "defaultWorkingDirectory":
 			return "📁 Default Working Directory"
+		case "checkUpdate":
+			return "Check for Updates…"
+		case "updateAvailableTitle":
+			return "Update Available"
+		case "updateNow":
+			return "Update Now"
+		case "later":
+			return "Later"
+		case "upToDateTitle":
+			return "Up to Date"
+		case "upToDateMsg":
+			return "You're running the latest version."
+		case "updateCheckFailedTitle":
+			return "Update Check Failed"
+		case "updateUnavailableTitle":
+			return "Updates Unavailable"
+		case "updateUnavailableMsg":
+			return "Self-update is not available in this build."
 		}
 		return key
 	}
@@ -173,6 +294,24 @@ func (a *App) trayText(key string) string {
 		return "工作目录"
 	case "defaultWorkingDirectory":
 		return "📁 默认工作目录"
+	case "checkUpdate":
+		return "检查更新…"
+	case "updateAvailableTitle":
+		return "发现新版本"
+	case "updateNow":
+		return "立即更新"
+	case "later":
+		return "稍后"
+	case "upToDateTitle":
+		return "已是最新版本"
+	case "upToDateMsg":
+		return "当前已是最新版本。"
+	case "updateCheckFailedTitle":
+		return "检查更新失败"
+	case "updateUnavailableTitle":
+		return "暂不支持更新"
+	case "updateUnavailableMsg":
+		return "此版本不支持自动更新。"
 	}
 	return key
 }
@@ -209,6 +348,7 @@ func (a *App) refreshTrayLanguage() {
 	a.refreshTrayOpenItem()
 	a.refreshTrayQuitItem()
 	a.refreshTrayCWD()
+	a.refreshMenuCheckUpdateItem()
 }
 
 func (a *App) refreshTrayCWD() {

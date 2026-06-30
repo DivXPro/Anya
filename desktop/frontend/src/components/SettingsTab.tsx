@@ -252,12 +252,6 @@ function SettingsTab() {
               )}
             </div>
 
-            {updateInfo?.notes && (
-              <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-words max-h-32 overflow-auto">
-                {updateInfo.notes}
-              </pre>
-            )}
-
             {updateProgress !== null && (
               <div className="space-y-1.5">
                 <Progress value={updateProgress} />

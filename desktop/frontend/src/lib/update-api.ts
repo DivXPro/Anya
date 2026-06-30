@@ -23,6 +23,10 @@ export function CheckForUpdate(): Promise<UpdateInfo | null> {
   return Call.ByName('main.App.CheckForUpdate');
 }
 
+export function AvailableUpdate(): Promise<UpdateInfo | null> {
+  return Call.ByName('main.App.AvailableUpdate');
+}
+
 export function DownloadAndApplyUpdate(): Promise<void> {
   return Call.ByName('main.App.DownloadAndApplyUpdate');
 }

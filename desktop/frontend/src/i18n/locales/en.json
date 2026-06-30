@@ -1,7 +1,9 @@
 {
   "appName": "Anya",
   "app": {
-    "tagline": "Hardware Agent"
+    "tagline": "Hardware Agent",
+    "updateTag": "Update",
+    "updateAvailable": "Version {{version}} available — click to update now"
   },
   "tabs": {
     "device": "Device",

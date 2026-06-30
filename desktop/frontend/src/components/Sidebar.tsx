@@ -7,6 +7,7 @@ import {
   RiHistoryLine,
   RiSettingsLine,
 } from '@remixicon/react';
+import { useAppUpdate } from '@/hooks/useAppUpdate';
 
 const ITEMS: { key: Tab; labelKey: string; icon: typeof RiRemoteControlLine }[] = [
   { key: 'device', labelKey: 'tabs.device', icon: RiRemoteControlLine },
@@ -17,6 +18,7 @@ const ITEMS: { key: Tab; labelKey: string; icon: typeof RiRemoteControlLine }[] 
 
 export function Sidebar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
   const { t } = useTranslation();
+  const { available, percent, inProgress, startUpdate } = useAppUpdate();
 
   return (
     <aside className="flex w-[220px] flex-col justify-between border-r border-border/50 bg-secondary/80 px-4 pb-4 pt-10 backdrop-blur-md">
@@ -43,8 +45,25 @@ export function Sidebar({ active, onChange }: { active: Tab; onChange: (tab: Tab
           })}
         </nav>
       </div>
-      <div className="px-2 text-xs text-muted-foreground">
-        {t('app.tagline')}
+      <div className="flex items-center justify-between gap-2 px-2 text-xs text-muted-foreground">
+        <span className="truncate">{t('app.tagline')}</span>
+        {available && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!inProgress) startUpdate();
+            }}
+            disabled={inProgress}
+            title={t('app.updateAvailable', { version: available.version })}
+            className={cn(
+              'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors',
+              'bg-primary text-primary-foreground hover:bg-primary/90',
+              inProgress && 'cursor-default opacity-90 hover:bg-primary'
+            )}
+          >
+            {percent !== null ? `${percent}%` : t('app.updateTag')}
+          </button>
+        )}
       </div>
     </aside>
   );

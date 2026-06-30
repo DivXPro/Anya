@@ -2,6 +2,7 @@ package appupdate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,11 @@ import (
 	"sync"
 	"sync/atomic"
 )
+
+// ErrUpdateInProgress is returned by DownloadAndApply when a download/apply is
+// already running, so callers can distinguish a duplicate trigger from a real
+// failure (e.g. to avoid re-enabling UI that the active download still owns).
+var ErrUpdateInProgress = errors.New("update already in progress")
 
 // Manager orchestrates check → download → verify → apply → relaunch.
 type Manager struct {
@@ -44,6 +50,15 @@ func (m *Manager) setState(s State) { m.mu.Lock(); m.state = s; m.mu.Unlock() }
 // State returns the current state-machine value.
 func (m *Manager) State() State { m.mu.Lock(); defer m.mu.Unlock(); return m.state }
 
+// Available returns the update found by the most recent successful check, or nil
+// when none is cached. It performs no network I/O so the UI can query it cheaply
+// (e.g. to render an "update available" indicator after a background check).
+func (m *Manager) Available() *UpdateInfo {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.available
+}
+
 // CheckForUpdate queries for a newer release. Returns (nil, nil) when up to date.
 func (m *Manager) CheckForUpdate(ctx context.Context) (*UpdateInfo, error) {
 	if m.inProgress.Load() {
@@ -75,7 +90,7 @@ func (m *Manager) CheckForUpdate(ctx context.Context) (*UpdateInfo, error) {
 // DownloadAndApply downloads the available update, verifies it, applies it, relaunches.
 func (m *Manager) DownloadAndApply(ctx context.Context) error {
 	if !m.inProgress.CompareAndSwap(false, true) {
-		return fmt.Errorf("update already in progress")
+		return ErrUpdateInProgress
 	}
 	defer m.inProgress.Store(false)
 

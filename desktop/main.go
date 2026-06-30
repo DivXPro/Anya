@@ -62,6 +62,18 @@ func main() {
 		e.Cancel()
 	})
 
+	// macOS: the app runs as a tray-only accessory (no Dock icon / menu bar).
+	// Promote it to a regular app while the window is visible so the standard
+	// menu bar shows, and demote it back when the window hides. Registering
+	// these hooks is also what makes the native WindowShow/WindowHide events
+	// fire. Covers every path: tray show, close button, and Escape.
+	mainWindow.RegisterHook(events.Common.WindowShow, func(_ *application.WindowEvent) {
+		setMacActivationRegular()
+	})
+	mainWindow.RegisterHook(events.Common.WindowHide, func(_ *application.WindowEvent) {
+		setMacActivationAccessory()
+	})
+
 	// ── Menu bar icon ──
 	systemTray := wailsApp.SystemTray.New()
 	systemTray.SetTooltip("Anya")
@@ -121,14 +133,42 @@ func main() {
 }
 
 func setupMacMenuBar(wailsApp *application.App, elfApp *App) {
-	menu := application.DefaultApplicationMenu()
+	menu := application.NewMenu()
 
-	// App menu: customize About to show version
+	// App menu (the first menu macOS shows under the bold app name). Built
+	// manually so "Check for Updates" can sit right under About, instead of
+	// being appended after Quit like a plain DefaultApplicationMenu().Add would.
+	appMenu := menu.AddSubmenu("Anya")
+	appMenu.AddRole(application.About)
+	checkUpdate := appMenu.Add(elfApp.trayText("checkUpdate"))
+	checkUpdate.OnClick(func(_ *application.Context) {
+		go elfApp.CheckForUpdateInteractive()
+	})
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.ServicesMenu)
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.Hide)
+	appMenu.AddRole(application.HideOthers)
+	appMenu.AddRole(application.UnHide)
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.Quit)
+
+	// Standard remaining menus.
+	menu.AddRole(application.FileMenu)
+	menu.AddRole(application.EditMenu)
+	menu.AddRole(application.ViewMenu)
+	menu.AddRole(application.WindowMenu)
+	menu.AddRole(application.HelpMenu)
+
+	// Customize About to show the native about panel.
 	if aboutItem := menu.FindByRole(application.About); aboutItem != nil {
 		aboutItem.OnClick(func(_ *application.Context) {
 			wailsApp.Menu.ShowAbout()
 		})
 	}
+
+	// Let the app keep the menu item's label in sync with the UI language.
+	elfApp.SetMenuCheckUpdateItem(checkUpdate)
 
 	wailsApp.Menu.SetApplicationMenu(menu)
 }
