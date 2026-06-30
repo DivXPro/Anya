@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, amd64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Install wails3
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.106
+      - name: Build frontend
+        run: cd desktop/frontend && npm ci && npm run build
+      - name: Build .app
+        run: |
+          cd desktop
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          wails3 task darwin:build ARCH=${{ matrix.arch }}
+      - name: Zip bundle
+        run: |
+          cd desktop/bin
+          APP="$(ls -d *.app | head -1)"
+          ditto -c -k --keepParent "$APP" "Anya-darwin-${{ matrix.arch }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Anya-darwin-${{ matrix.arch }}
+          path: desktop/bin/Anya-darwin-${{ matrix.arch }}.zip
+
+  build-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Build Windows binary
+        run: ./scripts/build-windows.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Anya-windows-amd64
+          path: desktop/bin/anya-windows-amd64.exe
+
+  release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Stage release assets
+        run: |
+          mkdir -p dist
+          cp artifacts/Anya-darwin-arm64/Anya-darwin-arm64.zip dist/
+          cp artifacts/Anya-darwin-amd64/Anya-darwin-amd64.zip dist/
+          cp artifacts/Anya-windows-amd64/anya-windows-amd64.exe dist/Anya-windows-amd64.exe
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum Anya-darwin-arm64.zip Anya-darwin-amd64.zip Anya-windows-amd64.exe > checksums.txt
+          cat checksums.txt
+      - name: Sign checksums (ed25519)
+        env:
+          UPDATE_SIGNING_PRIVKEY: ${{ secrets.UPDATE_SIGNING_PRIVKEY }}
+        run: |
+          cd desktop
+          go run ./cmd/sign-release -in ../dist/checksums.txt -out ../dist/checksums.txt.sig
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Anya-darwin-arm64.zip
+            dist/Anya-darwin-amd64.zip
+            dist/Anya-windows-amd64.exe
+            dist/checksums.txt
+            dist/checksums.txt.sig
+          generate_release_notes: true
