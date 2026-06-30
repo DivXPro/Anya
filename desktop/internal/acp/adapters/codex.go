@@ -117,14 +117,18 @@ func (a *CodexAdapter) ensureInitWithSkip(skipNewThread bool) error {
 		return nil
 	}
 
+	a.mu.Lock()
+	systemPrompt := a.systemPrompt
+	a.mu.Unlock()
+
 	params := map[string]any{
 		"ephemeral":         false,
 		"approvalPolicy":    "never",
 		"approvalsReviewer": "auto_review",
 		"sandbox":           "workspace-write",
 	}
-	if a.systemPrompt != "" {
-		params["baseInstructions"] = a.systemPrompt
+	if systemPrompt != "" {
+		params["baseInstructions"] = systemPrompt
 	}
 
 	resp, err := a.sendRequest("thread/start", params)
@@ -164,6 +168,12 @@ func (a *CodexAdapter) Send(prompt string, history []acp.Message) (<-chan acp.St
 	a.mu.Unlock()
 
 	if sessionID == "" {
+		a.streamMu.Lock()
+		if a.activeStream == ch {
+			close(ch)
+			a.activeStream = nil
+		}
+		a.streamMu.Unlock()
 		return nil, fmt.Errorf("no codex thread available")
 	}
 
@@ -179,6 +189,12 @@ func (a *CodexAdapter) Send(prompt string, history []acp.Message) (<-chan acp.St
 		},
 	}
 	if err := a.pm.SendJSON(req); err != nil {
+		a.streamMu.Lock()
+		if a.activeStream == ch {
+			close(ch)
+			a.activeStream = nil
+		}
+		a.streamMu.Unlock()
 		return nil, fmt.Errorf("send turn/start: %w", err)
 	}
 
@@ -198,14 +214,18 @@ func (a *CodexAdapter) LoadSession(acpSessionID string, history []acp.Message) e
 	}
 	a.mu.Unlock()
 
+	a.mu.Lock()
+	systemPrompt := a.systemPrompt
+	a.mu.Unlock()
+
 	params := map[string]any{
 		"threadId":          acpSessionID,
 		"approvalPolicy":    "never",
 		"approvalsReviewer": "auto_review",
 		"sandbox":           "workspace-write",
 	}
-	if a.systemPrompt != "" {
-		params["baseInstructions"] = a.systemPrompt
+	if systemPrompt != "" {
+		params["baseInstructions"] = systemPrompt
 	}
 
 	resp, err := a.sendRequest("thread/resume", params)

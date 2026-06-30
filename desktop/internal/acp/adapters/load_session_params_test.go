@@ -21,15 +21,21 @@ func acpHelperReply(id int, result map[string]any) {
 }
 
 // TestACPHelperProcess is not a real test: when re-executed with GO_ACP_HELPER=1
-// it acts as a minimal NDJSON ACP agent over stdio. It answers initialize and
-// session/new, and for session/load it records the received params to the file
-// named by GO_ACP_CAPTURE so the parent test can assert on them. Under a normal
-// `go test` run (without the env var) it returns immediately as a no-op.
+// it acts as a minimal NDJSON ACP agent over stdio. It answers initialize,
+// session/new, and session/prompt (id-matched empty result). For session/load it
+// records the received params to the file named by GO_ACP_CAPTURE so the parent
+// test can assert on them. If GO_ACP_LOG is set, it also appends one JSON line
+// per received request ({"method":..., "params":...}) to that file. Under a
+// normal `go test` run (without GO_ACP_HELPER) it returns immediately as a no-op.
 func TestACPHelperProcess(t *testing.T) {
 	if os.Getenv("GO_ACP_HELPER") != "1" {
 		return
 	}
 	capturePath := os.Getenv("GO_ACP_CAPTURE")
+	// GO_ACP_LOG, when set, names a file the helper appends one JSON line to per
+	// received request ({"method":..., "params":...}), so a parent test can
+	// assert which requests went over the wire and in what order.
+	logPath := os.Getenv("GO_ACP_LOG")
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		line, err := reader.ReadBytes('\n')
@@ -48,6 +54,13 @@ func TestACPHelperProcess(t *testing.T) {
 		if json.Unmarshal(line, &req) != nil {
 			continue
 		}
+		if logPath != "" {
+			entry, _ := json.Marshal(map[string]any{"method": req.Method, "params": req.Params})
+			if f, ferr := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); ferr == nil {
+				_, _ = f.Write(append(entry, '\n'))
+				_ = f.Close()
+			}
+		}
 		switch req.Method {
 		case "session/new":
 			acpHelperReply(req.ID, map[string]any{"sessionId": "sess-new"})
@@ -56,6 +69,10 @@ func TestACPHelperProcess(t *testing.T) {
 				_ = os.WriteFile(capturePath, []byte(req.Params), 0o644)
 			}
 			acpHelperReply(req.ID, map[string]any{"sessionId": "sess-loaded"})
+		case "session/prompt":
+			// Reply with an id-matched result so the adapter's dispatch loop
+			// finishes the turn and closes the stream channel.
+			acpHelperReply(req.ID, map[string]any{})
 		default:
 			acpHelperReply(req.ID, map[string]any{"protocolVersion": 1})
 		}

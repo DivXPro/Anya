@@ -49,7 +49,11 @@ func (a *HermesAdapter) SetSystemPrompt(prompt string) {
 }
 
 func (a *HermesAdapter) ensureInit() error {
-	if a.initDone && a.sessionID != "" {
+	a.mu.Lock()
+	initDone := a.initDone
+	sessionID := a.sessionID
+	a.mu.Unlock()
+	if initDone && sessionID != "" {
 		return nil
 	}
 	if !a.pm.IsRunning() {
@@ -77,31 +81,40 @@ func (a *HermesAdapter) ensureInit() error {
 		return fmt.Errorf("acp initialize: %w", err)
 	}
 	log.Printf("[hermes] initialized: %v", initResp)
+	a.mu.Lock()
 	a.initDone = true
+	sessionID = a.sessionID
+	systemPrompt := a.systemPrompt
+	a.mu.Unlock()
 
-	if a.sessionID != "" {
-		log.Printf("[hermes] using loaded session: %s", a.sessionID)
+	if sessionID != "" {
+		log.Printf("[hermes] using loaded session: %s", sessionID)
 		return nil
 	}
 
 	params := map[string]any{
-		"cwd":        a.effectiveCWDLocked(),
+		"cwd":        a.effectiveCWD(),
 		"mcpServers": []any{},
 	}
-	if a.systemPrompt != "" {
-		params["systemInstructions"] = a.systemPrompt
+	if systemPrompt != "" {
+		params["systemInstructions"] = systemPrompt
 	}
 	sessResp, err := a.sendRequest("session/new", params)
 	if err != nil {
 		return fmt.Errorf("acp session/new: %w", err)
 	}
 
-	if sid, ok := sessResp["sessionId"].(string); ok {
+	a.mu.Lock()
+	sid, ok := sessResp["sessionId"].(string)
+	if ok {
 		a.sessionID = sid
-	} else {
+	}
+	sessionID = a.sessionID
+	a.mu.Unlock()
+	if !ok {
 		log.Printf("[hermes] session/new unexpected response: %+v", sessResp)
 	}
-	log.Printf("[hermes] session created: %s", a.sessionID)
+	log.Printf("[hermes] session created: %s", sessionID)
 	return nil
 }
 
@@ -115,6 +128,7 @@ func (a *HermesAdapter) Send(prompt string, history []acp.Message) (<-chan acp.S
 	id := a.reqID
 	a.lastPromptReqID = id
 	systemPrompt := a.systemPrompt
+	sessionID := a.sessionID
 	ch := make(chan acp.StreamEvent, 256)
 	a.streamMu.Lock()
 	a.activeStream = ch
@@ -122,7 +136,7 @@ func (a *HermesAdapter) Send(prompt string, history []acp.Message) (<-chan acp.S
 	a.mu.Unlock()
 
 	promptParams := map[string]any{
-		"sessionId": a.sessionID,
+		"sessionId": sessionID,
 		"prompt":    []map[string]any{{"type": "text", "text": prompt}},
 	}
 	if systemPrompt != "" {
@@ -136,6 +150,12 @@ func (a *HermesAdapter) Send(prompt string, history []acp.Message) (<-chan acp.S
 	}
 
 	if err := a.pm.SendJSON(req); err != nil {
+		a.streamMu.Lock()
+		if a.activeStream == ch {
+			close(ch)
+			a.activeStream = nil
+		}
+		a.streamMu.Unlock()
 		return nil, fmt.Errorf("send request: %w", err)
 	}
 
@@ -146,7 +166,10 @@ func (a *HermesAdapter) LoadSession(acpSessionID string, history []acp.Message) 
 	if err := a.ensureInit(); err != nil {
 		return err
 	}
-	if a.sessionID == acpSessionID {
+	a.mu.Lock()
+	current := a.sessionID
+	a.mu.Unlock()
+	if current == acpSessionID {
 		return nil
 	}
 
@@ -158,12 +181,15 @@ func (a *HermesAdapter) LoadSession(acpSessionID string, history []acp.Message) 
 	if err != nil {
 		return fmt.Errorf("acp session/load: %w", err)
 	}
+	a.mu.Lock()
 	if sid, ok := resp["sessionId"].(string); ok && sid != "" {
 		a.sessionID = sid
 	} else {
 		a.sessionID = acpSessionID
 	}
-	log.Printf("[hermes] session loaded: %s", a.sessionID)
+	sessionID := a.sessionID
+	a.mu.Unlock()
+	log.Printf("[hermes] session loaded: %s", sessionID)
 	return nil
 }
 
@@ -180,10 +206,6 @@ func (a *HermesAdapter) Stop() error {
 	a.mu.Lock()
 	a.resetPending = false
 	a.mu.Unlock()
-	return a.pm.Stop()
-}
-func (a *HermesAdapter) stopLocked() error {
-	a.resetPending = false
 	return a.pm.Stop()
 }
 
@@ -302,7 +324,10 @@ func (a *HermesAdapter) dispatchLoop(pm *acp.ProcessManager) {
 				continue
 			}
 
-			if msg.Method == "session/update" && msg.Params.SessionID == a.sessionID {
+			a.mu.Lock()
+			sessionID := a.sessionID
+			a.mu.Unlock()
+			if msg.Method == "session/update" && msg.Params.SessionID == sessionID {
 				evt := acp.StreamEvent{}
 				switch msg.Params.Update.SessionUpdate {
 				case "agent_message_chunk":
@@ -343,15 +368,18 @@ func (a *HermesAdapter) dispatchLoop(pm *acp.ProcessManager) {
 			}
 
 		case <-done:
-			// Check for pending reset after stream completes
+			// Check for pending reset after stream completes. pm.Stop() blocks on
+			// process termination, so decide under a.mu but call Stop() outside it
+			// to avoid stalling other a.mu users while the child is torn down.
 			a.mu.Lock()
-			if a.resetPending {
-				a.resetPending = false
-				if err := a.stopLocked(); err != nil {
+			shouldStop := a.resetPending
+			a.resetPending = false
+			a.mu.Unlock()
+			if shouldStop {
+				if err := a.pm.Stop(); err != nil {
 					log.Printf("[hermes] delayed stop after reset failed: %v", err)
 				}
 			}
-			a.mu.Unlock()
 			return
 		}
 	}

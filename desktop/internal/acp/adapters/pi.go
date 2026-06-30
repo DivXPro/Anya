@@ -85,6 +85,12 @@ func (a *PiAdapter) Send(prompt string, history []acp.Message) (<-chan acp.Strea
 		"message": prompt,
 	}
 	if err := a.pm.SendJSON(req); err != nil {
+		a.streamMu.Lock()
+		if a.activeStream == ch {
+			close(ch)
+			a.activeStream = nil
+		}
+		a.streamMu.Unlock()
 		return nil, fmt.Errorf("send request: %w", err)
 	}
 
@@ -95,7 +101,10 @@ func (a *PiAdapter) LoadSession(acpSessionID string, history []acp.Message) erro
 	if err := a.ensureInit(); err != nil {
 		return err
 	}
-	if a.sessionID == acpSessionID {
+	a.mu.Lock()
+	currentSessionID := a.sessionID
+	a.mu.Unlock()
+	if currentSessionID == acpSessionID {
 		return nil
 	}
 
