@@ -9,7 +9,42 @@ permissions:
   contents: write
 
 jobs:
+  build-firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: pio-${{ runner.os }}-
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build firmware
+        run: |
+          cd firmware
+          VERSION="$(git describe --tags --always --dirty)"
+          sed -i.bak "s|'-DFIRMWARE_VERSION=\".*\"'|'-DFIRMWARE_VERSION=\"$VERSION\"'|" platformio.ini
+          rm -f platformio.ini.bak
+          pio run
+          mkdir -p out
+          cp .pio/build/m5stickc-s3/firmware.bin out/firmware.bin
+          printf '%s' "$VERSION" > out/version.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-assets
+          path: firmware/out/
+
   build-macos:
+    needs: build-firmware
     runs-on: macos-latest
     strategy:
       matrix:
@@ -26,6 +61,11 @@ jobs:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Download firmware assets
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-assets
+          path: desktop/internal/firmware/assets
       - name: Install wails3
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.106
       - name: Generate bindings
@@ -51,6 +91,7 @@ jobs:
           path: desktop/bin/Anya-darwin-${{ matrix.arch }}.zip
 
   build-windows:
+    needs: build-firmware
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,6 +105,11 @@ jobs:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Download firmware assets
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-assets
+          path: desktop/internal/firmware/assets
       - name: Generate bindings
         run: |
           cd desktop
