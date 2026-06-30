@@ -5,6 +5,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CD="$ROOT/desktop"
 export PATH="$PATH:$(go env GOPATH)/bin"
 
+VERSION="$(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || echo dev)"
+COMMIT="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo none)"
+
 PACKAGE=false
 INSTALL_SCOPE="${INSTALL_SCOPE:-user}"
 ARCH="${ARCH:-amd64}"
@@ -57,7 +60,7 @@ build_exe() {
     GOOS=windows GOARCH="$ARCH" CGO_ENABLED=0 go build \
       -tags production \
       -trimpath \
-      -ldflags="-w -s -H windowsgui" \
+      -ldflags="-w -s -H windowsgui -X desktop/internal/version.Version=$VERSION -X desktop/internal/version.Commit=$COMMIT" \
       -o "$CD/bin/anya-windows-$ARCH.exe" \
       .
   fi
