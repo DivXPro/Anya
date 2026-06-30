@@ -5,7 +5,7 @@
   },
   "tabs": {
     "device": "设备",
-    "agent": "Agent",
+    "agent": "智能体",
     "history": "历史",
     "settings": "设置"
   },
@@ -35,7 +35,7 @@
     "tts": {
       "title": "语音播报",
       "enabled": "启用 TTS 语音播报",
-      "enabledDesc": "将 Agent 的文本回复转为语音并通过设备播放",
+      "enabledDesc": "将智能体的文本回复转为语音并通过设备播放",
       "speed": "播报语速",
       "speedSlow": "慢速",
       "speedNormal": "正常",
@@ -96,14 +96,14 @@
     "otaUpgradeAvailable": "可更新"
   },
   "agent": {
-    "title": "Agent",
-    "subtitle": "选择当前启用的 AI Agent",
+    "title": "智能体",
+    "subtitle": "选择当前启用的 AI 智能体",
     "workingDirectory": {
       "title": "工作目录",
       "browse": "浏览",
       "reset": "重置",
       "placeholder": "未设置工作目录",
-      "description": "Agent 执行任务时使用的默认工作目录。未设置时将使用系统默认目录。",
+      "description": "智能体执行任务时使用的默认工作目录。未设置时将使用系统默认目录。",
       "dialogTitle": "选择工作目录",
       "saveFailed": "保存失败"
     },
@@ -126,7 +126,7 @@
     "empty": "暂无历史记录",
     "loading": "加载中...",
     "roleUser": "我",
-    "roleAssistant": "Agent",
+    "roleAssistant": "智能体",
     "noContent": "（无内容）"
   },
   "status": {
@@ -139,6 +139,6 @@
     "noDevice": "未连接设备",
     "open": "打开 Anya",
     "quit": "退出",
-    "agent": "Agent"
+    "agent": "智能体"
   }
 }

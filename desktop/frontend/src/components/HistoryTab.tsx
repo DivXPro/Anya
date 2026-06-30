@@ -158,9 +158,6 @@ function HistoryTab() {
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">{t("tabs.history")}</h1>
-          <p className="text-sm text-muted-foreground">
-            {t("history.subtitle")}
-          </p>
         </div>
         <div className="relative w-64">
           <RiSearchLine className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
