@@ -18,6 +18,7 @@ import (
 	"desktop/internal/acp"
 	"desktop/internal/acp/adapters"
 	"desktop/internal/agentinstall"
+	"desktop/internal/appupdate"
 	logoassets "desktop/internal/assets"
 	"desktop/internal/discovery"
 	"desktop/internal/firmware"
@@ -55,6 +56,7 @@ type App struct {
 	flashMgr       *firmware.Manager
 	otaMgr         *firmware.OTAManager
 	agentInstaller *agentinstall.Installer
+	updater        *appupdate.Manager
 
 	confirmMu    sync.Mutex
 	confirmWaits map[string]chan string
@@ -68,6 +70,51 @@ type App struct {
 // CurrentVersion returns the running application version (bound to the frontend).
 func (a *App) CurrentVersion() string {
 	return version.Version
+}
+
+// CheckForUpdate queries for a newer release; returns nil when up to date.
+func (a *App) CheckForUpdate() (*appupdate.UpdateInfo, error) {
+	if a.updater == nil {
+		return nil, fmt.Errorf("self-update unavailable in this build")
+	}
+	return a.updater.CheckForUpdate(a.ctx)
+}
+
+// DownloadAndApplyUpdate downloads, verifies, applies the update and relaunches.
+func (a *App) DownloadAndApplyUpdate() error {
+	if a.updater == nil {
+		return fmt.Errorf("self-update unavailable in this build")
+	}
+	return a.updater.DownloadAndApply(a.ctx)
+}
+
+func (a *App) backgroundUpdateCheck() {
+	time.Sleep(8 * time.Second) // don't block startup
+	for {
+		if a.updateAutoCheckEnabled() {
+			if _, err := a.updater.CheckForUpdate(a.ctx); err != nil {
+				log.Printf("[update] background check failed: %v", err)
+			}
+		}
+		time.Sleep(24 * time.Hour)
+	}
+}
+
+func (a *App) updateAutoCheckEnabled() bool {
+	v, err := store.GetSetting(a.db, "update_auto_check")
+	if err != nil {
+		return true // default on (key absent)
+	}
+	return v != "false"
+}
+
+// wailsEmitter implements appupdate.Emitter via the Wails event bus.
+type wailsEmitter struct{}
+
+func (wailsEmitter) Emit(name string, data any) {
+	if app := application.Get(); app != nil && app.Event != nil {
+		app.Event.Emit(name, data)
+	}
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
@@ -259,6 +306,18 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 
 	// 2.1 Detect which agent CLIs are installed and select the first available one.
 	a.agentInstaller = agentinstall.New(application.Get(), a.db)
+	if verifier, err := appupdate.DefaultVerifier(); err != nil {
+		log.Printf("[update] self-update disabled: %v", err)
+	} else {
+		a.updater = appupdate.NewManager(
+			version.Version,
+			appupdate.NewChecker(version.RepoOwner, version.RepoName),
+			verifier,
+			appupdate.NewApplier(),
+			wailsEmitter{},
+		)
+		go a.backgroundUpdateCheck()
+	}
 	if err := a.agentInstaller.DetectAll(); err != nil {
 		log.Printf("[elf] detect agents error: %v", err)
 	}
