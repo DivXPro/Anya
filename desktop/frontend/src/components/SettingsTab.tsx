@@ -20,6 +20,15 @@ import {
 } from '@remixicon/react';
 import { useAppSettings, type Theme } from '@/hooks/useAppSettings';
 import { CurrentVersion } from '@/lib/update-api';
+import { Events } from '@wailsio/runtime';
+import {
+  CheckForUpdate,
+  DownloadAndApplyUpdate,
+  EventUpdateProgress,
+  EventUpdateApplying,
+  EventUpdateError,
+  type UpdateInfo,
+} from '@/lib/update-api';
 
 function formatBytes(n: number): string {
   if (n <= 0) return '0 B';
@@ -44,6 +53,58 @@ function SettingsTab() {
   useEffect(() => {
     CurrentVersion().then(setAppVersion).catch(() => setAppVersion(''));
   }, []);
+
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateUpToDate, setUpdateUpToDate] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<number | null>(null);
+  const [updateApplying, setUpdateApplying] = useState(false);
+  const [updateError, setUpdateError] = useState('');
+
+  useEffect(() => {
+    const offProgress = Events.On(EventUpdateProgress, (e) => {
+      const d = e.data as { percent: number };
+      setUpdateProgress(d?.percent ?? 0);
+    });
+    const offApplying = Events.On(EventUpdateApplying, () => setUpdateApplying(true));
+    const offError = Events.On(EventUpdateError, (e) => {
+      const d = e.data as { message: string };
+      setUpdateError(d?.message ?? 'error');
+      setUpdateProgress(null);
+    });
+    return () => {
+      offProgress();
+      offApplying();
+      offError();
+    };
+  }, []);
+
+  const checkUpdate = async () => {
+    setUpdateChecking(true);
+    setUpdateUpToDate(false);
+    setUpdateError('');
+    try {
+      const info = await CheckForUpdate();
+      if (info) setUpdateInfo(info);
+      else setUpdateUpToDate(true);
+    } catch (err) {
+      setUpdateError(String(err));
+    } finally {
+      setUpdateChecking(false);
+    }
+  };
+
+  const applyUpdate = async () => {
+    setUpdateError('');
+    setUpdateProgress(0);
+    try {
+      await DownloadAndApplyUpdate();
+    } catch (err) {
+      setUpdateError(String(err));
+      setUpdateProgress(null);
+    }
+  };
+
   const [flashProgress, setFlashProgress] = useState<FlashProgress>({
     running: false,
     stage: FlashStage.StageIdle,
@@ -161,9 +222,59 @@ function SettingsTab() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">{t('settings.title')}</h1>
-        {appVersion && (
-          <p className="text-xs text-muted-foreground">v{appVersion.replace(/^v/, '')}</p>
-        )}
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold">{t('settings.appUpdate.title')}</h2>
+        <div className="rounded-lg border bg-card">
+          <div className="flex items-center justify-between border-b p-3">
+            <Label>{t('settings.appUpdate.currentVersion')}</Label>
+            <Badge variant="secondary">v{(appVersion || 'dev').replace(/^v/, '')}</Badge>
+          </div>
+
+          <div className="space-y-3 p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                {updateUpToDate
+                  ? t('settings.appUpdate.upToDate')
+                  : updateInfo
+                    ? t('settings.appUpdate.available', { version: updateInfo.version })
+                    : ''}
+              </p>
+              {updateInfo ? (
+                <Button size="sm" onClick={applyUpdate} disabled={updateApplying || updateProgress !== null}>
+                  {updateApplying ? t('settings.appUpdate.applying') : t('settings.appUpdate.download')}
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={checkUpdate} disabled={updateChecking}>
+                  {updateChecking ? t('settings.appUpdate.checking') : t('settings.appUpdate.check')}
+                </Button>
+              )}
+            </div>
+
+            {updateInfo?.notes && (
+              <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-words max-h-32 overflow-auto">
+                {updateInfo.notes}
+              </pre>
+            )}
+
+            {updateProgress !== null && (
+              <div className="space-y-1.5">
+                <Progress value={updateProgress} />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{updateProgress}%</span>
+                  <span>{updateApplying ? t('settings.appUpdate.restartHint') : ''}</span>
+                </div>
+              </div>
+            )}
+
+            {updateError && (
+              <p className="text-sm text-red-700 dark:text-red-400">
+                {t('settings.appUpdate.failed')}: {updateError}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="space-y-3">
