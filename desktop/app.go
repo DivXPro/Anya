@@ -563,6 +563,10 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 				// corrupt the shared ACP session/stream).
 				if !a.tryBeginTurn(sessionID) {
 					log.Printf("[elf] ignoring audio_end: a turn is already in progress for session %s", sessionID)
+					// Signal the device that the request was dropped so it leaves
+					// the SENDING state and stops waiting, instead of relying on
+					// its turn watchdog to time out ~30s later.
+					dev.SendText(gateway.SummaryMessage("正在处理上一条请求，请稍候"))
 					continue
 				}
 				go func(buf []byte) {

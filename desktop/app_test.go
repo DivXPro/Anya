@@ -3,10 +3,13 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"desktop/internal/acp"
 	"desktop/internal/acp/adapters"
+	"desktop/internal/gateway"
 	"desktop/internal/store"
 )
 
@@ -107,5 +110,94 @@ func TestAppStartupSyncsCWDToRouter(t *testing.T) {
 	// Verify the stored cwd was loaded
 	if a.agentCWD != "/tmp/test-workspace" {
 		t.Fatalf("expected agentCWD '/tmp/test-workspace', got %q", a.agentCWD)
+	}
+}
+
+// fakeDevice is a minimal DeviceAdapter used to drive handleDeviceEvents in
+// tests. It records every message sent to the device.
+type fakeDevice struct {
+	events     chan gateway.DeviceEvent
+	binary     chan []byte
+	disconnect chan struct{}
+	mu         sync.Mutex
+	sent       []gateway.DeviceMessage
+}
+
+func newFakeDevice() *fakeDevice {
+	return &fakeDevice{
+		events:     make(chan gateway.DeviceEvent, 8),
+		binary:     make(chan []byte, 8),
+		disconnect: make(chan struct{}),
+	}
+}
+
+func (f *fakeDevice) Info() gateway.DeviceInfo { return gateway.DeviceInfo{ID: "dev1"} }
+func (f *fakeDevice) SetDeviceID(string)       {}
+func (f *fakeDevice) SetDeviceName(string)     {}
+func (f *fakeDevice) SendText(msg gateway.DeviceMessage) error {
+	f.mu.Lock()
+	f.sent = append(f.sent, msg)
+	f.mu.Unlock()
+	return nil
+}
+func (f *fakeDevice) SendBinary([]byte) error                           { return nil }
+func (f *fakeDevice) ReceiveEvent() (<-chan gateway.DeviceEvent, error) { return f.events, nil }
+func (f *fakeDevice) ReceiveBinary() (<-chan []byte, error)             { return f.binary, nil }
+func (f *fakeDevice) OnDisconnect() <-chan struct{}                     { return f.disconnect }
+func (f *fakeDevice) Close() error                                      { return nil }
+
+func (f *fakeDevice) sentMessages() []gateway.DeviceMessage {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]gateway.DeviceMessage(nil), f.sent...)
+}
+
+// When a second voice request arrives while a turn is already in flight, the
+// desktop must notify the device (so it leaves the SENDING state) instead of
+// silently dropping the request and leaving the device waiting.
+func TestAudioEndWhileTurnInProgressNotifiesDevice(t *testing.T) {
+	a := NewApp()
+	const sessionID = "sess-busy"
+
+	// Simulate an in-flight turn for this session.
+	if !a.tryBeginTurn(sessionID) {
+		t.Fatal("precondition: begin turn should succeed")
+	}
+
+	dev := newFakeDevice()
+	done := make(chan struct{})
+	go func() {
+		a.handleDeviceEvents(dev, sessionID)
+		close(done)
+	}()
+
+	// Device finishes recording and submits a second request.
+	dev.events <- gateway.DeviceEvent{Type: "audio_end"}
+
+	// The desktop must send a summary back so the device stops waiting.
+	deadline := time.After(2 * time.Second)
+	for {
+		notified := false
+		for _, m := range dev.sentMessages() {
+			if m.Type == "summary" && m.Text != "" {
+				notified = true
+			}
+		}
+		if notified {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("device was not notified after dropped audio_end; sent=%+v", dev.sentMessages())
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	// Closing the events channel makes the loop exit cleanly.
+	close(dev.events)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handleDeviceEvents did not exit after events channel closed")
 	}
 }
