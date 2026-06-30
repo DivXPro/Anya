@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"testing"
+	"time"
 
 	"desktop/internal/acp"
 )
@@ -85,4 +86,85 @@ func TestClaudeAdapterResetPending(t *testing.T) {
 		a.activeStream = nil
 	}
 	a.streamMu.Unlock()
+}
+
+// TestClaudeAdapterFinishStreamReleasesLock guards against a self-deadlock
+// regression: finishStream must release streamMu so that subsequent turns
+// (Send) and update dispatch (dispatchUpdates) can re-acquire it. Before the
+// fix, finishStream locked streamMu twice and hung forever holding the write
+// lock, so only the first turn ever produced a response.
+func TestClaudeAdapterFinishStreamReleasesLock(t *testing.T) {
+	a := NewClaudeAdapter()
+
+	ch := make(chan acp.StreamEvent, 4)
+	a.streamMu.Lock()
+	a.activeStream = ch
+	a.streamMu.Unlock()
+
+	finished := make(chan struct{})
+	go func() {
+		a.finishStream(nil)
+		close(finished)
+	}()
+	select {
+	case <-finished:
+	case <-time.After(2 * time.Second):
+		t.Fatal("finishStream deadlocked")
+	}
+
+	// A terminal "done" event must have been delivered and the channel closed.
+	// The range loop returns only once the channel is closed.
+	var sawDone bool
+	for evt := range ch {
+		if evt.IsDone() {
+			sawDone = true
+		}
+	}
+	if !sawDone {
+		t.Fatal("expected done event on stream")
+	}
+
+	// activeStream must be cleared and the lock must be re-acquirable, i.e. it
+	// was not leaked by a deadlocked goroutine.
+	acquired := make(chan struct{})
+	go func() {
+		a.streamMu.Lock()
+		a.activeStream = nil
+		a.streamMu.Unlock()
+		close(acquired)
+	}()
+	select {
+	case <-acquired:
+	case <-time.After(2 * time.Second):
+		t.Fatal("streamMu was leaked: could not re-acquire after finishStream")
+	}
+}
+
+// TestClaudeAdapterFinishStreamResetPending guards the reset path: when a cwd
+// change set resetPending during an active stream, finishStream runs stopLocked
+// (which itself takes streamMu) after the stream completes. This must not
+// deadlock and must clear resetPending.
+func TestClaudeAdapterFinishStreamResetPending(t *testing.T) {
+	a := NewClaudeAdapter()
+
+	ch := make(chan acp.StreamEvent, 4)
+	a.streamMu.Lock()
+	a.activeStream = ch
+	a.streamMu.Unlock()
+	a.resetPending = true
+
+	finished := make(chan struct{})
+	go func() {
+		a.finishStream(nil)
+		close(finished)
+	}()
+	select {
+	case <-finished:
+	case <-time.After(2 * time.Second):
+		t.Fatal("finishStream with resetPending deadlocked")
+	}
+
+	if a.resetPending {
+		t.Fatal("expected resetPending to be cleared after finishStream")
+	}
 }

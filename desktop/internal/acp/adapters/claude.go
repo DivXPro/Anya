@@ -113,7 +113,7 @@ func (a *ClaudeAdapter) newSession() error {
 	a.mu.Unlock()
 
 	params := map[string]any{
-		"cwd":        a.effectiveCWDLocked(),
+		"cwd":        a.effectiveCWD(),
 		"mcpServers": []any{},
 	}
 	if systemPrompt != "" {
@@ -166,6 +166,7 @@ func (a *ClaudeAdapter) Send(prompt string, history []acp.Message) (<-chan acp.S
 	a.reqID++
 	id := a.reqID
 	systemPrompt := a.systemPrompt
+	sessionID := a.sessionID
 	ch := make(chan acp.StreamEvent, 256)
 	a.streamMu.Lock()
 	a.activeStream = ch
@@ -173,7 +174,7 @@ func (a *ClaudeAdapter) Send(prompt string, history []acp.Message) (<-chan acp.S
 	a.mu.Unlock()
 
 	params := map[string]any{
-		"sessionId": a.sessionID,
+		"sessionId": sessionID,
 		"prompt":    []map[string]any{{"type": "text", "text": prompt}},
 	}
 	if systemPrompt != "" {
@@ -182,16 +183,24 @@ func (a *ClaudeAdapter) Send(prompt string, history []acp.Message) (<-chan acp.S
 
 	go func() {
 		_, err := a.clientRequest(id, "session/prompt", params)
+		a.finishStream(err)
+	}()
 
-		a.streamMu.Lock()
-		defer a.streamMu.Unlock()
-		active := a.activeStream
-		if active == nil {
-			return
-		}
-		if err != nil {
+	return ch, nil
+}
+
+// finishStream is invoked once the session/prompt request returns. It delivers a
+// terminal event (error and/or done) to the active stream, closes it, and then
+// handles any pending session reset. It must be called with neither a.streamMu
+// nor a.mu held: it acquires them itself, and stopLocked (reached via the reset
+// path) also takes streamMu, so holding streamMu across that call would deadlock.
+func (a *ClaudeAdapter) finishStream(sendErr error) {
+	a.streamMu.Lock()
+	active := a.activeStream
+	if active != nil {
+		if sendErr != nil {
 			select {
-			case active <- acp.StreamEvent{Type: "error", Error: err}:
+			case active <- acp.StreamEvent{Type: "error", Error: sendErr}:
 			default:
 			}
 		}
@@ -200,22 +209,19 @@ func (a *ClaudeAdapter) Send(prompt string, history []acp.Message) (<-chan acp.S
 		default:
 		}
 		close(active)
-		a.streamMu.Lock()
 		a.activeStream = nil
-		a.streamMu.Unlock()
+	}
+	a.streamMu.Unlock()
 
-		// Check for pending reset after stream completes
-		a.mu.Lock()
-		if a.resetPending {
-			a.resetPending = false
-			if err := a.stopLocked(); err != nil {
-				log.Printf("[claude] delayed stop after reset failed: %v", err)
-			}
+	// Check for pending reset after stream completes.
+	a.mu.Lock()
+	if a.resetPending {
+		a.resetPending = false
+		if err := a.stopLocked(); err != nil {
+			log.Printf("[claude] delayed stop after reset failed: %v", err)
 		}
-		a.mu.Unlock()
-	}()
-
-	return ch, nil
+	}
+	a.mu.Unlock()
 }
 
 func (a *ClaudeAdapter) CurrentSessionID() string {
@@ -264,8 +270,9 @@ func (a *ClaudeAdapter) LoadSession(acpSessionID string, history []acp.Message) 
 	} else {
 		a.sessionID = acpSessionID
 	}
+	loaded := a.sessionID
 	a.mu.Unlock()
-	log.Printf("[claude] session loaded: %s", a.sessionID)
+	log.Printf("[claude] session loaded: %s", loaded)
 	return nil
 }
 
@@ -398,7 +405,10 @@ func (a *ClaudeAdapter) dispatchUpdates(updates <-chan claudeacp.RPCMessage) {
 			log.Printf("[claude] update parse error: %v", err)
 			continue
 		}
-		if payload.SessionID != a.sessionID {
+		a.mu.Lock()
+		sessionID := a.sessionID
+		a.mu.Unlock()
+		if payload.SessionID != sessionID {
 			continue
 		}
 
