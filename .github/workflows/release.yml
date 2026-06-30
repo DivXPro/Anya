@@ -28,6 +28,11 @@ jobs:
           cache-dependency-path: desktop/frontend/package-lock.json
       - name: Install wails3
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.106
+      - name: Generate bindings
+        run: |
+          cd desktop
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          wails3 generate bindings -ts -i
       - name: Build frontend
         run: cd desktop/frontend && npm ci && npm run build
       - name: Build .app
@@ -59,6 +64,10 @@ jobs:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Generate bindings
+        run: |
+          cd desktop
+          go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.106 generate bindings -ts -i
       - name: Build Windows binary
         run: ./scripts/build-windows.sh
       - uses: actions/upload-artifact@v4
