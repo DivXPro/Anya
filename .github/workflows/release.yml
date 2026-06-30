@@ -101,7 +101,7 @@ jobs:
           cd desktop
           export PATH="$PATH:$(go env GOPATH)/bin"
           wails3 task darwin:package ARCH=${{ matrix.arch }}
-      - name: Zip bundle
+      - name: Build DMG installer
         run: |
           cd desktop/bin
           APP="$(ls -d anya.app 2>/dev/null | head -1)"
@@ -110,11 +110,27 @@ jobs:
             ls -la
             exit 1
           fi
+          brew install create-dmg
+          create-dmg \
+            --volname "Anya Installer" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --app-drop-link 450 185 \
+            --icon "$APP" 150 185 \
+            "Anya-darwin-${{ matrix.arch }}.dmg" \
+            "$APP"
+      - name: Zip bundle
+        run: |
+          cd desktop/bin
+          APP="$(ls -d anya.app 2>/dev/null | head -1)"
           ditto -c -k --keepParent "$APP" "Anya-darwin-${{ matrix.arch }}.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: Anya-darwin-${{ matrix.arch }}
-          path: desktop/bin/Anya-darwin-${{ matrix.arch }}.zip
+          path: |
+            desktop/bin/Anya-darwin-${{ matrix.arch }}.zip
+            desktop/bin/Anya-darwin-${{ matrix.arch }}.dmg
 
   build-windows:
     needs: [build-firmware, generate-bindings]
@@ -164,12 +180,14 @@ jobs:
         run: |
           mkdir -p dist
           cp artifacts/Anya-darwin-arm64/Anya-darwin-arm64.zip dist/
+          cp artifacts/Anya-darwin-arm64/Anya-darwin-arm64.dmg dist/
           cp artifacts/Anya-darwin-amd64/Anya-darwin-amd64.zip dist/
+          cp artifacts/Anya-darwin-amd64/Anya-darwin-amd64.dmg dist/
           cp artifacts/Anya-windows-amd64/anya-windows-amd64.exe dist/Anya-windows-amd64.exe
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum Anya-darwin-arm64.zip Anya-darwin-amd64.zip Anya-windows-amd64.exe > checksums.txt
+          sha256sum Anya-darwin-arm64.zip Anya-darwin-arm64.dmg Anya-darwin-amd64.zip Anya-darwin-amd64.dmg Anya-windows-amd64.exe > checksums.txt
           cat checksums.txt
       - name: Sign checksums (ed25519)
         env:
@@ -182,7 +200,9 @@ jobs:
         with:
           files: |
             dist/Anya-darwin-arm64.zip
+            dist/Anya-darwin-arm64.dmg
             dist/Anya-darwin-amd64.zip
+            dist/Anya-darwin-amd64.dmg
             dist/Anya-windows-amd64.exe
             dist/checksums.txt
             dist/checksums.txt.sig
