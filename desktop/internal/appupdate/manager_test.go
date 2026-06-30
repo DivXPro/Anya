@@ -120,3 +120,12 @@ func TestManagerUpToDate(t *testing.T) {
 		t.Fatalf("expected up-to-date (nil), got %+v", info)
 	}
 }
+
+func TestManagerRejectsConcurrentApply(t *testing.T) {
+	m := NewManager("v1.0.0", NewChecker("o", "r"), &Verifier{}, &fakeApplier{}, &fakeEmitter{})
+	m.available = &UpdateInfo{Version: "v9.9.9", AssetName: "x"}
+	m.inProgress.Store(true) // simulate an apply already running
+	if err := m.DownloadAndApply(context.Background()); err == nil {
+		t.Fatal("expected 'already in progress' error")
+	}
+}

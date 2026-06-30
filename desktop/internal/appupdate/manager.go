@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 )
 
 // Manager orchestrates check → download → verify → apply → relaunch.
@@ -22,6 +23,8 @@ type Manager struct {
 	mu        sync.Mutex
 	state     State
 	available *UpdateInfo
+
+	inProgress atomic.Bool
 }
 
 func NewManager(current string, checker *Checker, verifier *Verifier, applier Applier, emit Emitter) *Manager {
@@ -43,6 +46,9 @@ func (m *Manager) State() State { m.mu.Lock(); defer m.mu.Unlock(); return m.sta
 
 // CheckForUpdate queries for a newer release. Returns (nil, nil) when up to date.
 func (m *Manager) CheckForUpdate(ctx context.Context) (*UpdateInfo, error) {
+	if m.inProgress.Load() {
+		return nil, nil
+	}
 	m.setState(StateChecking)
 	info, err := m.checker.Latest(ctx)
 	if err != nil {
@@ -68,6 +74,11 @@ func (m *Manager) CheckForUpdate(ctx context.Context) (*UpdateInfo, error) {
 
 // DownloadAndApply downloads the available update, verifies it, applies it, relaunches.
 func (m *Manager) DownloadAndApply(ctx context.Context) error {
+	if !m.inProgress.CompareAndSwap(false, true) {
+		return fmt.Errorf("update already in progress")
+	}
+	defer m.inProgress.Store(false)
+
 	m.mu.Lock()
 	info := m.available
 	m.mu.Unlock()
@@ -167,7 +178,8 @@ func (m *Manager) downloadBytes(ctx context.Context, url string) ([]byte, error)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
-	return io.ReadAll(resp.Body)
+	const maxMetaBytes = 1 << 20 // 1 MiB ceiling for checksums/signature
+	return io.ReadAll(io.LimitReader(resp.Body, maxMetaBytes))
 }
 
 type progressWriter struct {

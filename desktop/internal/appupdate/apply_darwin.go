@@ -53,13 +53,12 @@ func (a *darwinApplier) Apply(assetPath string) error {
 	if err != nil {
 		return err
 	}
-	if !writable(bundle) {
-		return fmt.Errorf("cannot update: %s is not writable (move the app to /Applications and retry)", bundle)
-	}
-
-	work, err := os.MkdirTemp("", "anya-apply-*")
+	parent := filepath.Dir(bundle)
+	// Work in the bundle's parent dir so the final rename stays on one volume,
+	// and so a non-writable install location fails clearly here.
+	work, err := os.MkdirTemp(parent, ".anya-update-")
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot update %s: install location not writable (check permissions or reinstall): %w", parent, err)
 	}
 	defer os.RemoveAll(work)
 
@@ -90,15 +89,6 @@ func (a *darwinApplier) Relaunch() error {
 	}
 	go func() { os.Exit(0) }()
 	return nil
-}
-
-func writable(path string) bool {
-	probe := filepath.Join(path, ".anya-write-probe")
-	if err := os.WriteFile(probe, []byte("x"), 0o644); err != nil {
-		return false
-	}
-	_ = os.Remove(probe)
-	return true
 }
 
 func findDotApp(root string) (string, error) {
@@ -133,6 +123,21 @@ func unzip(src, dst string) error {
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
+		}
+		if f.FileInfo().Mode()&os.ModeSymlink != 0 {
+			rc, err := f.Open()
+			if err != nil {
+				return err
+			}
+			linkTarget, rErr := io.ReadAll(rc)
+			rc.Close()
+			if rErr != nil {
+				return rErr
+			}
+			if err := os.Symlink(string(linkTarget), target); err != nil {
+				return err
+			}
+			continue
 		}
 		rc, err := f.Open()
 		if err != nil {
