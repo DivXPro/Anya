@@ -111,16 +111,27 @@ func (r *Router) idleReaper() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 	for range ticker.C {
+		// Collect idle adapters under the lock, then Stop() them outside it.
+		// adapter.Stop() can block (terminate child / close runtime); holding the
+		// write lock across it would stall every other Router method, including
+		// Route on the voice path.
+		var toStop []ACPAdapter
+		var toStopIDs []string
 		r.mu.Lock()
 		for id, last := range r.lastUsed {
 			if time.Since(last) > r.idleTimeout {
 				if adapter, ok := r.adapters[id]; ok && adapter.IsRunning() {
-					log.Printf("[router] idle timeout for %s, stopping", id)
-					adapter.Stop()
+					toStop = append(toStop, adapter)
+					toStopIDs = append(toStopIDs, id)
 				}
 				delete(r.lastUsed, id)
 			}
 		}
 		r.mu.Unlock()
+
+		for i, adapter := range toStop {
+			log.Printf("[router] idle timeout for %s, stopping", toStopIDs[i])
+			adapter.Stop()
+		}
 	}
 }

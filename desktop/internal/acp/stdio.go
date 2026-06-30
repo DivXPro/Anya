@@ -23,6 +23,7 @@ const (
 
 type ProcessManager struct {
 	mu      sync.Mutex
+	writeMu sync.Mutex
 	cmd     *exec.Cmd
 	stdin   io.WriteCloser
 	stdout  io.ReadCloser
@@ -209,13 +210,16 @@ func (pm *ProcessManager) IsRunning() bool {
 
 func (pm *ProcessManager) Send(data []byte) error {
 	pm.mu.Lock()
-	defer pm.mu.Unlock()
 	if !pm.running {
+		pm.mu.Unlock()
 		return fmt.Errorf("process not running")
 	}
+	stdin := pm.stdin
+	framing := pm.framing
+	pm.mu.Unlock()
 
 	var frame []byte
-	switch pm.framing {
+	switch framing {
 	case NDJSONFraming:
 		frame = append(data, '\n')
 	default:
@@ -223,7 +227,13 @@ func (pm *ProcessManager) Send(data []byte) error {
 		frame = append([]byte(header), data...)
 	}
 
-	if _, err := pm.stdin.Write(frame); err != nil {
+	// Serialize concurrent writers with a dedicated mutex instead of pm.mu, so a
+	// write that blocks (child stopped draining stdin, pipe buffer full) cannot
+	// wedge Stop()/IsRunning() — which need pm.mu to terminate the child and
+	// unblock the write.
+	pm.writeMu.Lock()
+	defer pm.writeMu.Unlock()
+	if _, err := stdin.Write(frame); err != nil {
 		return fmt.Errorf("write to stdin: %w", err)
 	}
 	return nil

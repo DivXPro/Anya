@@ -6,11 +6,18 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"desktop/internal/gateway"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
+
+// wsWriteTimeout bounds a single WebSocket write. Without it, a dead or stalled
+// device would block WriteMessage forever while a.mu is held, and Close() (which
+// also needs a.mu) could never run to abort it. 10s tolerates a slow link while
+// staying under the device-side turn watchdog (~30s).
+const wsWriteTimeout = 10 * time.Second
 
 type StickCS3Adapter struct {
 	conn       *websocket.Conn
@@ -108,6 +115,7 @@ func (a *StickCS3Adapter) SendText(msg gateway.DeviceMessage) error {
 	if err != nil {
 		return err
 	}
+	_ = a.conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
 	return a.conn.WriteMessage(websocket.TextMessage, data)
 }
 
@@ -117,6 +125,7 @@ func (a *StickCS3Adapter) SendBinary(data []byte) error {
 	if a.closed {
 		return net.ErrClosed
 	}
+	_ = a.conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
 	return a.conn.WriteMessage(websocket.BinaryMessage, data)
 }
 
