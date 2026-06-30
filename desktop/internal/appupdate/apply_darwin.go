@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // NewApplier returns the macOS applier.
@@ -84,11 +85,30 @@ func (a *darwinApplier) Relaunch() error {
 	if a.relaunchPath == "" {
 		return fmt.Errorf("nothing to relaunch")
 	}
-	if err := exec.Command("open", a.relaunchPath).Start(); err != nil {
+	// macOS LaunchServices won't start a second instance of an app whose previous
+	// instance is still running: `open` on a live bundle just reactivates the
+	// (about-to-exit) instance, so the app appears to quit without coming back.
+	// Spawn a detached helper that waits for this process to fully exit, then
+	// opens the freshly-swapped bundle.
+	pid := os.Getpid()
+	script := fmt.Sprintf(
+		"while /bin/kill -0 %d 2>/dev/null; do /bin/sleep 0.2; done; exec /usr/bin/open %s --args --updated",
+		pid, shellSingleQuote(a.relaunchPath),
+	)
+	cmd := exec.Command("/bin/sh", "-c", script)
+	// Detach into a new session so the helper survives this process exiting.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
 		return err
 	}
 	go func() { os.Exit(0) }()
 	return nil
+}
+
+// shellSingleQuote wraps s in single quotes, escaping any embedded single quotes
+// so an arbitrary path is passed to /bin/sh verbatim.
+func shellSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func findDotApp(root string) (string, error) {

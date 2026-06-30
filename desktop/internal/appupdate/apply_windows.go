@@ -47,7 +47,7 @@ func (a *windowsApplier) Relaunch() error {
 	if a.relaunchPath == "" {
 		return fmt.Errorf("nothing to relaunch")
 	}
-	if err := exec.Command(a.relaunchPath).Start(); err != nil {
+	if err := exec.Command(a.relaunchPath, "--updated").Start(); err != nil {
 		return err
 	}
 	go func() { os.Exit(0) }()

@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
 	"runtime"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -20,6 +21,16 @@ var trayIcon []byte
 
 func main() {
 	elfApp := NewApp()
+
+	// A post-update relaunch passes --updated so we can surface the window on
+	// startup, instead of leaving the freshly-updated app hidden in the tray.
+	updatedRelaunch := false
+	for _, arg := range os.Args[1:] {
+		if arg == "--updated" {
+			updatedRelaunch = true
+			break
+		}
+	}
 
 	wailsApp := application.New(application.Options{
 		Name:        "Anya",
@@ -73,6 +84,15 @@ func main() {
 	mainWindow.RegisterHook(events.Common.WindowHide, func(_ *application.WindowEvent) {
 		setMacActivationAccessory()
 	})
+
+	// After a self-update relaunch, show the window once the app has started so
+	// the user sees the updated app come back rather than only a tray icon.
+	if updatedRelaunch {
+		wailsApp.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
+			mainWindow.Show()
+			mainWindow.Focus()
+		})
+	}
 
 	// ── Menu bar icon ──
 	systemTray := wailsApp.SystemTray.New()
