@@ -73,6 +73,11 @@ jobs:
           cd desktop
           export PATH="$PATH:$(go env GOPATH)/bin"
           wails3 generate bindings -ts -i
+      - name: Upload generated bindings
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-bindings
+          path: desktop/frontend/bindings
       - name: Build frontend
         run: cd desktop/frontend && npm ci && npm run build
       - name: Build .app bundle
@@ -96,7 +101,7 @@ jobs:
           path: desktop/bin/Anya-darwin-${{ matrix.arch }}.zip
 
   build-windows:
-    needs: build-firmware
+    needs: [build-firmware]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -115,10 +120,11 @@ jobs:
         with:
           name: firmware-assets
           path: desktop/internal/firmware/assets
-      - name: Generate bindings
-        run: |
-          cd desktop
-          go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.106 generate bindings -ts -i
+      - name: Download generated bindings
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-bindings
+          path: desktop/frontend/bindings
       - name: Build Windows binary
         run: ./scripts/build-windows.sh
       - uses: actions/upload-artifact@v4
