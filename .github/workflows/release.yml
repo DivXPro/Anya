@@ -43,8 +43,29 @@ jobs:
           name: firmware-assets
           path: firmware/out/
 
+  generate-bindings:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'
+      - name: Install wails3
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.106
+      - name: Generate bindings
+        run: |
+          cd desktop
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          wails3 generate bindings -ts -i
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-bindings
+          path: desktop/frontend/bindings
+
   build-macos:
-    needs: build-firmware
+    needs: [build-firmware, generate-bindings]
     runs-on: macos-latest
     strategy:
       matrix:
@@ -66,18 +87,13 @@ jobs:
         with:
           name: firmware-assets
           path: desktop/internal/firmware/assets
-      - name: Install wails3
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.106
-      - name: Generate bindings
-        run: |
-          cd desktop
-          export PATH="$PATH:$(go env GOPATH)/bin"
-          wails3 generate bindings -ts -i
-      - name: Upload generated bindings
-        uses: actions/upload-artifact@v4
+      - name: Download generated bindings
+        uses: actions/download-artifact@v4
         with:
           name: frontend-bindings
           path: desktop/frontend/bindings
+      - name: Install wails3
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.106
       - name: Build frontend
         run: cd desktop/frontend && npm ci && npm run build
       - name: Build .app bundle
@@ -101,7 +117,7 @@ jobs:
           path: desktop/bin/Anya-darwin-${{ matrix.arch }}.zip
 
   build-windows:
-    needs: [build-firmware]
+    needs: [build-firmware, generate-bindings]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
