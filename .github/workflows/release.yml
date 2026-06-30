@@ -75,15 +75,20 @@ jobs:
           wails3 generate bindings -ts -i
       - name: Build frontend
         run: cd desktop/frontend && npm ci && npm run build
-      - name: Build .app
+      - name: Build .app bundle
         run: |
           cd desktop
           export PATH="$PATH:$(go env GOPATH)/bin"
-          wails3 task darwin:build ARCH=${{ matrix.arch }}
+          wails3 task darwin:package ARCH=${{ matrix.arch }}
       - name: Zip bundle
         run: |
           cd desktop/bin
-          APP="$(ls -d *.app | head -1)"
+          APP="$(ls -d anya.app 2>/dev/null | head -1)"
+          if [ -z "$APP" ]; then
+            echo "No .app bundle found in $(pwd)" >&2
+            ls -la
+            exit 1
+          fi
           ditto -c -k --keepParent "$APP" "Anya-darwin-${{ matrix.arch }}.zip"
       - uses: actions/upload-artifact@v4
         with:
