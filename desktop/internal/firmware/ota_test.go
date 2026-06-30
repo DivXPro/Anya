@@ -9,16 +9,16 @@ import (
 )
 
 type mockDevice struct {
-	mu        sync.Mutex
-	texts     []gateway.DeviceMessage
-	binaries  [][]byte
-	info      gateway.DeviceInfo
+	mu         sync.Mutex
+	texts      []gateway.DeviceMessage
+	binaries   [][]byte
+	info       gateway.DeviceInfo
 	disconnect chan struct{}
 }
 
 func newMockDevice(id string) *mockDevice {
 	return &mockDevice{
-		info: gateway.DeviceInfo{ID: id, Name: "test"},
+		info:       gateway.DeviceInfo{ID: id, Name: "test"},
 		disconnect: make(chan struct{}),
 	}
 }
@@ -128,6 +128,26 @@ func TestOTAProgressEvent(t *testing.T) {
 	if p.Percent != 50 {
 		t.Errorf("expected percent 50, got %d", p.Percent)
 	}
+}
+
+// A device may resend firmware_update_ack (retransmit after a flaky link,
+// reconnect, or a firmware quirk). The handler closes startCh to signal the
+// waiting runUpdate goroutine; closing it twice would panic the whole process.
+// A duplicate ack must therefore be a no-op, not a crash.
+func TestOTADuplicateAckNoPanic(t *testing.T) {
+	mgr := NewOTAManager()
+	dev := newMockDevice("dev1")
+	if err := mgr.StartUpdate("dev1", dev, []byte("firmware payload"), "1.0.0"); err != nil {
+		t.Fatalf("StartUpdate: %v", err)
+	}
+	// Cancel cleans up the background runUpdate goroutine when the test ends.
+	defer mgr.Cancel("dev1", dev)
+
+	ack := &gateway.DeviceEvent{Type: "firmware_update_ack"}
+	// First ack starts the transfer; the second (duplicate) must not panic by
+	// closing the already-closed startCh.
+	mgr.HandleEvent("dev1", ack)
+	mgr.HandleEvent("dev1", ack)
 }
 
 func TestOTAEventPayloadJSON(t *testing.T) {

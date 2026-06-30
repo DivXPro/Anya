@@ -37,6 +37,7 @@ type otaState struct {
 	startCh     chan struct{}
 	ackCh       chan int
 	doneCh      chan struct{}
+	startOnce   sync.Once
 	doneOnce    sync.Once
 	progress    OTAProgress
 }
@@ -243,7 +244,9 @@ func (m *OTAManager) HandleEvent(deviceID string, evt *gateway.DeviceEvent) {
 		m.mu.Lock()
 		s, ok := m.states[deviceID]
 		if ok {
-			close(s.startCh)
+			// Guard against a duplicate/retransmitted ack closing startCh twice,
+			// which would panic. Mirrors the doneOnce guard used for doneCh.
+			s.startOnce.Do(func() { close(s.startCh) })
 		}
 		m.mu.Unlock()
 

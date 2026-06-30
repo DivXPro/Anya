@@ -72,8 +72,14 @@ func (m *Manager) Flash(port string) error {
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), flashTimeout)
+	m.mu.Lock()
 	m.cancel = cancel
-	defer func() { m.cancel = nil }()
+	m.mu.Unlock()
+	defer func() {
+		m.mu.Lock()
+		m.cancel = nil
+		m.mu.Unlock()
+	}()
 
 	opts := espflasher.DefaultOptions()
 	opts.ChipType = espflasher.ChipESP32S3
