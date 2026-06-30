@@ -34,6 +34,10 @@ func main() {
 		},
 	})
 
+	if runtime.GOOS == "darwin" {
+		setupMacMenuBar(wailsApp, elfApp)
+	}
+
 	// Main window — hidden initially, opened via menu
 	mainWindow := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:           "Anya",
@@ -114,4 +118,17 @@ func main() {
 	if err := wailsApp.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func setupMacMenuBar(wailsApp *application.App, elfApp *App) {
+	menu := application.DefaultApplicationMenu()
+
+	// App menu: customize About to show version
+	if aboutItem := menu.FindByRole(application.About); aboutItem != nil {
+		aboutItem.OnClick(func(_ *application.Context) {
+			wailsApp.Menu.ShowAbout()
+		})
+	}
+
+	wailsApp.Menu.SetApplicationMenu(menu)
 }
