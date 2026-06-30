@@ -1,13 +1,35 @@
 name: Build Windows Client
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  # Manual trigger only — no longer runs automatically on pushes/PRs to main.
+  workflow_dispatch:
 
 jobs:
+  # Wails TS bindings (desktop/frontend/bindings) are gitignored and required by
+  # the frontend build. Generating them builds the Go app, which on Linux needs
+  # gtk4/webkitgtk; do it on macOS (as release.yml does) and pass it on as an
+  # artifact.
+  generate-bindings:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'
+      - name: Install wails3
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.106
+      - name: Generate bindings
+        run: |
+          cd desktop
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          wails3 generate bindings -ts -i
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-bindings
+          path: desktop/frontend/bindings
+
   build:
+    needs: generate-bindings
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +41,11 @@ jobs:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: desktop/frontend/package-lock.json
+      - name: Download generated bindings
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-bindings
+          path: desktop/frontend/bindings
       - name: Build Windows binary
         run: ./scripts/build-windows.sh
       - uses: actions/upload-artifact@v4
