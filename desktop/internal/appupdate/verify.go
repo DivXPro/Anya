@@ -17,7 +17,7 @@ import (
 // update signatures. Populated by the keygen step (Task 3.3). Multiple keys
 // allow rotation (current + next).
 var trustedPublicKeysB64 = []string{
-	// "<BASE64_ED25519_PUBKEY>",  // filled in Task 3.3
+	"gJtXGULfORxXOrSqlYvwX1JZVBCmahh5bN9aFUIW3Nk=", // current update-signing key
 }
 
 // Verifier verifies update artifacts. Production: DefaultVerifier(); tests inject keys.
