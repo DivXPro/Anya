@@ -13,6 +13,7 @@
 #include "state.h"
 #include "ota.h"
 #include "lang.h"
+#include "vad.h"
 
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "0.0.0-dev"
@@ -34,6 +35,17 @@ static State menuReturnState = State::IDLE;
 // "processing" heartbeat every ~12s, so 30s tolerates a couple of missed beats.
 static const unsigned long TURN_WATCHDOG_MS = 30UL * 1000UL;
 static unsigned long s_turnActivityAt = 0;
+
+static VAD s_vad;
+static const size_t FRAME_SAMPLES = 16000 * 20 / 1000; // 20ms @ 16kHz
+
+static void finish_listening() {
+    audio_stop_recording();
+    protocol_send_audio_end();
+    audio_play_end_tone();
+    state_transition(State::SENDING);
+    s_turnActivityAt = millis();
+}
 
 static const Str mainMenuItems[] = {
     Str::MenuChooseWifi,
@@ -212,35 +224,18 @@ static void register_button_callbacks() {
             ESP_LOGI("main", "PTT press ignored: not connected");
             return;
         }
-        // Reject new input while a turn is in flight (waiting on the desktop).
-        // Starting a second turn would run concurrently on the shared ACP
-        // session and corrupt the in-progress reply.
-        {
-            State st = state_current();
-            if (st == State::SENDING || st == State::PROCESSING) {
-                ESP_LOGI("main", "PTT press ignored: busy (state %d)", (int)st);
-                return;
-            }
+        State st = state_current();
+        if (st == State::IDLE) {
+            ESP_LOGI("main", "PTT press -> LISTENING");
+            audio_play_start_tone();
+            state_transition(State::LISTENING);
+            s_vad.reset();
+            audio_start_recording();
+            protocol_send_audio_start();
+        } else if (st == State::LISTENING) {
+            ESP_LOGI("main", "PTT press -> SENDING (manual)");
+            finish_listening();
         }
-        ESP_LOGI("main", "PTT press -> LISTENING");
-        state_transition(State::LISTENING);
-        audio_start_recording();
-        protocol_send_audio_start();
-    });
-
-    btn_on_ptt_release([]() {
-        if (ota_in_progress()) return;
-        if (inMenu) return;
-        if (state_current() == State::CONFIRM) return;
-        if (!ws_connected()) {
-            ESP_LOGI("main", "PTT release ignored: not connected");
-            return;
-        }
-        ESP_LOGI("main", "PTT release -> SENDING");
-        audio_stop_recording();
-        protocol_send_audio_end();
-        state_transition(State::SENDING);
-        s_turnActivityAt = millis();
     });
 
     btn_on_next([]() {
@@ -421,10 +416,18 @@ void loop() {
     }
 
     if (!ota_in_progress() && audio_is_recording()) {
-        static uint8_t buf[1024];
-        size_t len = audio_capture(buf, sizeof(buf));
-        if (len > 0) {
-            protocol_send_audio_chunk(buf, len);
+        static int16_t frame[FRAME_SAMPLES];
+        size_t len = audio_capture(reinterpret_cast<uint8_t*>(frame), sizeof(frame));
+        if (len == sizeof(frame)) {
+            if (!s_vad.process(frame, FRAME_SAMPLES)) {
+                ESP_LOGI("main", "VAD silence timeout -> SENDING");
+                finish_listening();
+            } else {
+                protocol_send_audio_chunk(reinterpret_cast<uint8_t*>(frame), len);
+            }
+        } else if (len > 0) {
+            // 非整帧也上传，但不做 VAD 判断
+            protocol_send_audio_chunk(reinterpret_cast<uint8_t*>(frame), len);
         }
     }
 
