@@ -12,6 +12,18 @@
   "settings": {
     "title": "Settings",
     "subtitle": "Configure appearance and voice services",
+    "appUpdate": {
+      "title": "App Update",
+      "currentVersion": "Current Version",
+      "check": "Check for Updates",
+      "checking": "Checking…",
+      "upToDate": "You're on the latest version",
+      "available": "New version {{version}} available",
+      "download": "Download & Restart",
+      "applying": "Installing…",
+      "restartHint": "The app will restart when done",
+      "failed": "Update failed"
+    },
     "appearance": {
       "title": "Appearance",
       "theme": "Theme",
