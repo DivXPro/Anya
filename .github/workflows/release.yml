@@ -100,6 +100,8 @@ jobs:
         run: |
           cd desktop
           export PATH="$PATH:$(go env GOPATH)/bin"
+          export VERSION="${GITHUB_REF_NAME}"
+          export COMMIT="${GITHUB_SHA:0:7}"
           wails3 task darwin:package ARCH=${{ matrix.arch }}
       - name: Build DMG installer
         run: |
@@ -158,6 +160,9 @@ jobs:
           name: frontend-bindings
           path: desktop/frontend/bindings
       - name: Build Windows binary
+        env:
+          VERSION: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
         run: ./scripts/build-windows.sh
       - uses: actions/upload-artifact@v4
         with:
