@@ -243,7 +243,12 @@ func (a *App) buildLocalizedMacMenu() *application.Menu {
 	// App menu (macOS shows the first submenu under the bold app name). Built
 	// manually so "Check for Updates" sits right under About.
 	appMenu := menu.AddSubmenu("Anya")
-	appMenu.AddRole(application.About) // role already wires ShowAbout
+	appMenu.AddRole(application.About) // role label is localized below
+	if about := appMenu.FindByRole(application.About); about != nil {
+		// Replace the default about panel (which shows no version) with one that
+		// displays version.Version — the value stamped from the git tag at build.
+		about.OnClick(func(_ *application.Context) { a.showAbout() })
+	}
 	checkItem := appMenu.Add("Check for Updates…")
 	checkItem.OnClick(func(_ *application.Context) {
 		go a.CheckForUpdateInteractive()
@@ -270,6 +275,26 @@ func (a *App) buildLocalizedMacMenu() *application.Menu {
 
 	a.localizeMenu(menu)
 	return menu
+}
+
+// showAbout shows a custom About dialog that includes the build version. Wails'
+// native ShowAbout only renders name/description/icon (no version), and the
+// bundle Info.plist version is static, so we surface version.Version here — it
+// is stamped from the git tag at build time and thus always tracks the release.
+func (a *App) showAbout() {
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	dialog := app.Dialog.Info()
+	dialog.SetTitle("Anya")
+	if a.trayUILanguage == "en" {
+		dialog.SetMessage(fmt.Sprintf("Hardware Agent Voice Assistant\n\nVersion %s (%s)", version.Version, version.Commit))
+	} else {
+		dialog.SetMessage(fmt.Sprintf("硬件智能体语音助手\n\n版本 %s（%s）", version.Version, version.Commit))
+	}
+	dialog.SetIcon(appIcon)
+	dialog.Show()
 }
 
 // refreshMacMenu rebuilds the menu bar in the current UI language and re-applies
