@@ -19,6 +19,7 @@ import {
   RiUsbLine,
 } from '@remixicon/react';
 import { useAppSettings, type Theme } from '@/hooks/useAppSettings';
+import { CurrentVersion } from '@/lib/update-api';
 
 function formatBytes(n: number): string {
   if (n <= 0) return '0 B';
@@ -39,6 +40,10 @@ function SettingsTab() {
   const [firmwareVersion, setFirmwareVersion] = useState('');
   const [deviceVersion, setDeviceVersion] = useState('');
   const [checkingVersion, setCheckingVersion] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>('');
+  useEffect(() => {
+    CurrentVersion().then(setAppVersion).catch(() => setAppVersion(''));
+  }, []);
   const [flashProgress, setFlashProgress] = useState<FlashProgress>({
     running: false,
     stage: FlashStage.StageIdle,
@@ -156,6 +161,9 @@ function SettingsTab() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">{t('settings.title')}</h1>
+        {appVersion && (
+          <p className="text-xs text-muted-foreground">v{appVersion.replace(/^v/, '')}</p>
+        )}
       </div>
 
       <div className="space-y-3">

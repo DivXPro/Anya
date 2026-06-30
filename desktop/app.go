@@ -26,6 +26,7 @@ import (
 	"desktop/internal/processor"
 	"desktop/internal/speech"
 	"desktop/internal/store"
+	"desktop/internal/version"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -62,6 +63,11 @@ type App struct {
 	// a new voice request can't run concurrently with one already being processed.
 	turnMu     sync.Mutex
 	turnActive map[string]bool
+}
+
+// CurrentVersion returns the running application version (bound to the frontend).
+func (a *App) CurrentVersion() string {
+	return version.Version
 }
 
 func (a *App) SetTrayDeviceItem(item *application.MenuItem) {
