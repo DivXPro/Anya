@@ -773,6 +773,12 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 	}
 	log.Printf("[elf] STT: %s", text)
 
+	if strings.TrimSpace(text) == "" {
+		dev.SendText(gateway.StatusMessage("connected"))
+		dev.SendText(gateway.SummaryMessage("没听清，请再说一次"))
+		return
+	}
+
 	// 2. Save user message
 	if err := store.InsertMessage(a.db, &store.Message{
 		SessionID: sessionID, Role: "user", Content: text,
