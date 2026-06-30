@@ -59,6 +59,9 @@ func (m *Manager) Available() *UpdateInfo {
 	return m.available
 }
 
+// InProgress reports whether a download/apply is currently running.
+func (m *Manager) InProgress() bool { return m.inProgress.Load() }
+
 // CheckForUpdate queries for a newer release. Returns (nil, nil) when up to date.
 func (m *Manager) CheckForUpdate(ctx context.Context) (*UpdateInfo, error) {
 	if m.inProgress.Load() {

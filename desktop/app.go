@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -232,16 +233,123 @@ func (a *App) SetTrayCWDItem(item *application.MenuItem) {
 	a.refreshTrayCWD()
 }
 
-// SetMenuCheckUpdateItem registers the macOS menu bar "Check for Updates" item
-// so its label can follow the UI language.
-func (a *App) SetMenuCheckUpdateItem(item *application.MenuItem) {
-	a.menuCheckUpdateItem = item
-	a.refreshMenuCheckUpdateItem()
+// buildLocalizedMacMenu builds the macOS menu bar in English (standard roles
+// already are), captures the "Check for Updates" item, then localizes every
+// label in one pass. Rebuilding from English each time keeps the localizer's
+// English-keyed dictionary valid across repeated language switches.
+func (a *App) buildLocalizedMacMenu() *application.Menu {
+	menu := application.NewMenu()
+
+	// App menu (macOS shows the first submenu under the bold app name). Built
+	// manually so "Check for Updates" sits right under About.
+	appMenu := menu.AddSubmenu("Anya")
+	appMenu.AddRole(application.About) // role already wires ShowAbout
+	checkItem := appMenu.Add("Check for Updates…")
+	checkItem.OnClick(func(_ *application.Context) {
+		go a.CheckForUpdateInteractive()
+	})
+	if a.updater != nil {
+		checkItem.SetEnabled(!a.updater.InProgress())
+	}
+	a.menuCheckUpdateItem = checkItem
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.ServicesMenu)
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.Hide)
+	appMenu.AddRole(application.HideOthers)
+	appMenu.AddRole(application.UnHide)
+	appMenu.AddSeparator()
+	appMenu.AddRole(application.Quit)
+
+	// Standard remaining menus.
+	menu.AddRole(application.FileMenu)
+	menu.AddRole(application.EditMenu)
+	menu.AddRole(application.ViewMenu)
+	menu.AddRole(application.WindowMenu)
+	menu.AddRole(application.HelpMenu)
+
+	a.localizeMenu(menu)
+	return menu
 }
 
-func (a *App) refreshMenuCheckUpdateItem() {
-	if a.menuCheckUpdateItem != nil {
-		a.menuCheckUpdateItem.SetLabel(a.trayText("checkUpdate"))
+// refreshMacMenu rebuilds the menu bar in the current UI language and re-applies
+// it. Safe to call from any goroutine; the native menu swap is marshalled to the
+// main thread.
+func (a *App) refreshMacMenu() {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	application.InvokeSync(func() {
+		app.Menu.SetApplicationMenu(a.buildLocalizedMacMenu())
+	})
+}
+
+// localizeMenu walks the menu tree and translates each item's English label to
+// the current UI language, leaving roles/accelerators/handlers intact.
+func (a *App) localizeMenu(m *application.Menu) {
+	dict := a.menuDict()
+	if dict == nil {
+		return
+	}
+	for i := 0; ; i++ {
+		item := m.ItemAt(i)
+		if item == nil {
+			break
+		}
+		if t, ok := dict[item.Label()]; ok {
+			item.SetLabel(t)
+		}
+		if item.IsSubmenu() {
+			a.localizeMenu(item.GetSubmenu())
+		}
+	}
+}
+
+// menuDict maps English menu labels to the current language, or nil for English
+// (leave the default labels as-is).
+func (a *App) menuDict() map[string]string {
+	if a.trayUILanguage == "en" {
+		return nil
+	}
+	return map[string]string{
+		"About Anya":            "关于 Anya",
+		"Check for Updates…":    "检查更新…",
+		"Services":              "服务",
+		"Hide Anya":             "隐藏 Anya",
+		"Hide Others":           "隐藏其他",
+		"Show All":              "全部显示",
+		"Quit Anya":             "退出 Anya",
+		"File":                  "文件",
+		"Close":                 "关闭窗口",
+		"Edit":                  "编辑",
+		"Undo":                  "撤销",
+		"Redo":                  "重做",
+		"Cut":                   "剪切",
+		"Copy":                  "拷贝",
+		"Paste":                 "粘贴",
+		"Paste and Match Style": "粘贴并匹配样式",
+		"Delete":                "删除",
+		"Select All":            "全选",
+		"Speech":                "语音",
+		"Start Speaking":        "开始朗读",
+		"Stop Speaking":         "停止朗读",
+		"View":                  "显示",
+		"Reload":                "重新加载",
+		"Force Reload":          "强制重新加载",
+		"Open Developer Tools":  "打开开发者工具",
+		"Actual Size":           "实际大小",
+		"Zoom In":               "放大",
+		"Zoom Out":              "缩小",
+		"Toggle Full Screen":    "切换全屏",
+		"Window":                "窗口",
+		"Minimize":              "最小化",
+		"Zoom":                  "缩放",
+		"Bring All to Front":    "前置全部窗口",
+		"Help":                  "帮助",
 	}
 }
 
@@ -260,8 +368,6 @@ func (a *App) trayText(key string) string {
 			return "Working Directory"
 		case "defaultWorkingDirectory":
 			return "📁 Default Working Directory"
-		case "checkUpdate":
-			return "Check for Updates…"
 		case "updateAvailableTitle":
 			return "Update Available"
 		case "updateNow":
@@ -294,8 +400,6 @@ func (a *App) trayText(key string) string {
 		return "工作目录"
 	case "defaultWorkingDirectory":
 		return "📁 默认工作目录"
-	case "checkUpdate":
-		return "检查更新…"
 	case "updateAvailableTitle":
 		return "发现新版本"
 	case "updateNow":
@@ -348,7 +452,7 @@ func (a *App) refreshTrayLanguage() {
 	a.refreshTrayOpenItem()
 	a.refreshTrayQuitItem()
 	a.refreshTrayCWD()
-	a.refreshMenuCheckUpdateItem()
+	a.refreshMacMenu()
 }
 
 func (a *App) refreshTrayCWD() {

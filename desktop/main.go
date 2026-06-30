@@ -94,6 +94,15 @@ func main() {
 		})
 	}
 
+	// The tray and macOS menu bar are first built before the saved UI language is
+	// known (defaulting to zh). Once the app has started (and ServiceStartup has
+	// loaded the language), re-apply it so both reflect the persisted language.
+	// This listener runs on a goroutine after the run loop is up, so the
+	// InvokeSync inside refreshMacMenu is safe.
+	wailsApp.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
+		elfApp.refreshTrayLanguage()
+	})
+
 	// ── Menu bar icon ──
 	systemTray := wailsApp.SystemTray.New()
 	systemTray.SetTooltip("Anya")
@@ -153,42 +162,5 @@ func main() {
 }
 
 func setupMacMenuBar(wailsApp *application.App, elfApp *App) {
-	menu := application.NewMenu()
-
-	// App menu (the first menu macOS shows under the bold app name). Built
-	// manually so "Check for Updates" can sit right under About, instead of
-	// being appended after Quit like a plain DefaultApplicationMenu().Add would.
-	appMenu := menu.AddSubmenu("Anya")
-	appMenu.AddRole(application.About)
-	checkUpdate := appMenu.Add(elfApp.trayText("checkUpdate"))
-	checkUpdate.OnClick(func(_ *application.Context) {
-		go elfApp.CheckForUpdateInteractive()
-	})
-	appMenu.AddSeparator()
-	appMenu.AddRole(application.ServicesMenu)
-	appMenu.AddSeparator()
-	appMenu.AddRole(application.Hide)
-	appMenu.AddRole(application.HideOthers)
-	appMenu.AddRole(application.UnHide)
-	appMenu.AddSeparator()
-	appMenu.AddRole(application.Quit)
-
-	// Standard remaining menus.
-	menu.AddRole(application.FileMenu)
-	menu.AddRole(application.EditMenu)
-	menu.AddRole(application.ViewMenu)
-	menu.AddRole(application.WindowMenu)
-	menu.AddRole(application.HelpMenu)
-
-	// Customize About to show the native about panel.
-	if aboutItem := menu.FindByRole(application.About); aboutItem != nil {
-		aboutItem.OnClick(func(_ *application.Context) {
-			wailsApp.Menu.ShowAbout()
-		})
-	}
-
-	// Let the app keep the menu item's label in sync with the UI language.
-	elfApp.SetMenuCheckUpdateItem(checkUpdate)
-
-	wailsApp.Menu.SetApplicationMenu(menu)
+	wailsApp.Menu.SetApplicationMenu(elfApp.buildLocalizedMacMenu())
 }
