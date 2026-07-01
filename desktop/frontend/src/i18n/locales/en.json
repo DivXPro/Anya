@@ -129,10 +129,14 @@
     "install": "Install",
     "installing": "Installing...",
     "update": "Update",
+    "updated": "Updated",
+    "checkingUpdate": "Checking for updates…",
     "retry": "Retry",
     "installManuallyTitle": "Automatic install unavailable",
     "installManuallyDesc": "Anya couldn't install {{name}} automatically. Copy the command below and run it in your terminal, then click Install again:",
-    "installCommandPlaceholder": "Install command"
+    "installCommandPlaceholder": "Install command",
+    "installFailedTitle": "Install failed",
+    "installFailedDesc": "{{name}} failed to install/update. Details:"
   },
   "history": {
     "title": "History",

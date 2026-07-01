@@ -1,7 +1,7 @@
 {
   "appName": "Anya",
   "app": {
-    "tagline": "智能硬件伴侣",
+    "tagline": "智能体伴侣",
     "updateTag": "更新",
     "updateAvailable": "发现新版本 {{version}}，点击立即更新"
   },
@@ -129,10 +129,14 @@
     "install": "安装",
     "installing": "安装中...",
     "update": "更新",
+    "updated": "已更新",
+    "checkingUpdate": "正在检查更新…",
     "retry": "重试",
     "installManuallyTitle": "无法自动安装",
     "installManuallyDesc": "Anya 未能自动安装 {{name}}。请复制下方命令到终端运行，然后再点击安装：",
-    "installCommandPlaceholder": "安装命令"
+    "installCommandPlaceholder": "安装命令",
+    "installFailedTitle": "安装失败",
+    "installFailedDesc": "{{name}} 安装/更新失败，错误信息如下："
   },
   "history": {
     "title": "历史",

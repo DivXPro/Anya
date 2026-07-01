@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Events } from '@wailsio/runtime';
 import { Dialogs } from '@wailsio/runtime';
 import { App } from '../../bindings/desktop';
 import type { Agent } from '../../bindings/desktop/internal/store/models';
-import { Badge } from '@/components/ui/badge';
+import { Badge, badgeVariants } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { RiCheckLine, RiLoader4Line, RiFolderLine } from '@remixicon/react';
+import { RiCheckLine, RiLoader4Line, RiFolderLine, RiFolderOpenLine } from '@remixicon/react';
 import {
   DetectAgents,
   InstallAgent,
@@ -74,9 +75,23 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [installingIds, setInstallingIds] = useState<Set<string>>(new Set());
   const [agentUpdates, setAgentUpdates] = useState<Record<string, string>>({});
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [doneFlash, setDoneFlash] = useState<Record<string, 'updated' | 'installed'>>({});
+  const [installError, setInstallError] = useState<{ name: string; message: string } | null>(null);
   const [missingPmAgent, setMissingPmAgent] = useState<Agent | null>(null);
   const [manualCommand, setManualCommand] = useState<string>('');
   const [settings, setSettings] = useState<Record<string, string>>({});
+
+  // Tracks installs triggered from the "Update" button (vs a fresh install), so
+  // the success flash can say "Updated" instead of "Installed". A ref because
+  // the install event listeners are registered once and would capture stale
+  // state otherwise.
+  const updateClickedRef = useRef<Set<string>>(new Set());
+  // Latest agents list, for lookups inside the once-registered event listeners.
+  const agentsRef = useRef<Agent[]>([]);
+  useEffect(() => {
+    agentsRef.current = agents;
+  }, [agents]);
 
   const refreshAgents = async () => {
     try {
@@ -104,13 +119,17 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
   };
 
   // Query the registry for newer versions of installed agents. Best-effort:
-  // failures leave the map empty so no spurious "Update" buttons appear.
+  // failures leave the map empty so no spurious "Update" buttons appear. While
+  // running, checkingUpdates drives a spinner on installed rows.
   const refreshUpdates = async () => {
+    setCheckingUpdates(true);
     try {
       const map = await CheckAgentUpdates();
       setAgentUpdates(map || {});
     } catch {
       setAgentUpdates({});
+    } finally {
+      setCheckingUpdates(false);
     }
   };
 
@@ -146,25 +165,46 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
       }
     });
 
-    const offFinished = Events.On(EventInstallFinished, () => {
-      setInstallingIds((prev) => {
-        const next = new Set(prev);
-        // Refresh will update precise state; clear all for simplicity.
-        next.clear();
-        return next;
-      });
+    const offFinished = Events.On(EventInstallFinished, (event) => {
+      const data = event.data as InstallEventData;
+      const id = data?.agentID;
+      if (id) {
+        setInstallingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        const kind = updateClickedRef.current.has(id) ? 'updated' : 'installed';
+        updateClickedRef.current.delete(id);
+        setDoneFlash((prev) => ({ ...prev, [id]: kind }));
+        setTimeout(() => {
+          setDoneFlash((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
+        }, 2500);
+      }
       refreshAgents();
       // An install may have been an upgrade — re-check so the button reverts.
       refreshUpdates();
     });
 
-    const offFailed = Events.On(EventInstallFailed, () => {
-      setInstallingIds((prev) => {
-        const next = new Set(prev);
-        next.clear();
-        return next;
-      });
+    const offFailed = Events.On(EventInstallFailed, (event) => {
+      const data = event.data as InstallEventData;
+      const id = data?.agentID;
+      if (id) {
+        setInstallingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        updateClickedRef.current.delete(id);
+        const name = agentsRef.current.find((a) => a.id === id)?.name || id;
+        setInstallError({ name, message: data?.error || 'unknown error' });
+      }
       refreshAgents();
+      refreshUpdates();
     });
 
     return () => {
@@ -184,12 +224,14 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
     }
   };
 
-  const handleInstall = async (agent: Agent) => {
+  const handleInstall = async (agent: Agent, isUpdate = false) => {
+    if (isUpdate) updateClickedRef.current.add(agent.id);
     setInstallingIds((prev) => new Set(prev).add(agent.id));
     try {
       await InstallAgent(agent.id);
     } catch (e) {
       console.error(e);
+      updateClickedRef.current.delete(agent.id);
       setInstallingIds((prev) => {
         const next = new Set(prev);
         next.delete(agent.id);
@@ -268,9 +310,10 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
               value={settings.agent_cwd || ''}
               readOnly
               placeholder={t('agent.workingDirectory.placeholder')}
-              className="flex-1 rounded-md border px-3 py-2 text-sm bg-background"
+              className="h-10 flex-1 rounded-md border px-3 text-sm bg-background"
             />
             <Button onClick={handlePickWorkingDirectory}>
+              <RiFolderOpenLine />
               {t('agent.workingDirectory.browse')}
             </Button>
             {settings.agent_cwd && (
@@ -319,18 +362,38 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
                 </div>
               </div>
 
-              {agent.installed ? (
+              {installing ? (
+                <Badge variant="outline" className="gap-1">
+                  <RiLoader4Line className="h-3 w-3 animate-spin" />
+                  {t('agent.installing')}
+                </Badge>
+              ) : doneFlash[agent.id] ? (
+                <Badge
+                  variant="secondary"
+                  className="gap-1 bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+                >
+                  <RiCheckLine className="h-3 w-3" />
+                  {doneFlash[agent.id] === 'updated' ? t('agent.updated') : t('agent.installed')}
+                </Badge>
+              ) : agent.installed && checkingUpdates ? (
+                <span
+                  className="flex items-center text-muted-foreground"
+                  title={t('agent.checkingUpdate')}
+                >
+                  <RiLoader4Line className="h-4 w-4 animate-spin" />
+                </span>
+              ) : agent.installed ? (
                 agentUpdates[agent.id] ? (
-                  <Button
-                    size="sm"
+                  <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleInstall(agent);
+                      handleInstall(agent, true);
                     }}
-                    disabled={installing}
+                    className={cn(badgeVariants({ variant: 'default' }), 'cursor-pointer')}
                   >
-                    {installing ? t('agent.installing') : t('agent.update')}
-                  </Button>
+                    {t('agent.update')}
+                  </button>
                 ) : agent.selected ? (
                   <Badge
                     variant="secondary"
@@ -342,21 +405,17 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
                 ) : (
                   <Badge variant="secondary">{t('agent.installed')}</Badge>
                 )
-              ) : installing ? (
-                <Badge variant="outline" className="gap-1">
-                  <RiLoader4Line className="h-3 w-3 animate-spin" />
-                  {t('agent.installing')}
-                </Badge>
               ) : (
-                <Button
-                  size="sm"
+                <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleInstall(agent);
                   }}
+                  className={cn(badgeVariants({ variant: 'default' }), 'cursor-pointer')}
                 >
                   {t('agent.install')}
-                </Button>
+                </button>
               )}
             </div>
           );
@@ -375,6 +434,22 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
             <code className="block break-all text-sm font-mono">
               {manualCommand || t('agent.installCommandPlaceholder')}
             </code>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={installError !== null} onOpenChange={(open) => !open && setInstallError(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('agent.installFailedTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('agent.installFailedDesc', { name: installError?.name || '' })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md bg-muted p-3">
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs font-mono">
+              {installError?.message}
+            </pre>
           </div>
         </DialogContent>
       </Dialog>
