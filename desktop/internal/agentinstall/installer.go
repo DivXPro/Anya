@@ -320,7 +320,12 @@ func commonBinDirs() []string {
 			dirs = append(dirs, bin)
 		}
 	}
-	return dirs
+	// Include the user's real login-shell PATH so binaries installed in
+	// non-standard locations (e.g. ~/.kimi-code/bin, nvm/fnm, custom npm
+	// prefixes) are found even when the app was launched from the Dock with a
+	// minimal launchd PATH.
+	dirs = append(dirs, loginShellPathDirs()...)
+	return dedupeDirs(dirs)
 }
 
 func augmentPath(pmPath string) string {
@@ -336,6 +341,79 @@ func augmentPath(pmPath string) string {
 		}
 	}
 	return path
+}
+
+var (
+	shellPathOnce sync.Once
+	shellPathDirs []string
+)
+
+// loginShellPathDirs returns the PATH directories from the user's login shell,
+// resolved once and cached. macOS GUI apps launched from the Dock/Finder inherit
+// a minimal launchd PATH that omits user-configured locations, so agent binaries
+// installed there (e.g. ~/.kimi-code/bin) would otherwise go undetected.
+func loginShellPathDirs() []string {
+	shellPathOnce.Do(func() {
+		shellPathDirs = resolveShellPathDirs()
+	})
+	return shellPathDirs
+}
+
+func resolveShellPathDirs() []string {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/zsh" // macOS default login shell
+	}
+	const marker = "__ANYA_PATH__"
+	// Sentinels let us extract $PATH even when rc files print banners.
+	script := "printf '%s%s%s' '" + marker + "' \"$PATH\" '" + marker + "'"
+
+	run := func(args ...string) (string, bool) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		out, err := exec.CommandContext(ctx, shell, args...).Output()
+		if err != nil {
+			return "", false
+		}
+		s := string(out)
+		i := strings.Index(s, marker)
+		j := strings.LastIndex(s, marker)
+		if i < 0 || j <= i {
+			return "", false
+		}
+		return s[i+len(marker) : j], true
+	}
+
+	// Login + interactive sources both profile and rc files (~/.zshrc etc., where
+	// many tools add themselves); fall back to login-only if that form fails.
+	pathValue, ok := run("-l", "-i", "-c", script)
+	if !ok {
+		pathValue, ok = run("-l", "-c", script)
+		if !ok {
+			return nil
+		}
+	}
+	return filepath.SplitList(pathValue)
+}
+
+// dedupeDirs removes empty and duplicate entries, preserving first-seen order.
+func dedupeDirs(dirs []string) []string {
+	seen := make(map[string]struct{}, len(dirs))
+	out := make([]string, 0, len(dirs))
+	for _, d := range dirs {
+		if d == "" {
+			continue
+		}
+		if _, ok := seen[d]; ok {
+			continue
+		}
+		seen[d] = struct{}{}
+		out = append(out, d)
+	}
+	return out
 }
 
 func lastLines(s string, n int) string {
