@@ -19,6 +19,7 @@ import {
   InstallAgent,
   IsAgentInstalling,
   GetAgentInstallCommand,
+  CheckAgentUpdates,
   EventInstallStarted,
   EventInstallFinished,
   EventInstallFailed,
@@ -72,6 +73,7 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
   const { t } = useTranslation();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [installingIds, setInstallingIds] = useState<Set<string>>(new Set());
+  const [agentUpdates, setAgentUpdates] = useState<Record<string, string>>({});
   const [missingPmAgent, setMissingPmAgent] = useState<Agent | null>(null);
   const [manualCommand, setManualCommand] = useState<string>('');
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -101,6 +103,17 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
     setInstallingIds(next);
   };
 
+  // Query the registry for newer versions of installed agents. Best-effort:
+  // failures leave the map empty so no spurious "Update" buttons appear.
+  const refreshUpdates = async () => {
+    try {
+      const map = await CheckAgentUpdates();
+      setAgentUpdates(map || {});
+    } catch {
+      setAgentUpdates({});
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -115,6 +128,8 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
       if (!mounted) return;
       setAgents(list || []);
       await refreshInstalling(list || []);
+      if (!mounted) return;
+      refreshUpdates();
     })();
 
     return () => {
@@ -139,6 +154,8 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
         return next;
       });
       refreshAgents();
+      // An install may have been an upgrade — re-check so the button reverts.
+      refreshUpdates();
     });
 
     const offFailed = Events.On(EventInstallFailed, () => {
@@ -303,7 +320,18 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
               </div>
 
               {agent.installed ? (
-                agent.selected ? (
+                agentUpdates[agent.id] ? (
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleInstall(agent);
+                    }}
+                    disabled={installing}
+                  >
+                    {installing ? t('agent.installing') : t('agent.update')}
+                  </Button>
+                ) : agent.selected ? (
                   <Badge
                     variant="secondary"
                     className="gap-1 bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"

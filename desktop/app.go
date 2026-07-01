@@ -1352,6 +1352,19 @@ func (a *App) IsAgentInstalling(agentID string) bool {
 	return a.agentInstaller.IsInstalling(agentID)
 }
 
+// CheckAgentUpdates queries the package registry for installed agents and
+// returns a map of agent ID -> latest available version for those whose
+// installed version is older. Called by the frontend to decide whether an
+// agent's button should offer "Update" instead of a plain "Installed" badge.
+func (a *App) CheckAgentUpdates() (map[string]string, error) {
+	if a.agentInstaller == nil {
+		return nil, fmt.Errorf("agent installer not initialized")
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 15*time.Second)
+	defer cancel()
+	return a.agentInstaller.CheckUpdates(ctx), nil
+}
+
 // GetPackageManager returns the first available npm-compatible package manager,
 // or an empty string if none is found.
 func (a *App) GetPackageManager() string {

@@ -27,3 +27,7 @@ export function GetPackageManager(): Promise<string> {
 export function GetAgentInstallCommand(agentID: string): Promise<string> {
   return byName('main.App.GetAgentInstallCommand', agentID);
 }
+
+export function CheckAgentUpdates(): Promise<Record<string, string>> {
+  return byName('main.App.CheckAgentUpdates');
+}
