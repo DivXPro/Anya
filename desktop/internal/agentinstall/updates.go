@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 
 	"desktop/internal/store"
@@ -41,6 +42,29 @@ func latestNpmVersion(ctx context.Context, pkg string) (string, error) {
 		return "", err
 	}
 	return body.Version, nil
+}
+
+// latestFromURL fetches a vendor endpoint that returns the latest version as
+// plain text (redirects are followed). Used for agents with an official version
+// endpoint instead of / in addition to npm (e.g. claude-code, kimi).
+func latestFromURL(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := npmHTTP.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("status %d", resp.StatusCode)
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(b)), nil
 }
 
 // parseSemver extracts the first x.y.z triple found in s (agent --version output
@@ -98,14 +122,21 @@ func (i *Installer) CheckUpdates(ctx context.Context) map[string]string {
 		if !ok || !ag.Installed || ag.Version == nil {
 			continue
 		}
-		pkg := info.Packages["npm"]
-		if pkg == "" {
+		if info.LatestVersionURL == "" && info.Packages["npm"] == "" {
 			continue
 		}
 		wg.Add(1)
-		go func(id, pkg, installed string) {
+		go func(id string, info AgentInfo, installed string) {
 			defer wg.Done()
-			latest, err := latestNpmVersion(ctx, pkg)
+			var (
+				latest string
+				err    error
+			)
+			if info.LatestVersionURL != "" {
+				latest, err = latestFromURL(ctx, info.LatestVersionURL)
+			} else {
+				latest, err = latestNpmVersion(ctx, info.Packages["npm"])
+			}
 			if err != nil {
 				return
 			}
@@ -114,7 +145,7 @@ func (i *Installer) CheckUpdates(ctx context.Context) map[string]string {
 				result[id] = latest
 				mu.Unlock()
 			}
-		}(ag.ID, pkg, *ag.Version)
+		}(ag.ID, info, *ag.Version)
 	}
 	wg.Wait()
 	return result

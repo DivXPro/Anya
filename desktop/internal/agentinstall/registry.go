@@ -19,6 +19,10 @@ type AgentInfo struct {
 	// When present and the required shell is available, it takes precedence
 	// over package-manager installs.
 	Scripts map[string]PlatformScript
+	// LatestVersionURL, when set, is a vendor endpoint that returns the latest
+	// version as plain text (e.g. "2.1.197"). It is preferred over the npm
+	// registry for update detection. Empty means "use the npm package".
+	LatestVersionURL string
 }
 
 // PlatformScript describes a platform-specific one-line installer.
@@ -44,6 +48,7 @@ var Registry = map[string]AgentInfo{
 			"darwin":  {Shell: "bash", Command: "curl -fsSL https://claude.ai/install.sh | bash"},
 			"linux":   {Shell: "bash", Command: "curl -fsSL https://claude.ai/install.sh | bash"},
 		},
+		LatestVersionURL: "https://downloads.claude.ai/claude-code-releases/latest",
 	},
 	"opencode": {
 		ID:      "opencode",
@@ -91,6 +96,7 @@ var Registry = map[string]AgentInfo{
 			"darwin":  {Shell: "bash", Command: "curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash"},
 			"linux":   {Shell: "bash", Command: "curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash"},
 		},
+		LatestVersionURL: "https://cdn.kimi.com/kimi-code/latest",
 	},
 	"hermes": {
 		ID:      "hermes",
