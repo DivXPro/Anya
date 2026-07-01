@@ -1,6 +1,7 @@
 package agentinstall
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -22,7 +23,13 @@ const (
 	EventInstallStarted  = "agent:install:started"
 	EventInstallFinished = "agent:install:finished"
 	EventInstallFailed   = "agent:install:failed"
+	EventInstallProgress = "agent:install:progress"
 )
+
+// installTimeout bounds a single install/upgrade. Because the child runs in its
+// own process group and is torn down via killProcessTree, this deadline is
+// enforced even for `curl | bash`-style pipelines.
+const installTimeout = 10 * time.Minute
 
 // Installer detects and installs agent CLIs.
 type Installer struct {
@@ -30,18 +37,24 @@ type Installer struct {
 	db    *sql.DB
 	mu    sync.Mutex
 	tasks map[string]*Task
+	// buildCmd builds the exec args + display string for an install/upgrade.
+	// It defaults to buildAgentCommand and is overridden in tests to keep them
+	// hermetic (the real builder would run the vendor installer over the network).
+	buildCmd func(id string, isUpdate bool) ([]string, string, error)
 }
 
 type Task struct {
 	AgentID string
 	Running bool
+	cancel  context.CancelFunc
 }
 
 func New(app *application.App, db *sql.DB) *Installer {
 	return &Installer{
-		app:   app,
-		db:    db,
-		tasks: make(map[string]*Task),
+		app:      app,
+		db:       db,
+		tasks:    make(map[string]*Task),
+		buildCmd: buildAgentCommand,
 	}
 }
 
@@ -114,7 +127,22 @@ func (i *Installer) IsInstalling(id string) bool {
 	return ok && t.Running
 }
 
-// Install starts an asynchronous install for the given agent.
+// AnyInstalling reports whether any agent install/upgrade is currently running.
+// Used to block a self-update relaunch that would otherwise orphan the install.
+func (i *Installer) AnyInstalling() bool {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	for _, t := range i.tasks {
+		if t.Running {
+			return true
+		}
+	}
+	return false
+}
+
+// Install starts an asynchronous install or in-place upgrade for the agent.
+// If the CLI is already present the command is "anchored" to how it was
+// installed (npm/pnpm/yarn vs vendor script); otherwise a fresh install is run.
 func (i *Installer) Install(id string) error {
 	info, ok := Registry[id]
 	if !ok {
@@ -126,12 +154,11 @@ func (i *Installer) Install(id string) error {
 		i.mu.Unlock()
 		return fmt.Errorf("install already in progress for %s", id)
 	}
-	i.tasks[id] = &Task{AgentID: id, Running: true}
 	i.mu.Unlock()
 
-	args, display, err := PlatformInstallCommand(id)
+	isUpdate := findBinary(info.Binary) != ""
+	args, display, err := i.buildCmd(id, isUpdate)
 	if err != nil {
-		i.finishTask(id, false)
 		return err
 	}
 
@@ -139,30 +166,61 @@ func (i *Installer) Install(id string) error {
 		log.Printf("[agentinstall] save install command %s error: %v", id, err)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), installTimeout)
+
+	i.mu.Lock()
+	i.tasks[id] = &Task{AgentID: id, Running: true, cancel: cancel}
+	i.mu.Unlock()
+
 	i.emit(EventInstallStarted, map[string]string{"agentID": id})
 
 	go func() {
+		defer cancel()
+
 		if len(args) == 0 {
 			i.emitFailure(id, "empty install command")
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer cancel()
-
 		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		// Run in its own process group and tear down the whole tree on
+		// cancel/timeout — otherwise `curl | bash` children (and any npm
+		// postinstall) would escape the deadline and orphan.
+		setProcAttr(cmd)
+		cmd.Cancel = func() error { return killProcessTree(cmd) }
+		// If the process ignores the kill (blocked in I/O), stop waiting after
+		// a grace period so the goroutine can't hang forever.
+		cmd.WaitDelay = 15 * time.Second
+
 		// Ensure any discovered package manager and common bin dirs are on PATH.
 		_, pmPath := DetectPackageManager()
 		cmd.Env = append(os.Environ(), fmt.Sprintf("PATH=%s", augmentPath(pmPath)))
 
-		log.Printf("[agentinstall] installing %s: %s", id, display)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			msg := string(out)
+		// Stream combined output line-by-line: emit progress events for the UI
+		// and keep a bounded tail for the failure message.
+		collector := newProgressWriter(func(line string) {
+			i.emit(EventInstallProgress, map[string]string{"agentID": id, "line": line})
+		})
+		cmd.Stdout = collector
+		cmd.Stderr = collector
+
+		log.Printf("[agentinstall] %s %s: %s", verb(isUpdate), id, display)
+		runErr := cmd.Run()
+		collector.flush()
+
+		if runErr != nil {
+			// Distinguish an explicit cancel from a genuine failure.
+			if ctx.Err() == context.Canceled {
+				i.emitFailure(id, "installation canceled")
+				return
+			}
+			if ctx.Err() == context.DeadlineExceeded {
+				i.emitFailure(id, fmt.Sprintf("installation timed out after %s", installTimeout))
+				return
+			}
+			msg := strings.TrimSpace(collector.tail())
 			if msg == "" {
-				msg = err.Error()
-			} else {
-				msg = lastLines(msg, 4)
+				msg = runErr.Error()
 			}
 			i.emitFailure(id, msg)
 			return
@@ -189,6 +247,46 @@ func (i *Installer) Install(id string) error {
 	}()
 
 	return nil
+}
+
+func verb(isUpdate bool) string {
+	if isUpdate {
+		return "upgrading"
+	}
+	return "installing"
+}
+
+// Cancel aborts an in-progress install/upgrade for the agent by cancelling its
+// context, which kills the whole process group. It is a no-op when nothing is
+// running for that agent.
+func (i *Installer) Cancel(id string) {
+	i.mu.Lock()
+	t, ok := i.tasks[id]
+	var cancel context.CancelFunc
+	if ok && t.Running {
+		cancel = t.cancel
+	}
+	i.mu.Unlock()
+	if cancel != nil {
+		log.Printf("[agentinstall] cancel requested for %s", id)
+		cancel()
+	}
+}
+
+// Shutdown cancels every in-progress install so that no child process is left
+// orphaned when the app quits or relaunches (e.g. during self-update).
+func (i *Installer) Shutdown() {
+	i.mu.Lock()
+	cancels := make([]context.CancelFunc, 0, len(i.tasks))
+	for _, t := range i.tasks {
+		if t.Running && t.cancel != nil {
+			cancels = append(cancels, t.cancel)
+		}
+	}
+	i.mu.Unlock()
+	for _, c := range cancels {
+		c()
+	}
 }
 
 func (i *Installer) emit(name string, data any) {
@@ -416,10 +514,69 @@ func dedupeDirs(dirs []string) []string {
 	return out
 }
 
-func lastLines(s string, n int) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	if len(lines) <= n {
-		return strings.Join(lines, "\n")
+// progressTailLines bounds how many recent output lines are retained for the
+// failure message shown to the user.
+const progressTailLines = 8
+
+// progressWriter splits combined stdout/stderr into lines, emitting each
+// non-empty line for live UI progress and retaining a bounded tail for error
+// reporting. It is safe for the concurrent writes exec makes for stdout+stderr.
+type progressWriter struct {
+	mu    sync.Mutex
+	buf   []byte
+	lines []string
+	emit  func(string)
+}
+
+func newProgressWriter(emit func(string)) *progressWriter {
+	return &progressWriter{emit: emit}
+}
+
+func (w *progressWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.buf = append(w.buf, p...)
+	for {
+		idx := bytes.IndexByte(w.buf, '\n')
+		if idx < 0 {
+			break
+		}
+		line := string(w.buf[:idx])
+		w.buf = append(w.buf[:0], w.buf[idx+1:]...)
+		w.handleLine(line)
 	}
-	return strings.Join(lines[len(lines)-n:], "\n")
+	return len(p), nil
+}
+
+// handleLine records a trimmed, non-empty line and emits it. Caller holds mu.
+func (w *progressWriter) handleLine(line string) {
+	trimmed := strings.TrimSpace(strings.TrimRight(line, "\r"))
+	if trimmed == "" {
+		return
+	}
+	w.lines = append(w.lines, trimmed)
+	if len(w.lines) > progressTailLines {
+		w.lines = w.lines[len(w.lines)-progressTailLines:]
+	}
+	if w.emit != nil {
+		w.emit(trimmed)
+	}
+}
+
+// flush processes any trailing bytes not terminated by a newline.
+func (w *progressWriter) flush() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.buf) > 0 {
+		line := string(w.buf)
+		w.buf = w.buf[:0]
+		w.handleLine(line)
+	}
+}
+
+// tail returns the most recent retained output lines joined by newlines.
+func (w *progressWriter) tail() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return strings.Join(w.lines, "\n")
 }

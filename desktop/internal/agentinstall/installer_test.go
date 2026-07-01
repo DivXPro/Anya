@@ -2,6 +2,8 @@ package agentinstall
 
 import (
 	"database/sql"
+	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -126,10 +128,18 @@ func TestInstall_MarksAgentInstalled(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	writeFakeNPM(t, tmp)
 	t.Setenv("PATH", tmp)
 
 	inst := New(nil, db)
+	// Inject a hermetic install command that drops a fake claude on PATH, so the
+	// end-to-end pipeline (run -> detect -> mark installed) is exercised without
+	// running the real vendor installer over the network.
+	inst.buildCmd = func(id string, isUpdate bool) ([]string, string, error) {
+		script := fmt.Sprintf("cat > %q <<'EOF'\n#!/bin/sh\necho \"Claude Code 0.1.0\"\nEOF\nchmod +x %q\n",
+			filepath.Join(tmp, "claude"), filepath.Join(tmp, "claude"))
+		return []string{"/bin/sh", "-c", script}, "sh -c fake-install", nil
+	}
+
 	if err := inst.Install("claude-code"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
@@ -157,21 +167,62 @@ func TestInstall_MarksAgentInstalled(t *testing.T) {
 	}
 }
 
-func TestInstall_NoPackageManager(t *testing.T) {
+func TestInstall_SyncBuildErrorClearsTask(t *testing.T) {
 	db := testDB(t)
-	if err := store.UpdateAgentInstalled(db, "claude-code", false); err != nil {
-		t.Fatalf("reset installed: %v", err)
+	inst := New(nil, db)
+	inst.buildCmd = func(id string, isUpdate bool) ([]string, string, error) {
+		return nil, "", fmt.Errorf("no package manager found")
 	}
 
-	// Ensure no package manager is found.
-	t.Setenv("PATH", "")
-
-	inst := New(nil, db)
 	if err := inst.Install("claude-code"); err == nil {
-		t.Fatal("expected error when no package manager is available")
+		t.Fatal("expected error when the command cannot be built")
 	}
 	if inst.IsInstalling("claude-code") {
-		t.Fatal("expected install task to be cleared after failure")
+		t.Fatal("expected no install task after a synchronous build failure")
+	}
+}
+
+func TestBuildPMCommand_NoPackageManager(t *testing.T) {
+	// With an empty PATH no package manager can be located, so the npm-family
+	// path must fail (the caller then surfaces the manual-install command).
+	t.Setenv("PATH", "")
+	info := Registry["claude-code"]
+	if _, _, err := buildPMCommand(info, ""); err == nil {
+		t.Fatal("expected error when no package manager is available")
+	}
+}
+
+func TestCancel_StopsRunningInstall(t *testing.T) {
+	db := testDB(t)
+	inst := New(nil, db)
+	// A long-running command stands in for a stalled installer.
+	inst.buildCmd = func(id string, isUpdate bool) ([]string, string, error) {
+		return []string{"/bin/sh", "-c", "sleep 30"}, "sleep 30", nil
+	}
+
+	if err := inst.Install("claude-code"); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+
+	// Wait until it is actually running.
+	deadline := time.Now().Add(2 * time.Second)
+	for !inst.IsInstalling("claude-code") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !inst.IsInstalling("claude-code") {
+		t.Fatal("expected install to be running")
+	}
+
+	inst.Cancel("claude-code")
+
+	// Cancel must tear the process down and clear the task promptly, well before
+	// the 30s sleep would end.
+	deadline = time.Now().Add(5 * time.Second)
+	for inst.IsInstalling("claude-code") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if inst.IsInstalling("claude-code") {
+		t.Fatal("expected cancel to stop the install promptly")
 	}
 }
 

@@ -3,6 +3,7 @@ import { Call } from '@wailsio/runtime';
 export const EventInstallStarted = 'agent:install:started';
 export const EventInstallFinished = 'agent:install:finished';
 export const EventInstallFailed = 'agent:install:failed';
+export const EventInstallProgress = 'agent:install:progress';
 
 function byName<T = void>(method: string, ...args: unknown[]) {
   return Call.ByName(method, ...args) as Promise<T>;
@@ -14,6 +15,10 @@ export function DetectAgents(): Promise<void> {
 
 export function InstallAgent(agentID: string): Promise<void> {
   return byName('main.App.InstallAgent', agentID);
+}
+
+export function CancelAgentInstall(agentID: string): Promise<void> {
+  return byName('main.App.CancelAgentInstall', agentID);
 }
 
 export function IsAgentInstalling(agentID: string): Promise<boolean> {

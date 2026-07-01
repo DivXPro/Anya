@@ -92,6 +92,12 @@ func (a *App) DownloadAndApplyUpdate() error {
 	if a.updater == nil {
 		return fmt.Errorf("self-update unavailable in this build")
 	}
+	// Applying an update relaunches the app; if an agent install is in flight it
+	// would be reparented (orphaned) and escape its timeout — the exact failure
+	// we are guarding against. Refuse until the install finishes or is canceled.
+	if a.agentInstaller != nil && a.agentInstaller.AnyInstalling() {
+		return fmt.Errorf("an agent installation is in progress; please wait for it to finish before updating")
+	}
 	a.setCheckUpdateMenuEnabled(false)
 	err := a.updater.DownloadAndApply(a.ctx)
 	if err != nil && !errors.Is(err, appupdate.ErrUpdateInProgress) {
@@ -756,6 +762,11 @@ func (a *App) GetSTTDownloadProgress() speech.DownloadProgress {
 // ServiceShutdown is called by Wails v3 when the service is shutting down.
 func (a *App) ServiceShutdown() error {
 	log.Println("[elf] shutting down...")
+	// Kill any in-flight agent installs so their child processes are not
+	// orphaned (which would let them run on, unbounded, after the app exits).
+	if a.agentInstaller != nil {
+		a.agentInstaller.Shutdown()
+	}
 	if a.wsServer != nil {
 		a.wsServer.Stop()
 	}
@@ -1350,6 +1361,16 @@ func (a *App) IsAgentInstalling(agentID string) bool {
 		return false
 	}
 	return a.agentInstaller.IsInstalling(agentID)
+}
+
+// CancelAgentInstall aborts an in-progress install/upgrade for the agent,
+// killing the entire process tree it spawned.
+func (a *App) CancelAgentInstall(agentID string) error {
+	if a.agentInstaller == nil {
+		return fmt.Errorf("agent installer not initialized")
+	}
+	a.agentInstaller.Cancel(agentID)
+	return nil
 }
 
 // CheckAgentUpdates queries the package registry for installed agents and

@@ -18,12 +18,14 @@ import { RiCheckLine, RiLoader4Line, RiFolderLine, RiFolderOpenLine } from '@rem
 import {
   DetectAgents,
   InstallAgent,
+  CancelAgentInstall,
   IsAgentInstalling,
   GetAgentInstallCommand,
   CheckAgentUpdates,
   EventInstallStarted,
   EventInstallFinished,
   EventInstallFailed,
+  EventInstallProgress,
 } from '@/lib/agent-api';
 
 const agentLogo: Record<string, string> = {
@@ -64,6 +66,7 @@ interface InstallEventData {
   agentID: string;
   version?: string;
   error?: string;
+  line?: string;
 }
 
 interface AgentTabProps {
@@ -74,6 +77,7 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
   const { t } = useTranslation();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [installingIds, setInstallingIds] = useState<Set<string>>(new Set());
+  const [installProgress, setInstallProgress] = useState<Record<string, string>>({});
   const [agentUpdates, setAgentUpdates] = useState<Record<string, string>>({});
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [doneFlash, setDoneFlash] = useState<Record<string, 'updated' | 'installed'>>({});
@@ -87,6 +91,9 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
   // the install event listeners are registered once and would capture stale
   // state otherwise.
   const updateClickedRef = useRef<Set<string>>(new Set());
+  // Tracks installs the user explicitly canceled, so the resulting failure event
+  // is treated as a quiet cancellation rather than surfacing an error dialog.
+  const canceledRef = useRef<Set<string>>(new Set());
   // Latest agents list, for lookups inside the once-registered event listeners.
   const agentsRef = useRef<Agent[]>([]);
   useEffect(() => {
@@ -162,16 +169,49 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
       const data = event.data as InstallEventData;
       if (data?.agentID) {
         setInstallingIds((prev) => new Set(prev).add(data.agentID));
+        // Reset any leftover progress line from a previous run.
+        setInstallProgress((prev) => {
+          if (!(data.agentID in prev)) return prev;
+          const next = { ...prev };
+          delete next[data.agentID];
+          return next;
+        });
       }
     });
+
+    const offProgress = Events.On(EventInstallProgress, (event) => {
+      const data = event.data as InstallEventData;
+      if (data?.agentID && data.line) {
+        setInstallProgress((prev) => ({ ...prev, [data.agentID]: data.line as string }));
+      }
+    });
+
+    const clearTransient = (id: string) => {
+      setInstallingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setInstallProgress((prev) => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    };
 
     const offFinished = Events.On(EventInstallFinished, (event) => {
       const data = event.data as InstallEventData;
       const id = data?.agentID;
       if (id) {
-        setInstallingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
+        clearTransient(id);
+        canceledRef.current.delete(id);
+        // The update completed — drop any stale "update available" flag right
+        // away so the button reverts even before the re-check returns.
+        setAgentUpdates((prev) => {
+          if (!(id in prev)) return prev;
+          const next = { ...prev };
+          delete next[id];
           return next;
         });
         const kind = updateClickedRef.current.has(id) ? 'updated' : 'installed';
@@ -194,14 +234,16 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
       const data = event.data as InstallEventData;
       const id = data?.agentID;
       if (id) {
-        setInstallingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
+        clearTransient(id);
         updateClickedRef.current.delete(id);
-        const name = agentsRef.current.find((a) => a.id === id)?.name || id;
-        setInstallError({ name, message: data?.error || 'unknown error' });
+        // A user-initiated cancel arrives as a failure event; swallow it quietly
+        // instead of surfacing an error dialog.
+        if (canceledRef.current.has(id)) {
+          canceledRef.current.delete(id);
+        } else {
+          const name = agentsRef.current.find((a) => a.id === id)?.name || id;
+          setInstallError({ name, message: data?.error || 'unknown error' });
+        }
       }
       refreshAgents();
       refreshUpdates();
@@ -209,6 +251,7 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
 
     return () => {
       offStarted();
+      offProgress();
       offFinished();
       offFailed();
     };
@@ -244,6 +287,17 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
         setManualCommand('');
       }
       setMissingPmAgent(agent);
+    }
+  };
+
+  const handleCancel = async (id: string) => {
+    // Mark first so the resulting failure event is treated as a quiet cancel.
+    canceledRef.current.add(id);
+    try {
+      await CancelAgentInstall(id);
+    } catch (e) {
+      console.error(e);
+      canceledRef.current.delete(id);
     }
   };
 
@@ -363,10 +417,27 @@ function AgentTab({ workingDirectoryRef }: AgentTabProps) {
               </div>
 
               {installing ? (
-                <Badge variant="outline" className="gap-1">
-                  <RiLoader4Line className="h-3 w-3 animate-spin" />
-                  {t('agent.installing')}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="flex items-center gap-1 max-w-[180px] text-xs text-muted-foreground"
+                    title={installProgress[agent.id] || t('agent.installing')}
+                  >
+                    <RiLoader4Line className="h-3 w-3 shrink-0 animate-spin" />
+                    <span className="truncate">
+                      {installProgress[agent.id] || t('agent.installing')}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCancel(agent.id);
+                    }}
+                    className={cn(badgeVariants({ variant: 'outline' }), 'cursor-pointer')}
+                  >
+                    {t('agent.cancel')}
+                  </button>
+                </div>
               ) : doneFlash[agent.id] ? (
                 <Badge
                   variant="secondary"
