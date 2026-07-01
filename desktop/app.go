@@ -289,9 +289,9 @@ func (a *App) showAbout() {
 	dialog := app.Dialog.Info()
 	dialog.SetTitle("Anya")
 	if a.trayUILanguage == "en" {
-		dialog.SetMessage(fmt.Sprintf("Hardware Agent Voice Assistant\n\nVersion %s (%s)", version.Version, version.Commit))
+		dialog.SetMessage(fmt.Sprintf("Hardware Agent Voice Assistant\n\nVersion %s (%s)\n© 2026 DivX", version.Version, version.Commit))
 	} else {
-		dialog.SetMessage(fmt.Sprintf("硬件智能体语音助手\n\n版本 %s（%s）", version.Version, version.Commit))
+		dialog.SetMessage(fmt.Sprintf("硬件智能体语音助手\n\n版本 %s（%s）\n© 2026 DivX", version.Version, version.Commit))
 	}
 	dialog.SetIcon(appIcon)
 	dialog.Show()
