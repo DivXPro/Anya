@@ -156,7 +156,11 @@ func (f *fakeTTS) callCount() int {
 }
 
 type fakeACPAdapter struct {
-	events []acp.StreamEvent
+	events     []acp.StreamEvent
+	sessions   []acp.AgentSession
+	cwd        string
+	loadedID   string
+	startedCWD string
 }
 
 func (f *fakeACPAdapter) Send(string, []acp.Message) (<-chan acp.StreamEvent, error) {
@@ -175,7 +179,25 @@ func (f *fakeACPAdapter) Info() acp.AgentInfo {
 }
 func (f *fakeACPAdapter) IsRunning() bool { return false }
 func (f *fakeACPAdapter) Stop() error     { return nil }
-func (f *fakeACPAdapter) SetCWD(string)   {}
+func (f *fakeACPAdapter) SetCWD(cwd string) {
+	f.cwd = cwd
+}
+func (f *fakeACPAdapter) ListAgentSessions(limit int) ([]acp.AgentSession, error) {
+	if len(f.sessions) > limit {
+		return f.sessions[:limit], nil
+	}
+	return f.sessions, nil
+}
+func (f *fakeACPAdapter) LoadAgentSession(id, cwd string) error {
+	f.loadedID = id
+	f.cwd = cwd
+	return nil
+}
+func (f *fakeACPAdapter) StartNewAgentSession(cwd string) error {
+	f.startedCWD = cwd
+	f.cwd = cwd
+	return nil
+}
 
 func newFakeDevice() *fakeDevice {
 	return &fakeDevice{
@@ -204,6 +226,181 @@ func (f *fakeDevice) sentMessages() []gateway.DeviceMessage {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]gateway.DeviceMessage(nil), f.sent...)
+}
+
+func waitForDeviceMessage(t *testing.T, dev *fakeDevice, msgType string) gateway.DeviceMessage {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		for _, msg := range dev.sentMessages() {
+			if msg.Type == msgType {
+				return msg
+			}
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for %s; sent=%+v", msgType, dev.sentMessages())
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+func TestDeviceCanRequestAgentSessionList(t *testing.T) {
+	tmp := t.TempDir()
+	db, err := store.InitDB(filepath.Join(tmp, "elf.db"))
+	if err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+	defer db.Close()
+	dialogue, err := store.CreateDialogue(db, "dev1", "fake-agent")
+	if err != nil {
+		t.Fatalf("create dialogue: %v", err)
+	}
+
+	adapter := &fakeACPAdapter{sessions: []acp.AgentSession{
+		{ID: "agent-session-1", Title: "First task", CWD: "/tmp/first", Source: "fake", CanResume: true},
+	}}
+	a := NewApp()
+	a.db = db
+	a.router = acp.NewRouter()
+	a.router.Register(adapter)
+
+	dev := newFakeDevice()
+	done := make(chan struct{})
+	go func() {
+		a.handleDeviceEvents(dev, dialogue.ID)
+		close(done)
+	}()
+
+	dev.events <- gateway.DeviceEvent{Type: "agent_session_list_req"}
+	msg := waitForDeviceMessage(t, dev, "agent_session_list")
+
+	if msg.Payload["agent_id"] != "fake-agent" {
+		t.Fatalf("agent_id = %v", msg.Payload["agent_id"])
+	}
+	items, ok := msg.Payload["sessions"].([]map[string]interface{})
+	if !ok || len(items) != 1 {
+		t.Fatalf("unexpected sessions payload: %#v", msg.Payload["sessions"])
+	}
+	if items[0]["id"] != "agent-session-1" || items[0]["title"] != "First task" {
+		t.Fatalf("unexpected first item: %#v", items[0])
+	}
+
+	close(dev.events)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handleDeviceEvents did not exit")
+	}
+}
+
+func TestDeviceCanSelectExistingAgentSessionAndDialogue(t *testing.T) {
+	tmp := t.TempDir()
+	cwd := filepath.Join(tmp, "workspace")
+	if err := os.MkdirAll(cwd, 0755); err != nil {
+		t.Fatalf("mkdir cwd: %v", err)
+	}
+	db, err := store.InitDB(filepath.Join(tmp, "elf.db"))
+	if err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+	defer db.Close()
+	dialogue, err := store.CreateDialogue(db, "dev1", "fake-agent")
+	if err != nil {
+		t.Fatalf("create dialogue: %v", err)
+	}
+
+	adapter := &fakeACPAdapter{}
+	a := NewApp()
+	a.db = db
+	a.router = acp.NewRouter()
+	a.router.Register(adapter)
+
+	dev := newFakeDevice()
+	done := make(chan struct{})
+	go func() {
+		a.handleDeviceEvents(dev, dialogue.ID)
+		close(done)
+	}()
+
+	dev.events <- gateway.DeviceEvent{
+		Type: "agent_session_select",
+		Payload: map[string]interface{}{
+			"id":         "agent-session-1",
+			"title":      "Selected task",
+			"cwd":        cwd,
+			"source":     "fake",
+			"can_resume": true,
+		},
+	}
+	msg := waitForDeviceMessage(t, dev, "agent_session_changed")
+
+	if adapter.loadedID != "agent-session-1" || adapter.cwd != cwd {
+		t.Fatalf("agent session not loaded: loaded=%q cwd=%q", adapter.loadedID, adapter.cwd)
+	}
+	if msg.Payload["id"] != "agent-session-1" || msg.Payload["cwd"] != cwd {
+		t.Fatalf("unexpected changed payload: %#v", msg.Payload)
+	}
+
+	close(dev.events)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handleDeviceEvents did not exit")
+	}
+}
+
+func TestDeviceCanStartNewAgentSession(t *testing.T) {
+	tmp := t.TempDir()
+	cwd := filepath.Join(tmp, "workspace")
+	if err := os.MkdirAll(cwd, 0755); err != nil {
+		t.Fatalf("mkdir cwd: %v", err)
+	}
+	db, err := store.InitDB(filepath.Join(tmp, "elf.db"))
+	if err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+	defer db.Close()
+	dialogue, err := store.CreateDialogue(db, "dev1", "fake-agent")
+	if err != nil {
+		t.Fatalf("create dialogue: %v", err)
+	}
+
+	adapter := &fakeACPAdapter{}
+	a := NewApp()
+	a.db = db
+	a.router = acp.NewRouter()
+	a.router.Register(adapter)
+
+	dev := newFakeDevice()
+	done := make(chan struct{})
+	go func() {
+		a.handleDeviceEvents(dev, dialogue.ID)
+		close(done)
+	}()
+
+	dev.events <- gateway.DeviceEvent{
+		Type: "agent_session_select",
+		Payload: map[string]interface{}{
+			"new": true,
+			"cwd": cwd,
+		},
+	}
+	msg := waitForDeviceMessage(t, dev, "agent_session_changed")
+
+	if adapter.startedCWD != cwd || adapter.cwd != cwd {
+		t.Fatalf("new agent session not started: started=%q cwd=%q", adapter.startedCWD, adapter.cwd)
+	}
+	if msg.Payload["new_session"] != true || msg.Payload["cwd"] != cwd {
+		t.Fatalf("unexpected changed payload: %#v", msg.Payload)
+	}
+
+	close(dev.events)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handleDeviceEvents did not exit")
+	}
 }
 
 func TestEmptyTranscriptUsesUIStateNotConnectionStatus(t *testing.T) {

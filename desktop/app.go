@@ -886,6 +886,7 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 	}
 
 	var audioBuffer []byte
+	currentDialogueID := sessionID
 
 	for {
 		select {
@@ -902,12 +903,13 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 				audioBuffer = nil
 				dev.SendText(gateway.UIStateMessage("listening"))
 			case "audio_end":
+				activeDialogueID := currentDialogueID
 				// Don't switch to processing immediately; let the device show
 				// "Sending..." until we actually start processing. Guard against
 				// a second turn starting while one is still in flight (which would
 				// corrupt the shared ACP session/stream).
-				if !a.tryBeginTurn(sessionID) {
-					log.Printf("[elf] ignoring audio_end: a turn is already in progress for session %s", sessionID)
+				if !a.tryBeginTurn(activeDialogueID) {
+					log.Printf("[elf] ignoring audio_end: a turn is already in progress for session %s", activeDialogueID)
 					// Signal the device that the request was dropped so it leaves
 					// the SENDING state and stops waiting, instead of relying on
 					// its turn watchdog to time out ~30s later.
@@ -916,13 +918,25 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 					continue
 				}
 				go func(buf []byte) {
-					defer a.endTurn(sessionID)
-					a.processVoiceRequest(dev, sessionID, buf)
+					defer a.endTurn(activeDialogueID)
+					a.processVoiceRequest(dev, activeDialogueID, buf)
 				}(audioBuffer)
 			case "button":
 				log.Printf("[elf] button: %s", evt.Action)
 			case "confirm_response":
 				a.handleConfirmResponse(evt.Payload)
+			case "agent_session_list_req":
+				a.sendAgentSessionList(dev, currentDialogueID)
+			case "agent_session_select":
+				nextDialogueID, err := a.handleAgentSessionSelect(dev, currentDialogueID, evt.Payload)
+				if err != nil {
+					log.Printf("[elf] agent session select error: %v", err)
+					dev.SendText(gateway.SummaryMessage("切换 Agent 会话失败"))
+					continue
+				}
+				if nextDialogueID != "" {
+					currentDialogueID = nextDialogueID
+				}
 			case "ping":
 				// WebSocket itself carries liveness; ping must not mutate the
 				// device UI/turn state.
@@ -935,9 +949,116 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 			audioBuffer = append(audioBuffer, chunk...)
 
 		case <-dev.OnDisconnect():
-			store.CloseSession(a.db, sessionID)
+			store.CloseDialogue(a.db, currentDialogueID)
 			return
 		}
+	}
+}
+
+func (a *App) sendAgentSessionList(dev gateway.DeviceAdapter, dialogueID string) {
+	dialogue, err := store.GetDialogue(a.db, dialogueID)
+	if err != nil {
+		log.Printf("[elf] agent session list dialogue lookup failed: %v", err)
+		dev.SendText(gateway.AgentSessionListMessage("", nil))
+		return
+	}
+	sessions, err := a.router.ListAgentSessions(dialogue.AgentID, 10)
+	if err != nil {
+		log.Printf("[elf] list agent sessions failed: %v", err)
+		dev.SendText(gateway.AgentSessionListMessage(dialogue.AgentID, nil))
+		return
+	}
+	dev.SendText(gateway.AgentSessionListMessage(dialogue.AgentID, sessions))
+}
+
+func (a *App) handleAgentSessionSelect(dev gateway.DeviceAdapter, currentDialogueID string, payload map[string]interface{}) (string, error) {
+	current, err := store.GetDialogue(a.db, currentDialogueID)
+	if err != nil {
+		return "", fmt.Errorf("lookup current dialogue: %w", err)
+	}
+	createNew, _ := payload["new"].(bool)
+	cwd, _ := payload["cwd"].(string)
+	if cwd == "" {
+		cwd = a.agentCWD
+	}
+	if cwd != "" {
+		if err := validateWorkingDirectory(cwd); err != nil {
+			return "", err
+		}
+	}
+
+	if createNew {
+		if err := a.router.StartNewAgentSession(current.AgentID, cwd); err != nil {
+			return "", err
+		}
+		a.applyAgentSessionCWD(cwd)
+		next, err := store.CreateDialogue(a.db, current.DeviceID, current.AgentID)
+		if err != nil {
+			return "", err
+		}
+		if next.ID != currentDialogueID {
+			if err := store.CloseDialogue(a.db, currentDialogueID); err != nil {
+				log.Printf("[elf] close previous dialogue after new agent session failed: %v", err)
+			}
+		}
+		dev.SendText(gateway.AgentSessionChangedMessage(current.AgentID, acp.AgentSession{CWD: cwd, Source: current.AgentID, CanResume: true}))
+		return next.ID, nil
+	}
+
+	id, _ := payload["id"].(string)
+	if id == "" {
+		return "", fmt.Errorf("missing agent session id")
+	}
+	title, _ := payload["title"].(string)
+	source, _ := payload["source"].(string)
+	canResume, ok := payload["can_resume"].(bool)
+	if !ok {
+		canResume = true
+	}
+
+	if err := a.router.LoadAgentSession(current.AgentID, id, cwd); err != nil {
+		return "", err
+	}
+	a.applyAgentSessionCWD(cwd)
+
+	next, err := store.GetOpenDialogueForAgentSession(a.db, current.DeviceID, current.AgentID, id)
+	if err != nil {
+		return "", err
+	}
+	if next == nil {
+		next, err = store.CreateDialogue(a.db, current.DeviceID, current.AgentID)
+		if err != nil {
+			return "", err
+		}
+		if err := store.UpdateDialogueAgentSession(a.db, next.ID, id, current.AgentID); err != nil {
+			return "", err
+		}
+	}
+	if next.ID != currentDialogueID {
+		if err := store.CloseDialogue(a.db, currentDialogueID); err != nil {
+			log.Printf("[elf] close previous dialogue after agent session selection failed: %v", err)
+		}
+	}
+	dev.SendText(gateway.AgentSessionChangedMessage(current.AgentID, acp.AgentSession{
+		ID:        id,
+		Title:     title,
+		CWD:       cwd,
+		Source:    source,
+		CanResume: canResume,
+	}))
+	return next.ID, nil
+}
+
+func (a *App) applyAgentSessionCWD(cwd string) {
+	a.agentCWD = cwd
+	if a.db != nil {
+		if err := store.SetSetting(a.db, "agent_cwd", cwd); err != nil {
+			log.Printf("[elf] persist agent session cwd failed: %v", err)
+		}
+	}
+	a.refreshTrayCWD()
+	if a.router != nil {
+		a.router.SetCWD(cwd)
 	}
 }
 

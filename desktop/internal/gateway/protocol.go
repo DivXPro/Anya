@@ -2,6 +2,8 @@ package gateway
 
 import (
 	"encoding/json"
+
+	"desktop/internal/acp"
 )
 
 type DeviceMessage struct {
@@ -65,6 +67,44 @@ func StatusMessage(state string) DeviceMessage {
 
 func UIStateMessage(state string) DeviceMessage {
 	return DeviceMessage{Type: "ui_state", State: state}
+}
+
+func AgentSessionListMessage(agentID string, sessions []acp.AgentSession) DeviceMessage {
+	items := make([]map[string]interface{}, len(sessions))
+	for i, s := range sessions {
+		items[i] = map[string]interface{}{
+			"id":         s.ID,
+			"title":      s.Title,
+			"cwd":        s.CWD,
+			"updated_at": s.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			"source":     s.Source,
+			"can_resume": s.CanResume,
+		}
+	}
+	return DeviceMessage{
+		Type: "agent_session_list",
+		Payload: map[string]interface{}{
+			"agent_id":   agentID,
+			"sessions":   items,
+			"can_create": true,
+		},
+	}
+}
+
+func AgentSessionChangedMessage(agentID string, session acp.AgentSession) DeviceMessage {
+	return DeviceMessage{
+		Type: "agent_session_changed",
+		Payload: map[string]interface{}{
+			"agent_id":    agentID,
+			"id":          session.ID,
+			"title":       session.Title,
+			"cwd":         session.CWD,
+			"source":      session.Source,
+			"can_resume":  session.CanResume,
+			"updated_at":  session.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			"new_session": session.ID == "",
+		},
+	}
 }
 
 func FirmwareVersionReqMessage() DeviceMessage {
