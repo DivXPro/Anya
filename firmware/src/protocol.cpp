@@ -11,6 +11,7 @@ static size_t otaChunkSize = 0;
 static size_t otaTotalSize = 0;
 static size_t otaReceived = 0;
 static int otaSeq = 0;
+static AgentSessionListCallback s_agentSessionListCallback = nullptr;
 
 void protocol_init() {
     ws_on_text([](const char* msg) {
@@ -57,6 +58,27 @@ void protocol_handle_message(const char* json) {
                 wifi_get_desktop_port());
         }
         state_transition(State::IDLE);
+    } else if (strcmp(type, "agent_session_list") == 0) {
+        AgentSessionOption options[10];
+        int count = 0;
+        JsonArray sessions = doc["payload"]["sessions"];
+        for (JsonObject s : sessions) {
+            if (count >= 10) break;
+            const char* id = s["id"] | "";
+            const char* title = s["title"] | "";
+            const char* cwd = s["cwd"] | "";
+            strncpy(options[count].id, id, sizeof(options[count].id) - 1);
+            options[count].id[sizeof(options[count].id) - 1] = '\0';
+            strncpy(options[count].title, title, sizeof(options[count].title) - 1);
+            options[count].title[sizeof(options[count].title) - 1] = '\0';
+            strncpy(options[count].cwd, cwd, sizeof(options[count].cwd) - 1);
+            options[count].cwd[sizeof(options[count].cwd) - 1] = '\0';
+            options[count].canResume = s["can_resume"] | true;
+            count++;
+        }
+        if (s_agentSessionListCallback) {
+            s_agentSessionListCallback(options, count);
+        }
     } else if (strcmp(type, "pairing_required") == 0) {
         String boundID = wifi_get_bound_desktop_id();
         if (boundID.length() > 0) {
@@ -175,4 +197,30 @@ void protocol_send_button(const char* action) {
     char json[64];
     snprintf(json, sizeof(json), "{\"type\":\"button\",\"action\":\"%s\"}", action);
     ws_send_text(json);
+}
+
+void protocol_on_agent_session_list(AgentSessionListCallback cb) {
+    s_agentSessionListCallback = cb;
+}
+
+void protocol_send_agent_session_list_req() {
+    ws_send_text("{\"type\":\"agent_session_list_req\"}");
+}
+
+void protocol_send_agent_session_select(const char* id, bool createNew, const char* cwd) {
+    JsonDocument doc;
+    doc["type"] = "agent_session_select";
+    JsonObject payload = doc["payload"].to<JsonObject>();
+    payload["new"] = createNew;
+    if (id && id[0]) {
+        payload["id"] = id;
+    }
+    if (cwd && cwd[0]) {
+        payload["cwd"] = cwd;
+    }
+    char json[512];
+    size_t n = serializeJson(doc, json, sizeof(json));
+    if (n > 0 && n < sizeof(json)) {
+        ws_send_text(json);
+    }
 }

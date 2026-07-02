@@ -25,7 +25,7 @@ static bool advertising = false;
 static bool httpStarted = false;
 
 static bool inMenu = false;
-enum class MenuLevel : uint8_t { MAIN, LANGUAGE };
+enum class MenuLevel : uint8_t { MAIN, LANGUAGE, AGENT_SESSION };
 static MenuLevel menuLevel = MenuLevel::MAIN;
 static int menuSelected = 0;
 static State menuReturnState = State::IDLE;
@@ -51,6 +51,7 @@ static const Str mainMenuItems[] = {
     Str::MenuChooseWifi,
     Str::MenuRepair,
     Str::MenuTestSpeaker,
+    Str::MenuAgentSession,
     Str::MenuLanguage,
     Str::MenuBack,
 };
@@ -63,10 +64,47 @@ static const Str langMenuItems[] = {
 };
 static const int langMenuCount = sizeof(langMenuItems) / sizeof(langMenuItems[0]);
 
+static AgentSessionOption s_agentSessions[10];
+static int s_agentSessionCount = 0;
+static bool s_agentSessionLoading = false;
+
+static int agent_session_menu_count() {
+    if (s_agentSessionLoading || s_agentSessionCount == 0) {
+        return 3; // New Session, Loading/No sessions, Back
+    }
+    return s_agentSessionCount + 2; // New Session, sessions..., Back
+}
+
+static int agent_session_back_index() {
+    return agent_session_menu_count() - 1;
+}
+
 static void show_menu() {
     if (menuLevel == MenuLevel::LANGUAGE) {
         disp_menu(deviceName, menuSelected, langMenuItems, langMenuCount,
                   wifi_rssi(), wifi_connected(), ws_connected());
+    } else if (menuLevel == MenuLevel::AGENT_SESSION) {
+        const int count = agent_session_menu_count();
+        const char* titles[12];
+        const char* cwd[12];
+        titles[0] = tr(Str::MenuNewAgentSession);
+        cwd[0] = "";
+        if (s_agentSessionLoading) {
+            titles[1] = tr(Str::MenuLoadingSessions);
+            cwd[1] = "";
+        } else if (s_agentSessionCount == 0) {
+            titles[1] = tr(Str::MenuNoAgentSessions);
+            cwd[1] = "";
+        } else {
+            for (int i = 0; i < s_agentSessionCount; i++) {
+                titles[i + 1] = s_agentSessions[i].title;
+                cwd[i + 1] = s_agentSessions[i].cwd;
+            }
+        }
+        titles[count - 1] = tr(Str::MenuBack);
+        cwd[count - 1] = "";
+        disp_agent_session_menu(deviceName, menuSelected, titles, cwd, count,
+                                wifi_rssi(), wifi_connected(), ws_connected());
     } else {
         disp_menu(deviceName, menuSelected, mainMenuItems, mainMenuCount,
                   wifi_rssi(), wifi_connected(), ws_connected());
@@ -166,7 +204,31 @@ static void register_button_callbacks() {
                 }
                 // Back (index 2) simply returns to the main menu.
                 menuLevel = MenuLevel::MAIN;
-                menuSelected = 3; // Language
+                menuSelected = 4; // Language
+                show_menu();
+                return;
+            }
+            if (menuLevel == MenuLevel::AGENT_SESSION) {
+                int back = agent_session_back_index();
+                if (menuSelected == back) {
+                    menuLevel = MenuLevel::MAIN;
+                    menuSelected = 3; // Agent Session
+                    show_menu();
+                    return;
+                }
+                if (menuSelected == 0) {
+                    protocol_send_agent_session_select("", true);
+                    inMenu = false;
+                    state_transition(State::IDLE);
+                    return;
+                }
+                int sessionIndex = menuSelected - 1;
+                if (!s_agentSessionLoading && sessionIndex >= 0 && sessionIndex < s_agentSessionCount) {
+                    protocol_send_agent_session_select(s_agentSessions[sessionIndex].id, false, s_agentSessions[sessionIndex].cwd);
+                    inMenu = false;
+                    state_transition(State::IDLE);
+                    return;
+                }
                 show_menu();
                 return;
             }
@@ -204,11 +266,19 @@ static void register_button_callbacks() {
                 delay(1200);
                 show_menu();
             } else if (menuSelected == 3) {
+                // Agent Session: ask desktop for recent Agent-side sessions.
+                menuLevel = MenuLevel::AGENT_SESSION;
+                menuSelected = 0;
+                s_agentSessionCount = 0;
+                s_agentSessionLoading = true;
+                show_menu();
+                protocol_send_agent_session_list_req();
+            } else if (menuSelected == 4) {
                 // Language: enter the second-level language menu
                 menuLevel = MenuLevel::LANGUAGE;
                 menuSelected = (lang_get() == Lang::EN) ? 0 : 1;
                 show_menu();
-            } else if (menuSelected == 4) {
+            } else if (menuSelected == 5) {
                 // Back: return to the screen we were on before opening the menu.
                 inMenu = false;
                 State target = menuReturnState;
@@ -264,7 +334,12 @@ static void register_button_callbacks() {
             state_transition(State::MENU);
             show_menu();
         } else {
-            int count = (menuLevel == MenuLevel::LANGUAGE) ? langMenuCount : mainMenuCount;
+            int count = mainMenuCount;
+            if (menuLevel == MenuLevel::LANGUAGE) {
+                count = langMenuCount;
+            } else if (menuLevel == MenuLevel::AGENT_SESSION) {
+                count = agent_session_menu_count();
+            }
             menuSelected = (menuSelected + 1) % count;
             ESP_LOGI("main", "menu next -> %d", menuSelected);
             show_menu();
@@ -286,6 +361,20 @@ void setup() {
     btn_init();
     ws_init();
     protocol_init();
+    protocol_on_agent_session_list([](const AgentSessionOption* sessions, int count) {
+        s_agentSessionCount = min(count, 10);
+        for (int i = 0; i < s_agentSessionCount; i++) {
+            s_agentSessions[i] = sessions[i];
+        }
+        s_agentSessionLoading = false;
+        if (inMenu && menuLevel == MenuLevel::AGENT_SESSION) {
+            int maxIndex = agent_session_menu_count() - 1;
+            if (menuSelected > maxIndex) {
+                menuSelected = maxIndex;
+            }
+            show_menu();
+        }
+    });
     register_button_callbacks();
 
     bool wifiOK = wifi_init();

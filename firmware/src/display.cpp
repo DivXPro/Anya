@@ -442,6 +442,38 @@ void disp_menu(const char* agent, int selected, const Str* items, int count, int
     }
 }
 
+void disp_agent_session_menu(const char* agent, int selected, const char* const* titles, const char* const* cwd, int count, int8_t rssi, bool wifiConnected, bool wsConnected) {
+    M5.Display.fillScreen(TFT_BLACK);
+    disp_status_bar(rssi, wifiConnected, wsConnected, agent);
+    mascotVisible = false;
+
+    const int rowH = 26;
+    const int startY = STATUS_BAR_H + 4;
+    const int visible = max(1, (M5.Display.height() - startY) / rowH);
+    int offset = 0;
+    if (selected >= visible && count > visible) {
+        offset = selected - visible + 1;
+    }
+
+    M5.Display.setTextSize(1);
+    M5.Display.setTextDatum(textdatum_t::top_left);
+
+    int end = min(count, offset + visible);
+    for (int i = offset; i < end; i++) {
+        int y = startY + (i - offset) * rowH;
+        bool sel = (i == selected);
+        const char* title = titles[i] ? titles[i] : "";
+        const char* dir = cwd[i] ? cwd[i] : "";
+
+        M5.Display.setClipRect(0, y, M5.Display.width(), rowH);
+        M5.Display.setTextColor(sel ? TFT_GREEN : TFT_WHITE);
+        M5.Display.drawString(String(sel ? "> " : "  ") + title, 4, y);
+        M5.Display.setTextColor(sel ? TFT_DARKGREEN : TFT_DARKGREY);
+        M5.Display.drawString(String("  ") + dir, 4, y + 12);
+        M5.Display.clearClipRect();
+    }
+}
+
 // ── Confirmation ──────────────────────────────────────────────
 void disp_confirm(const char* agent, const char* prompt, const char* const* options, int count, int selected) {
     M5.Display.fillScreen(TFT_BLACK);
