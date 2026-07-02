@@ -1,5 +1,7 @@
 package acp
 
+import "time"
+
 type ACPAdapter interface {
 	Send(prompt string, history []Message) (<-chan StreamEvent, error)
 	LoadSession(acpSessionID string, history []Message) error
@@ -8,6 +10,27 @@ type ACPAdapter interface {
 	IsRunning() bool
 	Stop() error
 	SetCWD(cwd string) // NEW
+}
+
+type AgentSession struct {
+	ID        string    `json:"id"`
+	Title     string    `json:"title"`
+	CWD       string    `json:"cwd"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Source    string    `json:"source"`
+	CanResume bool      `json:"can_resume"`
+}
+
+type AgentSessionProvider interface {
+	ListAgentSessions(limit int) ([]AgentSession, error)
+}
+
+type AgentSessionLoader interface {
+	LoadAgentSession(id, cwd string) error
+}
+
+type AgentSessionStarter interface {
+	StartNewAgentSession(cwd string) error
 }
 
 type AgentInfo struct {

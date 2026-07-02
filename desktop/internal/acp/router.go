@@ -67,6 +67,54 @@ func (r *Router) CurrentSessionID(agentID string) (string, error) {
 	return adapter.CurrentSessionID(), nil
 }
 
+func (r *Router) ListAgentSessions(agentID string, limit int) ([]AgentSession, error) {
+	r.mu.RLock()
+	adapter, ok := r.adapters[agentID]
+	r.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("unknown agent: %s", agentID)
+	}
+	provider, ok := adapter.(AgentSessionProvider)
+	if !ok {
+		return []AgentSession{}, nil
+	}
+	return provider.ListAgentSessions(limit)
+}
+
+func (r *Router) LoadAgentSession(agentID, id, cwd string) error {
+	r.mu.RLock()
+	adapter, ok := r.adapters[agentID]
+	r.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("unknown agent: %s", agentID)
+	}
+	adapter.SetCWD(cwd)
+	r.mu.Lock()
+	r.lastUsed[agentID] = time.Now()
+	r.mu.Unlock()
+	if loader, ok := adapter.(AgentSessionLoader); ok {
+		return loader.LoadAgentSession(id, cwd)
+	}
+	return adapter.LoadSession(id, nil)
+}
+
+func (r *Router) StartNewAgentSession(agentID, cwd string) error {
+	r.mu.RLock()
+	adapter, ok := r.adapters[agentID]
+	r.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("unknown agent: %s", agentID)
+	}
+	adapter.SetCWD(cwd)
+	r.mu.Lock()
+	delete(r.lastUsed, agentID)
+	r.mu.Unlock()
+	if starter, ok := adapter.(AgentSessionStarter); ok {
+		return starter.StartNewAgentSession(cwd)
+	}
+	return adapter.Stop()
+}
+
 func (r *Router) ListAgents() []AgentInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
