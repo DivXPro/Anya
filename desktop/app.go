@@ -20,6 +20,7 @@ import (
 	"desktop/internal/acp"
 	"desktop/internal/acp/adapters"
 	"desktop/internal/agentinstall"
+	"desktop/internal/applog"
 	"desktop/internal/appupdate"
 	logoassets "desktop/internal/assets"
 	"desktop/internal/discovery"
@@ -74,6 +75,16 @@ type App struct {
 // CurrentVersion returns the running application version (bound to the frontend).
 func (a *App) CurrentVersion() string {
 	return version.Version
+}
+
+// GetLogInfo returns the current desktop runtime log location and metadata.
+func (a *App) GetLogInfo() applog.Info {
+	return applog.GetInfo()
+}
+
+// ReadLogTail returns the tail of the desktop runtime log, capped server-side.
+func (a *App) ReadLogTail(maxBytes int64) (string, error) {
+	return applog.ReadTail(maxBytes)
 }
 
 // CheckForUpdate queries for a newer release; returns nil when up to date.
@@ -531,7 +542,6 @@ func NewApp() *App {
 // ServiceStartup is called by Wails v3 when the service is initialized.
 func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOptions) error {
 	a.ctx = ctx
-	log.Println("[elf] starting up...")
 
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -542,6 +552,11 @@ func (a *App) ServiceStartup(ctx context.Context, opts application.ServiceOption
 		return fmt.Errorf("create data dir: %w", err)
 	}
 	a.dataDir = dataDir
+	if err := applog.Init(dataDir); err != nil {
+		return fmt.Errorf("init app log: %w", err)
+	}
+	log.Println("[elf] starting up...")
+	agentinstall.ApplyRuntimePath()
 
 	// 1. Init store
 	db, err := store.InitDB(filepath.Join(dataDir, "elf.db"))
@@ -1157,10 +1172,18 @@ func (a *App) endTurn(sessionID string) {
 
 func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, audioData []byte) {
 	dev.SendText(gateway.UIStateMessage("processing"))
+	idleSent := false
+	sendIdle := func() {
+		if idleSent {
+			return
+		}
+		idleSent = true
+		dev.SendText(gateway.UIStateMessage("idle"))
+	}
+	defer sendIdle()
 
 	// 1. STT
 	if !a.sttReady() {
-		dev.SendText(gateway.UIStateMessage("idle"))
 		dev.SendText(gateway.SummaryMessage("语音模型加载中，请稍候"))
 		return
 	}
@@ -1177,7 +1200,6 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 	log.Printf("[elf] STT: %s", text)
 
 	if strings.TrimSpace(text) == "" {
-		dev.SendText(gateway.UIStateMessage("idle"))
 		dev.SendText(gateway.SummaryMessage("没听清，请再说一次"))
 		return
 	}
@@ -1331,7 +1353,7 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 		dev.SendText(gateway.TTSEndMessage())
 	}
 
-	dev.SendText(gateway.UIStateMessage("idle"))
+	sendIdle()
 	log.Printf("[elf] request complete")
 }
 

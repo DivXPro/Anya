@@ -17,9 +17,12 @@ import {
   RiSunLine,
   RiMoonLine,
   RiUsbLine,
+  RiFileTextLine,
+  RiRefreshLine,
 } from '@remixicon/react';
 import { useAppSettings, type Theme } from '@/hooks/useAppSettings';
 import { CurrentVersion } from '@/lib/update-api';
+import { GetLogInfo, ReadLogTail, type LogInfo } from '@/lib/log-api';
 import { Events } from '@wailsio/runtime';
 import {
   CheckForUpdate,
@@ -60,6 +63,10 @@ function SettingsTab() {
   const [updateProgress, setUpdateProgress] = useState<number | null>(null);
   const [updateApplying, setUpdateApplying] = useState(false);
   const [updateError, setUpdateError] = useState('');
+  const [logInfo, setLogInfo] = useState<LogInfo | null>(null);
+  const [logText, setLogText] = useState('');
+  const [logLoading, setLogLoading] = useState(false);
+  const [logError, setLogError] = useState('');
 
   useEffect(() => {
     const offProgress = Events.On(EventUpdateProgress, (e) => {
@@ -134,6 +141,7 @@ function SettingsTab() {
       .then((v) => setFirmwareVersion(v))
       .catch(() => {});
 
+    refreshLogs();
     refreshPorts();
 
     const poll = () => {
@@ -177,6 +185,23 @@ function SettingsTab() {
 
   const cancelFlash = () => {
     App.CancelFlash().catch(console.error);
+  };
+
+  const refreshLogs = async () => {
+    setLogLoading(true);
+    setLogError('');
+    try {
+      const [info, text] = await Promise.all([
+        GetLogInfo(),
+        ReadLogTail(200 * 1024),
+      ]);
+      setLogInfo(info);
+      setLogText(text);
+    } catch (e) {
+      setLogError(String(e));
+    } finally {
+      setLogLoading(false);
+    }
   };
 
   const checkDeviceVersion = async () => {
@@ -503,6 +528,48 @@ function SettingsTab() {
                   {flashProgress.error}
                 </pre>
               </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold">{t('settings.logs.title')}</h2>
+        <div className="rounded-lg border bg-card">
+          <div className="flex items-start justify-between border-b p-3">
+            <div className="min-w-0 space-y-1">
+              <Label className="flex items-center gap-2">
+                <RiFileTextLine className="h-4 w-4 shrink-0 text-muted-foreground" />
+                {t('settings.logs.file')}
+              </Label>
+              <p className="truncate text-xs text-muted-foreground" title={logInfo?.path || ''}>
+                {logInfo?.path || t('settings.logs.noFile')}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={refreshLogs} disabled={logLoading}>
+              <RiRefreshLine className={`mr-1 h-4 w-4 ${logLoading ? 'animate-spin' : ''}`} />
+              {t('settings.logs.refresh')}
+            </Button>
+          </div>
+
+          <div className="space-y-3 p-3">
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <Badge variant="secondary">
+                {t('settings.logs.size')}: {formatBytes(logInfo?.size || 0)}
+              </Badge>
+              {logInfo?.modified_at && (
+                <Badge variant="secondary">
+                  {t('settings.logs.modified')}: {new Date(logInfo.modified_at).toLocaleString()}
+                </Badge>
+              )}
+            </div>
+
+            {logError ? (
+              <p className="text-sm text-red-700 dark:text-red-400">{logError}</p>
+            ) : (
+              <pre className="max-h-72 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words">
+                {logText || t('settings.logs.empty')}
+              </pre>
             )}
           </div>
         </div>

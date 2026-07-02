@@ -119,6 +119,16 @@ func (i *Installer) detectOne(id, command string) error {
 	return nil
 }
 
+// ApplyRuntimePath expands the current process PATH with the same common
+// locations used by agent detection. GUI-launched desktop apps on macOS often
+// inherit a minimal launchd PATH, so applying this once at startup keeps agent
+// detection and agent process launch behavior consistent.
+func ApplyRuntimePath() {
+	if path := augmentPath(""); path != "" {
+		os.Setenv("PATH", path)
+	}
+}
+
 // IsInstalling reports whether an install is currently running for the agent.
 func (i *Installer) IsInstalling(id string) bool {
 	i.mu.Lock()

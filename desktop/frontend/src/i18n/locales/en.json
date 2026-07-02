@@ -77,6 +77,15 @@
       "checkingVersion": "Checking...",
       "upgradeAvailable": "A new version is available",
       "hintBoot": "If the device cannot connect, hold the BOOT button while plugging in USB."
+    },
+    "logs": {
+      "title": "Diagnostic Logs",
+      "file": "Log File",
+      "noFile": "Log file is not initialized",
+      "refresh": "Refresh",
+      "size": "Size",
+      "modified": "Updated",
+      "empty": "No log entries yet"
     }
   },
   "device": {

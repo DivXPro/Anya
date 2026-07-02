@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -157,6 +158,7 @@ func (f *fakeTTS) callCount() int {
 
 type fakeACPAdapter struct {
 	events     []acp.StreamEvent
+	sendErr    error
 	sessions   []acp.AgentSession
 	cwd        string
 	loadedID   string
@@ -164,6 +166,9 @@ type fakeACPAdapter struct {
 }
 
 func (f *fakeACPAdapter) Send(string, []acp.Message) (<-chan acp.StreamEvent, error) {
+	if f.sendErr != nil {
+		return nil, f.sendErr
+	}
 	ch := make(chan acp.StreamEvent, len(f.events))
 	for _, evt := range f.events {
 		ch <- evt
@@ -425,6 +430,89 @@ func TestEmptyTranscriptUsesUIStateNotConnectionStatus(t *testing.T) {
 	}
 	if !sawProcessingUI || !sawIdleUI {
 		t.Fatalf("expected processing and idle ui_state messages, sent=%+v", msgs)
+	}
+}
+
+func TestAgentRouteErrorReturnsDeviceToIdle(t *testing.T) {
+	tmp := t.TempDir()
+	db, err := store.InitDB(filepath.Join(tmp, "elf.db"))
+	if err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+	defer db.Close()
+
+	session, err := store.CreateSession(db, "dev1", "fake-agent")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	a := NewApp()
+	a.db = db
+	a.stt = fakeSTT{text: "你好"}
+	a.router = acp.NewRouter()
+	a.router.Register(&fakeACPAdapter{sendErr: errors.New("agent binary not found")})
+
+	dev := newFakeDevice()
+	a.processVoiceRequest(dev, session.ID, []byte{1, 2, 3})
+
+	msgs := dev.sentMessages()
+	var sawFailureSummary bool
+	if len(msgs) == 0 {
+		t.Fatal("expected messages to be sent")
+	}
+	if last := msgs[len(msgs)-1]; last.Type != "ui_state" || last.State != "idle" {
+		t.Fatalf("agent failure must return the device UI to idle; sent=%+v", msgs)
+	}
+	for _, msg := range msgs {
+		if msg.Type == "summary" && msg.Text == "Agent 调用失败" {
+			sawFailureSummary = true
+		}
+	}
+	if !sawFailureSummary {
+		t.Fatalf("expected agent failure summary, sent=%+v", msgs)
+	}
+}
+
+func TestAgentTurnErrorReturnsDeviceToIdle(t *testing.T) {
+	tmp := t.TempDir()
+	db, err := store.InitDB(filepath.Join(tmp, "elf.db"))
+	if err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+	defer db.Close()
+
+	session, err := store.CreateSession(db, "dev1", "fake-agent")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	a := NewApp()
+	a.db = db
+	a.stt = fakeSTT{text: "你好"}
+	a.router = acp.NewRouter()
+	a.router.Register(&fakeACPAdapter{events: []acp.StreamEvent{{
+		Type:  "error",
+		Error: errors.New("Claude CLI error: test failure"),
+	}}})
+
+	dev := newFakeDevice()
+	a.processVoiceRequest(dev, session.ID, []byte{1, 2, 3})
+
+	msgs := dev.sentMessages()
+	var sawFailureSummary bool
+	if len(msgs) == 0 {
+		t.Fatal("expected messages to be sent")
+	}
+	if last := msgs[len(msgs)-1]; last.Type != "ui_state" || last.State != "idle" {
+		t.Fatalf("agent turn error must return the device UI to idle; sent=%+v", msgs)
+	}
+	for _, msg := range msgs {
+		if msg.Type == "summary" && msg.Text == "处理出错" {
+			sawFailureSummary = true
+		}
+	}
+	if !sawFailureSummary {
+		t.Fatalf("expected turn failure summary, sent=%+v", msgs)
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -82,7 +81,7 @@ func (pm *ProcessManager) Start() error {
 		pm.cancel()
 		return fmt.Errorf("stdout pipe: %w", err)
 	}
-	pm.cmd.Stderr = os.Stderr
+	pm.cmd.Stderr = log.Writer()
 
 	if err := pm.cmd.Start(); err != nil {
 		pm.cancel()
