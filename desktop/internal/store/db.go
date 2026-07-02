@@ -100,7 +100,7 @@ func backfillMigrations(db *sql.DB) error {
 	checks := []check{
 		{
 			name: "001_init.sql",
-			done: func(db *sql.DB) bool { return tableExists(db, "sessions") },
+			done: func(db *sql.DB) bool { return tableExists(db, "sessions") || tableExists(db, "dialogues") },
 		},
 		{
 			name: "002_authorized_devices.sql",
@@ -113,6 +113,43 @@ func backfillMigrations(db *sql.DB) error {
 		{
 			name: "004_agent_version.sql",
 			done: func(db *sql.DB) bool { return columnExists(db, "agents", "version") },
+		},
+		{
+			name: "005_acp_session.sql",
+			done: func(db *sql.DB) bool {
+				return columnExists(db, "sessions", "acp_session_id") ||
+					columnExists(db, "dialogues", "agent_session_id")
+			},
+		},
+		{
+			name: "006_agent_selected.sql",
+			done: func(db *sql.DB) bool { return columnExists(db, "agents", "selected") },
+		},
+		{
+			name: "007_kimi_agent.sql",
+			done: func(db *sql.DB) bool { return agentExists(db, "kimi") },
+		},
+		{
+			name: "008_pi_agent.sql",
+			done: func(db *sql.DB) bool { return agentExists(db, "pi") },
+		},
+		{
+			name: "009_hermes_agent.sql",
+			done: func(db *sql.DB) bool { return agentExists(db, "hermes") },
+		},
+		{
+			name: "010_codex_agent.sql",
+			done: func(db *sql.DB) bool { return agentExists(db, "codex") },
+		},
+		{
+			name: "011_agent_installed.sql",
+			done: func(db *sql.DB) bool { return columnExists(db, "agents", "installed") },
+		},
+		{
+			name: "012_dialogues.sql",
+			done: func(db *sql.DB) bool {
+				return tableExists(db, "dialogues") && columnExists(db, "messages", "dialogue_id")
+			},
 		},
 	}
 	for _, c := range checks {
@@ -131,6 +168,14 @@ func backfillMigrations(db *sql.DB) error {
 		log.Printf("[store] backfilled migration: %s", c.name)
 	}
 	return nil
+}
+
+func agentExists(db *sql.DB, id string) bool {
+	var count int
+	if err := db.QueryRow("SELECT count(*) FROM agents WHERE id = ?", id).Scan(&count); err != nil {
+		return false
+	}
+	return count > 0
 }
 
 func tableExists(db *sql.DB, name string) bool {
