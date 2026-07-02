@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
 
 	"desktop/internal/acp"
+	"desktop/internal/acp/agentsessions"
 )
 
 type KimiAdapter struct {
@@ -48,12 +50,12 @@ func (a *KimiAdapter) SetSystemPrompt(prompt string) {
 	a.systemPrompt = prompt
 }
 
-func (a *KimiAdapter) ensureInit() error {
+func (a *KimiAdapter) ensureInit(skipNewSession bool) error {
 	a.mu.Lock()
 	initDone := a.initDone
 	sessionID := a.sessionID
 	a.mu.Unlock()
-	if initDone && sessionID != "" {
+	if initDone && (skipNewSession || sessionID != "") {
 		return nil
 	}
 	if !a.pm.IsRunning() {
@@ -91,6 +93,9 @@ func (a *KimiAdapter) ensureInit() error {
 		log.Printf("[kimi] using loaded session: %s", sessionID)
 		return nil
 	}
+	if skipNewSession {
+		return nil
+	}
 
 	params := map[string]any{
 		"cwd":        a.effectiveCWD(),
@@ -119,7 +124,7 @@ func (a *KimiAdapter) ensureInit() error {
 }
 
 func (a *KimiAdapter) Send(prompt string, history []acp.Message) (<-chan acp.StreamEvent, error) {
-	if err := a.ensureInit(); err != nil {
+	if err := a.ensureInit(false); err != nil {
 		return nil, err
 	}
 
@@ -163,7 +168,7 @@ func (a *KimiAdapter) Send(prompt string, history []acp.Message) (<-chan acp.Str
 }
 
 func (a *KimiAdapter) LoadSession(acpSessionID string, history []acp.Message) error {
-	if err := a.ensureInit(); err != nil {
+	if err := a.ensureInit(true); err != nil {
 		return err
 	}
 	a.mu.Lock()
@@ -191,6 +196,29 @@ func (a *KimiAdapter) LoadSession(acpSessionID string, history []acp.Message) er
 	a.mu.Unlock()
 	log.Printf("[kimi] session loaded: %s", sessionID)
 	return nil
+}
+
+func (a *KimiAdapter) ListAgentSessions(limit int) ([]acp.AgentSession, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	return agentsessions.ListKimiSessions(home, limit)
+}
+
+func (a *KimiAdapter) LoadAgentSession(id, cwd string) error {
+	a.SetCWD(cwd)
+	return a.LoadSession(id, nil)
+}
+
+func (a *KimiAdapter) StartNewAgentSession(cwd string) error {
+	a.SetCWD(cwd)
+	a.mu.Lock()
+	a.sessionID = ""
+	a.initDone = false
+	a.resetPending = false
+	a.mu.Unlock()
+	return a.pm.Stop()
 }
 
 func (a *KimiAdapter) CurrentSessionID() string {

@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"strconv"
 	"sync"
 	"time"
 
 	"desktop/internal/acp"
+	"desktop/internal/acp/agentsessions"
 )
 
 type PiAdapter struct {
@@ -120,6 +122,25 @@ func (a *PiAdapter) LoadSession(acpSessionID string, history []acp.Message) erro
 	a.mu.Unlock()
 	log.Printf("[pi] session loaded: %s", acpSessionID)
 	return nil
+}
+
+func (a *PiAdapter) ListAgentSessions(limit int) ([]acp.AgentSession, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	return agentsessions.ListPiSessions(home, limit)
+}
+
+func (a *PiAdapter) LoadAgentSession(id, cwd string) error {
+	return a.LoadSession(id, nil)
+}
+
+func (a *PiAdapter) StartNewAgentSession(cwd string) error {
+	a.mu.Lock()
+	a.sessionID = ""
+	a.mu.Unlock()
+	return a.pm.Stop()
 }
 
 func (a *PiAdapter) CurrentSessionID() string {
@@ -240,9 +261,11 @@ func (a *PiAdapter) sendRequest(command string, params map[string]any) error {
 	a.mu.Unlock()
 
 	req := map[string]any{
-		"id":     reqID,
-		"type":   command,
-		"params": params,
+		"id":   reqID,
+		"type": command,
+	}
+	for key, value := range params {
+		req[key] = value
 	}
 	if err := a.pm.SendJSON(req); err != nil {
 		a.mu.Lock()

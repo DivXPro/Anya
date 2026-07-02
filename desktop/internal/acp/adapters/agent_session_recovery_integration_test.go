@@ -57,6 +57,54 @@ func TestOpenCodeAgentSessionRecoveryFromRecentList(t *testing.T) {
 	}
 }
 
+func TestKimiAgentSessionRecoveryFromRecentList(t *testing.T) {
+	if _, err := exec.LookPath("kimi"); err != nil {
+		t.Skip("kimi not installed")
+	}
+	adapter := NewKimiAdapter()
+	defer adapter.Stop()
+
+	session := recentAgentSession(t, adapter, "kimi")
+	if err := adapter.LoadAgentSession(session.ID, session.CWD); err != nil {
+		t.Fatalf("load recent kimi agent session %q: %v", session.ID, err)
+	}
+	if got := adapter.CurrentSessionID(); got != session.ID {
+		t.Fatalf("current session = %q, want %q", got, session.ID)
+	}
+}
+
+func TestHermesAgentSessionRecoveryFromRecentList(t *testing.T) {
+	if _, err := exec.LookPath("hermes"); err != nil {
+		t.Skip("hermes not installed")
+	}
+	adapter := NewHermesAdapter()
+	defer adapter.Stop()
+
+	session := recentAgentSession(t, adapter, "hermes")
+	if err := adapter.LoadAgentSession(session.ID, session.CWD); err != nil {
+		t.Fatalf("load recent hermes agent session %q: %v", session.ID, err)
+	}
+	if got := adapter.CurrentSessionID(); got != session.ID {
+		t.Fatalf("current session = %q, want %q", got, session.ID)
+	}
+}
+
+func TestPiAgentSessionRecoveryFromRecentList(t *testing.T) {
+	if _, err := exec.LookPath("pi"); err != nil {
+		t.Skip("pi not installed")
+	}
+	adapter := NewPiAdapter()
+	defer adapter.Stop()
+
+	session := recentAgentSession(t, adapter, "pi")
+	if err := adapter.LoadAgentSession(session.ID, session.CWD); err != nil {
+		t.Fatalf("load recent pi agent session %q: %v", session.ID, err)
+	}
+	if got := adapter.CurrentSessionID(); got != session.ID {
+		t.Fatalf("current session = %q, want %q", got, session.ID)
+	}
+}
+
 func recentAgentSession(t *testing.T, provider acp.AgentSessionProvider, name string) acp.AgentSession {
 	t.Helper()
 	sessions, err := provider.ListAgentSessions(10)

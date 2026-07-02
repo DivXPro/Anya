@@ -122,6 +122,137 @@ func TestClaudeProviderListsRecentProjectJsonl(t *testing.T) {
 	}
 }
 
+func TestKimiProviderListsRecentSessions(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, ".kimi-code")
+	sessionDir := filepath.Join(root, "sessions", "wd_project_abcd", "ses-recent")
+	oldSessionDir := filepath.Join(root, "sessions", "wd_project_abcd", "ses-old")
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatalf("mkdir recent kimi session dir: %v", err)
+	}
+	if err := os.MkdirAll(oldSessionDir, 0755); err != nil {
+		t.Fatalf("mkdir old kimi session dir: %v", err)
+	}
+	index := `{"sessionId":"ses-old","sessionDir":"` + oldSessionDir + `","workDir":"/tmp/kimi/old"}` + "\n" +
+		`{"sessionId":"ses-recent","sessionDir":"` + sessionDir + `","workDir":"/tmp/kimi/recent"}` + "\n"
+	if err := os.WriteFile(filepath.Join(root, "session_index.jsonl"), []byte(index), 0644); err != nil {
+		t.Fatalf("write kimi session index: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(oldSessionDir, "state.json"), []byte(`{
+		"createdAt":"2026-07-01T01:00:00Z",
+		"updatedAt":"2026-07-01T02:00:00Z",
+		"title":"Old Kimi Session",
+		"lastPrompt":"old prompt"
+	}`), 0644); err != nil {
+		t.Fatalf("write old kimi state: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "state.json"), []byte(`{
+		"createdAt":"2026-07-02T01:00:00Z",
+		"updatedAt":"2026-07-02T02:00:00Z",
+		"title":"",
+		"lastPrompt":"Recent Kimi prompt"
+	}`), 0644); err != nil {
+		t.Fatalf("write recent kimi state: %v", err)
+	}
+
+	got, err := ListKimiSessions(home, 10)
+	if err != nil {
+		t.Fatalf("list kimi sessions: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 kimi sessions, got %+v", got)
+	}
+	if got[0].ID != "ses-recent" || got[0].Title != "Recent Kimi prompt" || got[0].CWD != "/tmp/kimi/recent" {
+		t.Fatalf("unexpected first kimi session: %+v", got[0])
+	}
+	if got[0].Source != "kimi" || !got[0].CanResume {
+		t.Fatalf("unexpected kimi source/resume flags: %+v", got[0])
+	}
+	wantUpdated, _ := time.Parse(time.RFC3339, "2026-07-02T02:00:00Z")
+	if !got[0].UpdatedAt.Equal(wantUpdated) {
+		t.Fatalf("updated_at = %s", got[0].UpdatedAt)
+	}
+}
+
+func TestHermesProviderListsRecentSessions(t *testing.T) {
+	home := t.TempDir()
+	dbPath := filepath.Join(home, ".hermes", "state.db")
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+		t.Fatalf("mkdir hermes dir: %v", err)
+	}
+	db := openFixtureDB(t, dbPath)
+	defer db.Close()
+	execFixture(t, db, `CREATE TABLE sessions (
+		id TEXT PRIMARY KEY,
+		title TEXT,
+		cwd TEXT,
+		started_at REAL NOT NULL,
+		archived INTEGER NOT NULL DEFAULT 0
+	)`)
+	execFixture(t, db, `INSERT INTO sessions (id, title, cwd, started_at, archived) VALUES
+		('old', 'Old Hermes Session', '/tmp/hermes/old', 1000.25, 0),
+		('recent', 'Recent Hermes Session', '/tmp/hermes/recent', 3000.5, 0),
+		('archived', 'Archived Hermes Session', '/tmp/hermes/archived', 4000.75, 1)`)
+
+	got, err := ListHermesSessions(home, 10)
+	if err != nil {
+		t.Fatalf("list hermes sessions: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 visible hermes sessions, got %+v", got)
+	}
+	if got[0].ID != "recent" || got[0].Title != "Recent Hermes Session" || got[0].CWD != "/tmp/hermes/recent" {
+		t.Fatalf("unexpected first hermes session: %+v", got[0])
+	}
+	if got[0].Source != "hermes" || !got[0].CanResume {
+		t.Fatalf("unexpected hermes source/resume flags: %+v", got[0])
+	}
+	if !got[0].UpdatedAt.Equal(time.Unix(3000, 500_000_000)) {
+		t.Fatalf("updated_at = %s", got[0].UpdatedAt)
+	}
+}
+
+func TestPiProviderListsRecentJsonl(t *testing.T) {
+	home := t.TempDir()
+	sessionDir := filepath.Join(home, ".pi", "agent", "sessions", "--tmp-pi-project--")
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatalf("mkdir pi session dir: %v", err)
+	}
+	oldPath := filepath.Join(sessionDir, "2026-07-01T01-00-00-000Z_old.jsonl")
+	recentPath := filepath.Join(sessionDir, "2026-07-02T01-00-00-000Z_recent.jsonl")
+	if err := os.WriteFile(oldPath, []byte(
+		`{"type":"session","id":"old","timestamp":"2026-07-01T01:00:00Z","cwd":"/tmp/pi/old"}`+"\n"+
+			`{"type":"message","message":{"role":"user","content":[{"type":"text","text":"Old Pi task"}]}}`+"\n",
+	), 0644); err != nil {
+		t.Fatalf("write old pi jsonl: %v", err)
+	}
+	if err := os.WriteFile(recentPath, []byte(
+		`{"type":"session","id":"recent","timestamp":"2026-07-02T01:00:00Z","cwd":"/tmp/pi/recent"}`+"\n"+
+			`{"type":"message","message":{"role":"user","content":[{"type":"text","text":"First Pi task"}]}}`+"\n"+
+			`{"type":"message","message":{"role":"user","content":[{"type":"text","text":"Recent Pi task"}]}}`+"\n",
+	), 0644); err != nil {
+		t.Fatalf("write recent pi jsonl: %v", err)
+	}
+
+	got, err := ListPiSessions(home, 10)
+	if err != nil {
+		t.Fatalf("list pi sessions: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 pi sessions, got %+v", got)
+	}
+	if got[0].ID != recentPath || got[0].Title != "Recent Pi task" || got[0].CWD != "/tmp/pi/recent" {
+		t.Fatalf("unexpected first pi session: %+v", got[0])
+	}
+	if got[0].Source != "pi" || !got[0].CanResume {
+		t.Fatalf("unexpected pi source/resume flags: %+v", got[0])
+	}
+	wantUpdated, _ := time.Parse(time.RFC3339, "2026-07-02T01:00:00Z")
+	if !got[0].UpdatedAt.Equal(wantUpdated) {
+		t.Fatalf("updated_at = %s", got[0].UpdatedAt)
+	}
+}
+
 func openFixtureDB(t *testing.T, path string) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite", path)

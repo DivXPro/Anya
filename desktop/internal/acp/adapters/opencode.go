@@ -49,9 +49,9 @@ func (a *OpenCodeAdapter) SetSystemPrompt(prompt string) {
 	a.systemPrompt = prompt
 }
 
-func (a *OpenCodeAdapter) ensureInit() error {
+func (a *OpenCodeAdapter) ensureInit(skipNewSession bool) error {
 	a.mu.Lock()
-	alreadyInit := a.initDone && a.sessionID != ""
+	alreadyInit := a.initDone && (skipNewSession || a.sessionID != "")
 	a.mu.Unlock()
 	if alreadyInit {
 		return nil
@@ -92,6 +92,9 @@ func (a *OpenCodeAdapter) ensureInit() error {
 		log.Printf("[opencode] using loaded session: %s", loadedSession)
 		return nil
 	}
+	if skipNewSession {
+		return nil
+	}
 
 	a.mu.Lock()
 	systemPrompt := a.systemPrompt
@@ -124,7 +127,7 @@ func (a *OpenCodeAdapter) ensureInit() error {
 }
 
 func (a *OpenCodeAdapter) Send(prompt string, history []acp.Message) (<-chan acp.StreamEvent, error) {
-	if err := a.ensureInit(); err != nil {
+	if err := a.ensureInit(false); err != nil {
 		return nil, err
 	}
 
@@ -168,7 +171,7 @@ func (a *OpenCodeAdapter) Send(prompt string, history []acp.Message) (<-chan acp
 }
 
 func (a *OpenCodeAdapter) LoadSession(acpSessionID string, history []acp.Message) error {
-	if err := a.ensureInit(); err != nil {
+	if err := a.ensureInit(true); err != nil {
 		return err
 	}
 	a.mu.Lock()

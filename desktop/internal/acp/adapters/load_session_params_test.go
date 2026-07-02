@@ -142,3 +142,50 @@ func TestLoadSessionSendsCwdAndMcpServers(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadSessionDoesNotCreateNewSession(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("helper relies on an `sh -c` env prefix; unix only")
+	}
+
+	cases := []struct {
+		name string
+		make func(pm *acp.ProcessManager) cwdLoadStopper
+	}{
+		{"kimi", func(pm *acp.ProcessManager) cwdLoadStopper { a := NewKimiAdapter(); a.pm = pm; return a }},
+		{"hermes", func(pm *acp.ProcessManager) cwdLoadStopper { a := NewHermesAdapter(); a.pm = pm; return a }},
+		{"opencode", func(pm *acp.ProcessManager) cwdLoadStopper { a := NewOpenCodeAdapter(); a.pm = pm; return a }},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			logf := filepath.Join(t.TempDir(), "rpc.log")
+			pm := acp.NewProcessManagerWithFraming(
+				helperCmd(fmt.Sprintf("GO_ACP_LOG=%q ", logf)), acp.NDJSONFraming)
+
+			a := c.make(pm)
+			defer a.Stop()
+
+			if err := a.LoadSession("sess-123", nil); err != nil {
+				t.Fatalf("LoadSession: %v", err)
+			}
+
+			entries := readRPCLog(t, logf)
+			var newCount, loadCount int
+			for _, e := range entries {
+				switch e.Method {
+				case "session/new":
+					newCount++
+				case "session/load":
+					loadCount++
+				}
+			}
+			if newCount != 0 {
+				t.Fatalf("LoadSession sent session/new %d times; restoring an existing session must not create an empty session first", newCount)
+			}
+			if loadCount != 1 {
+				t.Fatalf("LoadSession sent session/load %d times, want 1", loadCount)
+			}
+		})
+	}
+}
