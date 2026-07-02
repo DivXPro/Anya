@@ -10,4 +10,7 @@ void audio_play(const uint8_t* data, size_t len);
 void audio_play_test_tone();
 void audio_play_start_tone();
 void audio_play_end_tone();
+void audio_begin_playback();
+void audio_finish_playback();
 bool audio_is_recording();
+bool audio_is_playing();

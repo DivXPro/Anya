@@ -900,7 +900,7 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 			switch evt.Type {
 			case "audio_start":
 				audioBuffer = nil
-				dev.SendText(gateway.StatusMessage("listening"))
+				dev.SendText(gateway.UIStateMessage("listening"))
 			case "audio_end":
 				// Don't switch to processing immediately; let the device show
 				// "Sending..." until we actually start processing. Guard against
@@ -911,6 +911,7 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 					// Signal the device that the request was dropped so it leaves
 					// the SENDING state and stops waiting, instead of relying on
 					// its turn watchdog to time out ~30s later.
+					dev.SendText(gateway.UIStateMessage("idle"))
 					dev.SendText(gateway.SummaryMessage("正在处理上一条请求，请稍候"))
 					continue
 				}
@@ -923,7 +924,8 @@ func (a *App) handleDeviceEvents(dev gateway.DeviceAdapter, sessionID string) {
 			case "confirm_response":
 				a.handleConfirmResponse(evt.Payload)
 			case "ping":
-				dev.SendText(gateway.StatusMessage("connected"))
+				// WebSocket itself carries liveness; ping must not mutate the
+				// device UI/turn state.
 			}
 
 		case chunk, ok := <-audioCh:
@@ -1033,12 +1035,12 @@ func (a *App) endTurn(sessionID string) {
 }
 
 func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, audioData []byte) {
-	dev.SendText(gateway.StatusMessage("processing"))
+	dev.SendText(gateway.UIStateMessage("processing"))
 
 	// 1. STT
 	if !a.sttReady() {
+		dev.SendText(gateway.UIStateMessage("idle"))
 		dev.SendText(gateway.SummaryMessage("语音模型加载中，请稍候"))
-		dev.SendText(gateway.StatusMessage("connected"))
 		return
 	}
 
@@ -1054,7 +1056,7 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 	log.Printf("[elf] STT: %s", text)
 
 	if strings.TrimSpace(text) == "" {
-		dev.SendText(gateway.StatusMessage("connected"))
+		dev.SendText(gateway.UIStateMessage("idle"))
 		dev.SendText(gateway.SummaryMessage("没听清，请再说一次"))
 		return
 	}
@@ -1086,6 +1088,7 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 	}
 	events, err := a.router.Route(session.AgentID, text, acpHistory)
 	if err != nil {
+		log.Printf("[elf] route agent %s error: %v", session.AgentID, err)
 		dev.SendText(gateway.SummaryMessage("Agent 调用失败"))
 		return
 	}
@@ -1111,19 +1114,69 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 	// 5. Process response with timeout monitoring
 	pipeline := processor.NewPipeline(events)
 	pipeline.SetHeartbeatCallback(func() {
-		dev.SendText(gateway.StatusMessage("processing"))
+		dev.SendText(gateway.UIStateMessage("processing"))
 	})
 	resp, result, err := pipeline.Process()
 	switch result {
 	case processor.ResultNoResponseTimeout:
+		log.Printf("[elf] agent %s no-response timeout: %v", session.AgentID, err)
 		dev.SendText(gateway.SummaryMessage("Agent 超时无响应，已中断"))
 		return
 	case processor.ResultExecTimeout:
+		log.Printf("[elf] agent %s execution timeout: %v", session.AgentID, err)
 		dev.SendText(gateway.SummaryMessage("Agent 执行超时，已中断"))
 		return
 	}
 	if err != nil {
-		dev.SendText(gateway.SummaryMessage("处理出错"))
+		log.Printf("[elf] agent %s turn error: %v", session.AgentID, err)
+		if shouldRetryClaudeTurn(session.AgentID, err) {
+			log.Printf("[elf] retrying Claude turn with a fresh ACP session after CLI error")
+			dev.SendText(gateway.UIStateMessage("processing"))
+			if adapter, ok := a.router.GetAdapter(session.AgentID); ok {
+				if stopErr := adapter.Stop(); stopErr != nil {
+					log.Printf("[elf] stop Claude adapter before retry failed: %v", stopErr)
+				}
+			}
+			events, routeErr := a.router.Route(session.AgentID, text, acpHistory)
+			if routeErr != nil {
+				log.Printf("[elf] retry route agent %s error: %v", session.AgentID, routeErr)
+				dev.SendText(gateway.SummaryMessage("Agent 调用失败"))
+				return
+			}
+			if acpSessionID, sidErr := a.router.CurrentSessionID(session.AgentID); sidErr == nil && acpSessionID != "" {
+				if saveErr := store.UpdateSessionACPSession(a.db, sessionID, acpSessionID, session.AgentID); saveErr != nil {
+					log.Printf("[elf] failed to save retried acp session id: %v", saveErr)
+				}
+			}
+			pipeline = processor.NewPipeline(events)
+			pipeline.SetHeartbeatCallback(func() {
+				dev.SendText(gateway.UIStateMessage("processing"))
+			})
+			resp, result, err = pipeline.Process()
+			switch result {
+			case processor.ResultNoResponseTimeout:
+				log.Printf("[elf] retried agent %s no-response timeout: %v", session.AgentID, err)
+				dev.SendText(gateway.SummaryMessage("Agent 超时无响应，已中断"))
+				return
+			case processor.ResultExecTimeout:
+				log.Printf("[elf] retried agent %s execution timeout: %v", session.AgentID, err)
+				dev.SendText(gateway.SummaryMessage("Agent 执行超时，已中断"))
+				return
+			}
+			if err != nil {
+				log.Printf("[elf] retried agent %s turn error: %v", session.AgentID, err)
+				dev.SendText(gateway.SummaryMessage("处理出错"))
+				return
+			}
+		} else {
+			dev.SendText(gateway.SummaryMessage("处理出错"))
+			return
+		}
+	}
+
+	if strings.TrimSpace(resp.Content) == "" {
+		log.Printf("[elf] agent %s returned empty response", session.AgentID)
+		dev.SendText(gateway.SummaryMessage("Agent 没有返回内容"))
 		return
 	}
 
@@ -1157,8 +1210,16 @@ func (a *App) processVoiceRequest(dev gateway.DeviceAdapter, sessionID string, a
 		dev.SendText(gateway.TTSEndMessage())
 	}
 
-	dev.SendText(gateway.StatusMessage("connected"))
+	dev.SendText(gateway.UIStateMessage("idle"))
 	log.Printf("[elf] request complete")
+}
+
+func shouldRetryClaudeTurn(agentID string, err error) bool {
+	if err == nil || agentID != "claude-code" {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.HasPrefix(msg, "claude cli error:")
 }
 
 // ConnectToDevice notifies a scanned device to open a WebSocket back to the desktop.

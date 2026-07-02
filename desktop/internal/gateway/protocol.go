@@ -63,6 +63,10 @@ func StatusMessage(state string) DeviceMessage {
 	return DeviceMessage{Type: "status", State: state}
 }
 
+func UIStateMessage(state string) DeviceMessage {
+	return DeviceMessage{Type: "ui_state", State: state}
+}
+
 func FirmwareVersionReqMessage() DeviceMessage {
 	return DeviceMessage{Type: "firmware_version_req"}
 }

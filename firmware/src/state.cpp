@@ -27,6 +27,13 @@ void state_update_status(int8_t rssi, bool wifiConnected, bool wsConnected) {
     lastRssi = rssi;
     lastWifiConnected = wifiConnected;
     lastWsConnected = wsConnected;
+    bool idlePromptChanged = (current == State::IDLE && connected != wsConnected);
+    connected = wsConnected;
+    if (idlePromptChanged) {
+        disp_idle(agentName, connected);
+        disp_status_bar(rssi, wifiConnected, wsConnected, agentName, status_ssid());
+        return;
+    }
     disp_status_bar(rssi, wifiConnected, wsConnected, agentName, status_ssid());
 }
 
@@ -110,21 +117,33 @@ void state_force_idle() {
     }
     audio_stop_recording();
 
-    // Avoid redrawing the whole screen on repeated disconnect events while the
-    // device is already showing the disconnected idle screen. The WebSocket
-    // library retries every 5s, and each failed attempt fires a disconnect event.
+    connected = lastWsConnected;
+    current = State::IDLE;
+    disp_idle(agentName, connected);
+    disp_status_bar(lastRssi, lastWifiConnected, lastWsConnected, agentName, status_ssid());
+}
+
+void state_force_disconnected() {
+    if (current == State::UPDATING) {
+        ota_abort();
+    }
+    audio_stop_recording();
+
+    bool wifiConnected = wifi_connected();
+    int8_t rssi = wifiConnected ? wifi_rssi() : 0;
     bool alreadyDisconnectedIdle = (current == State::IDLE && !connected);
     connected = false;
-    lastWifiConnected = false;
+    lastRssi = rssi;
+    lastWifiConnected = wifiConnected;
     lastWsConnected = false;
     if (alreadyDisconnectedIdle) {
-        disp_status_bar(lastRssi, false, false, agentName, status_ssid());
+        disp_status_bar(lastRssi, lastWifiConnected, false, agentName, status_ssid());
         return;
     }
 
     current = State::IDLE;
     disp_idle(agentName, false);
-    disp_status_bar(lastRssi, false, false, agentName, status_ssid());
+    disp_status_bar(lastRssi, lastWifiConnected, false, agentName, status_ssid());
 }
 
 void state_play_audio(const uint8_t* data, size_t len) {

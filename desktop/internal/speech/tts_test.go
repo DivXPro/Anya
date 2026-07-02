@@ -28,7 +28,7 @@ func TestMP3ToPCM16kHzS16LE(t *testing.T) {
 	if dec.SampleRate() != 24000 {
 		t.Fatalf("fixture sample rate should be 24000 Hz, got %d", dec.SampleRate())
 	}
-	inputSamples := len(pcmBytes) / 2
+	inputFrames := len(pcmBytes) / (mp3DecoderChannels * 2)
 
 	// Re-open and run the function under test.
 	if _, err := f.Seek(0, 0); err != nil {
@@ -49,12 +49,18 @@ func TestMP3ToPCM16kHzS16LE(t *testing.T) {
 
 	outputSamples := len(out) / 2
 	expectedRatio := float64(ttsOutputSampleRate) / float64(dec.SampleRate())
-	actualRatio := float64(outputSamples) / float64(inputSamples)
+	actualRatio := float64(outputSamples) / float64(inputFrames)
 	tolerance := 0.05
 
 	if actualRatio < expectedRatio-tolerance || actualRatio > expectedRatio+tolerance {
-		t.Fatalf("resample ratio mismatch: expected %.4f±%.2f, got %.4f (input=%d output=%d)",
-			expectedRatio, tolerance, actualRatio, inputSamples, outputSamples)
+		t.Fatalf("resample ratio mismatch: expected %.4f±%.2f, got %.4f (input_frames=%d output_samples=%d)",
+			expectedRatio, tolerance, actualRatio, inputFrames, outputSamples)
+	}
+
+	inputDuration := float64(inputFrames) / float64(dec.SampleRate())
+	outputDuration := float64(outputSamples) / float64(ttsOutputSampleRate)
+	if diff := inputDuration - outputDuration; diff < -0.05 || diff > 0.05 {
+		t.Fatalf("duration changed after conversion: input=%.3fs output=%.3fs", inputDuration, outputDuration)
 	}
 
 	// Spot-check that bytes are valid little-endian int16 (non-trivial energy).

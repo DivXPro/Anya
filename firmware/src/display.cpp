@@ -1,4 +1,5 @@
 #include "display.h"
+#include "audio.h"
 #include "mascot.h"
 #include "layout.h"
 #include "lang.h"
@@ -330,7 +331,7 @@ bool disp_text_showing_for(unsigned long ms) {
     // text scrolling have finished — whichever ends last. While either is still
     // active, push the reference timestamp forward so the elapsed time is
     // measured from the moment the later action completes.
-    if (M5.Speaker.isPlaying() || !replyScrollFinished()) {
+    if (audio_is_playing() || !replyScrollFinished()) {
         s_textShownAt = millis();
         return false;
     }

@@ -274,6 +274,7 @@ static void register_button_callbacks() {
 
 void setup() {
     auto cfg = M5.config();
+    cfg.fallback_board = m5::board_t::board_M5StickS3;
     M5.begin(cfg);
     M5.Display.setFont(&fonts::efontCN_12);
     lang_init();

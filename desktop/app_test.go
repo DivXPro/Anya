@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -123,6 +124,59 @@ type fakeDevice struct {
 	sent       []gateway.DeviceMessage
 }
 
+type fakeSTT struct {
+	text string
+	err  error
+}
+
+func (f fakeSTT) Transcribe([]byte, string) (string, error) {
+	return f.text, f.err
+}
+
+type fakeTTS struct {
+	mu     sync.Mutex
+	called int
+	texts  []string
+}
+
+func (f *fakeTTS) Synthesize(text string) (<-chan []byte, error) {
+	f.mu.Lock()
+	f.called++
+	f.texts = append(f.texts, text)
+	f.mu.Unlock()
+	ch := make(chan []byte)
+	close(ch)
+	return ch, nil
+}
+
+func (f *fakeTTS) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.called
+}
+
+type fakeACPAdapter struct {
+	events []acp.StreamEvent
+}
+
+func (f *fakeACPAdapter) Send(string, []acp.Message) (<-chan acp.StreamEvent, error) {
+	ch := make(chan acp.StreamEvent, len(f.events))
+	for _, evt := range f.events {
+		ch <- evt
+	}
+	close(ch)
+	return ch, nil
+}
+
+func (f *fakeACPAdapter) LoadSession(string, []acp.Message) error { return nil }
+func (f *fakeACPAdapter) CurrentSessionID() string                { return "fake-acp-session" }
+func (f *fakeACPAdapter) Info() acp.AgentInfo {
+	return acp.AgentInfo{ID: "fake-agent", Name: "Fake", Command: "fake"}
+}
+func (f *fakeACPAdapter) IsRunning() bool { return false }
+func (f *fakeACPAdapter) Stop() error     { return nil }
+func (f *fakeACPAdapter) SetCWD(string)   {}
+
 func newFakeDevice() *fakeDevice {
 	return &fakeDevice{
 		events:     make(chan gateway.DeviceEvent, 8),
@@ -150,6 +204,94 @@ func (f *fakeDevice) sentMessages() []gateway.DeviceMessage {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]gateway.DeviceMessage(nil), f.sent...)
+}
+
+func TestEmptyTranscriptUsesUIStateNotConnectionStatus(t *testing.T) {
+	a := NewApp()
+	a.stt = fakeSTT{text: "   "}
+
+	dev := newFakeDevice()
+	a.processVoiceRequest(dev, "sess-empty", []byte{1, 2, 3})
+
+	msgs := dev.sentMessages()
+	var sawProcessingUI, sawIdleUI bool
+	for _, msg := range msgs {
+		if msg.Type == "ui_state" && msg.State == "processing" {
+			sawProcessingUI = true
+		}
+		if msg.Type == "ui_state" && msg.State == "idle" {
+			sawIdleUI = true
+		}
+		if msg.Type == "status" && msg.State == "connected" {
+			t.Fatalf("empty transcript must not report connection state as turn completion: sent=%+v", msgs)
+		}
+	}
+	if !sawProcessingUI || !sawIdleUI {
+		t.Fatalf("expected processing and idle ui_state messages, sent=%+v", msgs)
+	}
+}
+
+func TestPingDoesNotChangeDeviceUIState(t *testing.T) {
+	a := NewApp()
+	dev := newFakeDevice()
+
+	done := make(chan struct{})
+	go func() {
+		a.handleDeviceEvents(dev, "sess-ping")
+		close(done)
+	}()
+
+	dev.events <- gateway.DeviceEvent{Type: "ping"}
+	close(dev.events)
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handleDeviceEvents did not exit after events channel closed")
+	}
+
+	for _, msg := range dev.sentMessages() {
+		if msg.Type == "ui_state" || msg.Type == "status" {
+			t.Fatalf("ping must not change UI or connection state, sent=%+v", dev.sentMessages())
+		}
+	}
+}
+
+func TestEmptyAgentResponseDoesNotSendEmptySummaryOrTTS(t *testing.T) {
+	tmp := t.TempDir()
+	db, err := store.InitDB(filepath.Join(tmp, "elf.db"))
+	if err != nil {
+		t.Fatalf("init db: %v", err)
+	}
+	defer db.Close()
+
+	session, err := store.CreateSession(db, "dev1", "fake-agent")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	tts := &fakeTTS{}
+	a := NewApp()
+	a.db = db
+	a.stt = fakeSTT{text: "你好"}
+	a.tts = tts
+	a.router = acp.NewRouter()
+	a.router.Register(&fakeACPAdapter{events: []acp.StreamEvent{{Type: "done"}}})
+
+	dev := newFakeDevice()
+	a.processVoiceRequest(dev, session.ID, []byte{1, 2, 3})
+
+	for _, msg := range dev.sentMessages() {
+		if msg.Type == "summary" && strings.TrimSpace(msg.Text) == "" {
+			t.Fatalf("empty agent response must not send an empty summary: sent=%+v", dev.sentMessages())
+		}
+		if msg.Type == "tts_start" || msg.Type == "tts_end" {
+			t.Fatalf("empty agent response must not start TTS: sent=%+v", dev.sentMessages())
+		}
+	}
+	if tts.callCount() != 0 {
+		t.Fatalf("empty agent response must not synthesize TTS, calls=%d", tts.callCount())
+	}
 }
 
 // When a second voice request arrives while a turn is already in flight, the

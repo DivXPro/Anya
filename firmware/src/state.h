@@ -23,6 +23,7 @@ void state_transition(State s);
 void state_set_agent(const char* name);
 void state_set_summary(const char* text);
 void state_force_idle();
+void state_force_disconnected();
 void state_play_audio(const uint8_t* data, size_t len);
 void state_update_status(int8_t rssi, bool wifiConnected, bool wsConnected);
 void state_set_ota_progress(int8_t percent, const char* version);

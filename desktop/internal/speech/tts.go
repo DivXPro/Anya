@@ -16,6 +16,7 @@ import (
 const (
 	ttsOutputSampleRate = 16000
 	ttsOutputChannels   = 1
+	mp3DecoderChannels  = 2
 )
 
 // TTSEngine turns text into a stream of PCM audio chunks.
@@ -115,11 +116,18 @@ func mp3ToPCM16kHzS16LE(r io.Reader) ([]byte, error) {
 	if len(pcmBytes)%2 != 0 {
 		return nil, fmt.Errorf("decoded pcm has odd length")
 	}
+	if len(pcmBytes)%(mp3DecoderChannels*2) != 0 {
+		return nil, fmt.Errorf("decoded pcm has incomplete stereo frame")
+	}
 
 	inputRate := float64(dec.SampleRate())
-	samples := make([]float64, len(pcmBytes)/2)
+	frameCount := len(pcmBytes) / (mp3DecoderChannels * 2)
+	samples := make([]float64, frameCount)
 	for i := range samples {
-		samples[i] = float64(int16(binary.LittleEndian.Uint16(pcmBytes[i*2:])))
+		frameOffset := i * mp3DecoderChannels * 2
+		left := int16(binary.LittleEndian.Uint16(pcmBytes[frameOffset:]))
+		right := int16(binary.LittleEndian.Uint16(pcmBytes[frameOffset+2:]))
+		samples[i] = float64((int32(left) + int32(right)) / 2)
 	}
 
 	resampled, err := resampler.ResampleMono(samples, inputRate, ttsOutputSampleRate, resampler.QualityMedium)

@@ -28,6 +28,7 @@ func TestAllMessageTypes(t *testing.T) {
 		TTSStartMessage("pcm"),
 		TTSEndMessage(),
 		StatusMessage("listening"),
+		UIStateMessage("processing"),
 		FirmwareVersionReqMessage(),
 		FirmwareUpdateMessage("1.0.0", 1234, "abcd", 4096),
 		FirmwareCommitMessage(),

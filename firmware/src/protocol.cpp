@@ -1,6 +1,7 @@
 #include "protocol.h"
 #include "ws_client.h"
 #include "state.h"
+#include "audio.h"
 #include "elf_wifi.h"
 #include "ota.h"
 #include <ArduinoJson.h>
@@ -19,7 +20,7 @@ void protocol_init() {
         protocol_handle_binary(data, len);
     });
     ws_on_close([]() {
-        state_force_idle();
+        state_force_disconnected();
     });
 }
 
@@ -39,7 +40,13 @@ void protocol_handle_message(const char* json) {
         const char* s = doc["state"] | "";
         if (strcmp(s, "listening") == 0) state_transition(State::LISTENING);
         else if (strcmp(s, "processing") == 0) state_transition(State::PROCESSING);
-        else if (strcmp(s, "connected") == 0) state_transition(State::IDLE);
+        else if (strcmp(s, "connected") == 0) state_force_idle();
+    } else if (strcmp(type, "ui_state") == 0) {
+        const char* s = doc["state"] | "";
+        if (strcmp(s, "idle") == 0) state_force_idle();
+        else if (strcmp(s, "listening") == 0) state_transition(State::LISTENING);
+        else if (strcmp(s, "sending") == 0) state_transition(State::SENDING);
+        else if (strcmp(s, "processing") == 0) state_transition(State::PROCESSING);
     } else if (strcmp(type, "session") == 0) {
         const char* agent = doc["payload"]["agent_id"] | "claude";
         const char* desktopID = doc["payload"]["desktop_id"] | "";
@@ -121,10 +128,11 @@ void protocol_handle_message(const char* json) {
     } else if (strcmp(type, "confirm_cancel") == 0) {
         state_force_idle();
     } else if (strcmp(type, "tts_start") == 0) {
-        // prepare for TTS audio
+        audio_begin_playback();
     } else if (strcmp(type, "tts_end") == 0) {
         // Keep the agent reply on screen after TTS finishes. The PLAYING screen
         // is dismissed by the idle timeout in loop() or by a button press.
+        audio_finish_playback();
     }
 }
 

@@ -5,13 +5,48 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"desktop/internal/acp"
 
 	"github.com/beyond5959/acp-adapter/pkg/claudeacp"
 )
+
+// claudeSettingsModel reads the user's ~/.claude/settings.json env block and
+// returns the configured model (ANTHROPIC_MODEL, falling back to CLAUDE_MODEL).
+//
+// This exists because the vendored acp-adapter hardcodes DefaultModel =
+// "claude-opus-4-6" and normalizeRuntimeConfig re-fills any empty value back to
+// that default. That default is then passed as `--model` to the claude CLI,
+// overriding whatever the user configured in settings.json (e.g. a third-party
+// gateway model like GLM-5.2), which the gateway rejects with 422
+// "Model Not Exist". By resolving the model from settings.json ourselves and
+// setting cfg.DefaultModel to a non-empty value, normalizeRuntimeConfig leaves
+// it alone and the CLI gets the correct `--model`.
+func claudeSettingsModel() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
+	if err != nil {
+		return ""
+	}
+	var cfg struct {
+		Env map[string]string `json:"env"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return ""
+	}
+	if m := cfg.Env["ANTHROPIC_MODEL"]; m != "" {
+		return m
+	}
+	return cfg.Env["CLAUDE_MODEL"]
+}
 
 // IsClaudeCliInstalled reports whether the official Claude Code CLI is
 // available on PATH. The adapter itself is embedded, but it still needs the
@@ -37,6 +72,9 @@ type ClaudeAdapter struct {
 	permCh       chan acp.PermissionRequest
 	cwd          string
 	resetPending bool
+
+	initRuntimeFunc   func() error
+	clientRequestFunc func(id int, method string, params map[string]any) (map[string]any, error)
 }
 
 func NewClaudeAdapter() *ClaudeAdapter {
@@ -66,6 +104,14 @@ func (a *ClaudeAdapter) initRuntime() error {
 
 	cfg := claudeacp.DefaultRuntimeConfig()
 	cfg.LogLevel = "warn"
+	// DefaultRuntimeConfig hardcodes DefaultModel = "claude-opus-4-6" and
+	// normalizeRuntimeConfig re-fills it when empty, then passes it as
+	// `--model` to the claude CLI — overriding the user's settings.json model
+	// and causing 422 "Model Not Exist" on third-party gateways. Resolve the
+	// model the user actually configured so the CLI gets the right one.
+	if m := claudeSettingsModel(); m != "" {
+		cfg.DefaultModel = m
+	}
 	if wrapper := ensureClaudeWrapper(); wrapper != "" {
 		cfg.ClaudeBin = wrapper
 	}
@@ -143,7 +189,7 @@ func (a *ClaudeAdapter) ensureInit() error {
 	}
 	a.mu.Unlock()
 
-	if err := a.initRuntime(); err != nil {
+	if err := a.ensureRuntime(); err != nil {
 		return err
 	}
 
@@ -231,7 +277,7 @@ func (a *ClaudeAdapter) CurrentSessionID() string {
 }
 
 func (a *ClaudeAdapter) LoadSession(acpSessionID string, history []acp.Message) error {
-	if err := a.initRuntime(); err != nil {
+	if err := a.ensureRuntime(); err != nil {
 		return err
 	}
 
@@ -244,8 +290,7 @@ func (a *ClaudeAdapter) LoadSession(acpSessionID string, history []acp.Message) 
 
 	// Try to load the session. If the backend does not support loading this
 	// particular session (e.g. Claude backend may fail with "begin turn failed"),
-	// fall back to keeping the requested session id so the caller can decide
-	// whether to create a new session.
+	// return the error so the caller can create a fresh session instead.
 	a.mu.Lock()
 	a.reqID++
 	id := a.reqID
@@ -257,11 +302,7 @@ func (a *ClaudeAdapter) LoadSession(acpSessionID string, history []acp.Message) 
 		"mcpServers": []any{},
 	})
 	if err != nil {
-		log.Printf("[claude] session/load failed, keeping requested id: %v", err)
-		a.mu.Lock()
-		a.sessionID = acpSessionID
-		a.mu.Unlock()
-		return nil
+		return fmt.Errorf("acp session/load: %w", err)
 	}
 
 	a.mu.Lock()
@@ -345,7 +386,18 @@ func (a *ClaudeAdapter) effectiveCWDLocked() string {
 	return a.cwd
 }
 
+func (a *ClaudeAdapter) ensureRuntime() error {
+	if a.initRuntimeFunc != nil {
+		return a.initRuntimeFunc()
+	}
+	return a.initRuntime()
+}
+
 func (a *ClaudeAdapter) clientRequest(id int, method string, params map[string]any) (map[string]any, error) {
+	if a.clientRequestFunc != nil {
+		return a.clientRequestFunc(id, method, params)
+	}
+
 	paramsRaw, err := json.Marshal(params)
 	if err != nil {
 		return nil, err
@@ -419,14 +471,24 @@ func (a *ClaudeAdapter) dispatchUpdates(updates <-chan claudeacp.RPCMessage) {
 			if !ok {
 				continue
 			}
+			if isClaudeCLIErrorText(text) {
+				evt.Type = "error"
+				evt.Error = fmt.Errorf("%s", text)
+				break
+			}
 			evt.Type = "text_delta"
 			evt.Content = text
 		case "agent_thought_chunk":
-			// Surface thinking chunks as text so callers can see progress.
 			text, ok := sanitizeACPText(payload.Update.Content.Text)
 			if !ok {
 				continue
 			}
+			if isClaudeCLIErrorText(text) {
+				evt.Type = "error"
+				evt.Error = fmt.Errorf("%s", text)
+				break
+			}
+			// Surface thinking chunks as text so callers can see progress.
 			evt.Type = "text_delta"
 			evt.Content = text
 		case "tool_call_update":
@@ -451,6 +513,10 @@ func (a *ClaudeAdapter) dispatchUpdates(updates <-chan claudeacp.RPCMessage) {
 		default:
 		}
 	}
+}
+
+func isClaudeCLIErrorText(text string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(text)), "claude cli error:")
 }
 
 func (a *ClaudeAdapter) handlePermissionRequest(msg claudeacp.RPCMessage) {

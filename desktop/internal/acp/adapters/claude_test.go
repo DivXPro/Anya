@@ -1,10 +1,15 @@
 package adapters
 
 import (
+	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"desktop/internal/acp"
+
+	"github.com/beyond5959/acp-adapter/pkg/claudeacp"
 )
 
 func TestIsClaudeCliInstalled(t *testing.T) {
@@ -86,6 +91,72 @@ func TestClaudeAdapterResetPending(t *testing.T) {
 		a.activeStream = nil
 	}
 	a.streamMu.Unlock()
+}
+
+func TestClaudeAdapterLoadSessionPropagatesLoadFailure(t *testing.T) {
+	a := NewClaudeAdapter()
+	a.initRuntimeFunc = func() error { return nil }
+	a.clientRequestFunc = func(id int, method string, params map[string]any) (map[string]any, error) {
+		if method != "session/load" {
+			t.Fatalf("expected session/load request, got %s", method)
+		}
+		if got := params["sessionId"]; got != "stale-session" {
+			t.Fatalf("expected stale-session, got %v", got)
+		}
+		return nil, errors.New("begin turn failed")
+	}
+
+	err := a.LoadSession("stale-session", nil)
+	if err == nil {
+		t.Fatal("expected load failure to be returned")
+	}
+	if !strings.Contains(err.Error(), "begin turn failed") {
+		t.Fatalf("expected original load error, got %v", err)
+	}
+	if got := a.CurrentSessionID(); got == "stale-session" {
+		t.Fatalf("failed load should not keep stale session id %q", got)
+	}
+}
+
+func TestClaudeAdapterDispatchTreatsClaudeCLITextAsError(t *testing.T) {
+	a := NewClaudeAdapter()
+	a.sessionID = "session-1"
+
+	ch := make(chan acp.StreamEvent, 2)
+	a.streamMu.Lock()
+	a.activeStream = ch
+	a.streamMu.Unlock()
+
+	updates := make(chan claudeacp.RPCMessage, 1)
+	params, err := json.Marshal(map[string]any{
+		"sessionId": "session-1",
+		"update": map[string]any{
+			"sessionUpdate": "agent_thought_chunk",
+			"content": map[string]any{
+				"type": "text",
+				"text": "claude cli error: ",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
+	updates <- claudeacp.RPCMessage{Method: "session/update", Params: params}
+	close(updates)
+
+	a.dispatchUpdates(updates)
+
+	select {
+	case evt := <-ch:
+		if !evt.IsError() {
+			t.Fatalf("expected error event, got %v", evt)
+		}
+		if evt.Error == nil || !strings.HasPrefix(strings.ToLower(evt.Error.Error()), "claude cli error:") {
+			t.Fatalf("unexpected error: %v", evt.Error)
+		}
+	default:
+		t.Fatal("expected dispatched error event")
+	}
 }
 
 // TestClaudeAdapterFinishStreamReleasesLock guards against a self-deadlock
