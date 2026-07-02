@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"desktop/internal/acp"
 )
@@ -36,15 +37,19 @@ func ListClaudeSessions(home string, limit int) ([]acp.AgentSession, error) {
 			return err
 		}
 		cwd := decodeClaudeProjectDir(filepath.Base(filepath.Dir(path)))
-		title := claudeSessionTitle(path)
-		if title == "" {
-			title = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		chat := claudeSessionChat(path)
+		if !chat.HasChat {
+			return nil
+		}
+		updatedAt := chat.UpdatedAt
+		if updatedAt.IsZero() {
+			updatedAt = info.ModTime()
 		}
 		sessions = append(sessions, acp.AgentSession{
 			ID:        strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
-			Title:     title,
+			Title:     chat.Title,
 			CWD:       cwd,
-			UpdatedAt: info.ModTime(),
+			UpdatedAt: updatedAt,
 			Source:    "claude-code",
 			CanResume: true,
 		})
@@ -72,23 +77,50 @@ func decodeClaudeProjectDir(encoded string) string {
 	return strings.ReplaceAll(encoded, "-", string(filepath.Separator))
 }
 
-func claudeSessionTitle(path string) string {
+type jsonlChatInfo struct {
+	Title     string
+	UpdatedAt time.Time
+	HasChat   bool
+}
+
+func claudeSessionChat(path string) jsonlChatInfo {
 	file, err := os.Open(path)
 	if err != nil {
-		return ""
+		return jsonlChatInfo{}
 	}
 	defer file.Close()
 
-	var title string
+	var info jsonlChatInfo
 	scanner := bufio.NewScanner(file)
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
 	for scanner.Scan() {
-		if text := userTextFromClaudeLine(scanner.Bytes()); text != "" {
-			title = text
+		text, updatedAt, ok := userChatFromJSONLine(scanner.Bytes())
+		if ok {
+			info.Title = text
+			if !updatedAt.IsZero() {
+				info.UpdatedAt = updatedAt
+			}
+			info.HasChat = true
 		}
 	}
-	return trimTitle(title)
+	info.Title = trimTitle(info.Title)
+	return info
+}
+
+func userChatFromJSONLine(line []byte) (string, time.Time, bool) {
+	text := userTextFromClaudeLine(line)
+	if text == "" {
+		return "", time.Time{}, false
+	}
+	var raw struct {
+		Timestamp string `json:"timestamp"`
+	}
+	if err := json.Unmarshal(line, &raw); err != nil {
+		return text, time.Time{}, true
+	}
+	updatedAt, _ := time.Parse(time.RFC3339Nano, raw.Timestamp)
+	return text, updatedAt, true
 }
 
 func userTextFromClaudeLine(line []byte) string {

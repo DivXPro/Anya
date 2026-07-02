@@ -428,6 +428,7 @@ void loop() {
     // Animate mascot on screens that show it, and scroll agent reply text.
     disp_animate_mascot();
     disp_animate_text();
+    disp_animate_session_title();
 
     // Return to idle if the agent reply has been on screen for 1 minute.
     if (!ota_in_progress() && disp_text_showing_for(60UL * 1000UL)) {

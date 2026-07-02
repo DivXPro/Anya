@@ -7,6 +7,7 @@
 
 static State current = State::WIFI_SETUP;
 static char agentName[32] = "Claude";
+static char summaryText[256] = "";
 static bool connected = false;
 static int8_t lastRssi = 0;
 static bool lastWifiConnected = false;
@@ -66,6 +67,7 @@ void state_transition(State s) {
             disp_processing(agentName);
             break;
         case State::PLAYING:
+            disp_playing(summaryText, agentName);
             break;
         case State::MENU:
             // Menu items are drawn by main.cpp after it sets the menu level.
@@ -107,8 +109,15 @@ void state_set_agent(const char* name) {
 }
 
 void state_set_summary(const char* text) {
-    disp_playing(text, agentName);
-    disp_status_bar(lastRssi, lastWifiConnected, lastWsConnected, agentName, status_ssid());
+    bool changed = (strcmp(summaryText, text ? text : "") != 0);
+    strncpy(summaryText, text ? text : "", sizeof(summaryText) - 1);
+    summaryText[sizeof(summaryText) - 1] = '\0';
+    // If we are already showing the reply, refresh the display only when the
+    // text actually changes. Otherwise the transition to PLAYING will paint it.
+    if (current == State::PLAYING && changed) {
+        disp_playing(summaryText, agentName);
+        disp_status_bar(lastRssi, lastWifiConnected, lastWsConnected, agentName, status_ssid());
+    }
 }
 
 void state_force_idle() {

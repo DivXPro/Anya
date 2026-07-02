@@ -29,4 +29,5 @@ void disp_updating_progress(int8_t percent);
 // Call from the main loop to keep the mascot animating on screens that show it.
 void disp_animate_mascot();
 void disp_animate_text();
+void disp_animate_session_title();
 bool disp_text_showing_for(unsigned long ms);

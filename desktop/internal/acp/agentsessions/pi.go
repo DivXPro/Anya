@@ -77,12 +77,15 @@ func piSessionFromFile(path string) acp.AgentSession {
 				updatedAt, _ = time.Parse(time.RFC3339Nano, raw.Timestamp)
 			}
 		}
-		if text := userTextFromClaudeLine(line); text != "" {
+		if text, chatAt, ok := userChatFromJSONLine(line); ok {
 			title = text
+			if !chatAt.IsZero() {
+				updatedAt = chatAt
+			}
 		}
 	}
 	if strings.TrimSpace(title) == "" {
-		title = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		return acp.AgentSession{}
 	}
 	if updatedAt.IsZero() {
 		updatedAt = fileModTime(path)

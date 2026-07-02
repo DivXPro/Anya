@@ -29,6 +29,25 @@ static unsigned long s_textShownAt = 0;
 static const int TEXT_LINE_H = 14;
 static const int TEXT_AREA_MARGIN = 4;
 
+static bool s_sessionTitleScrollActive = false;
+static String s_sessionTitleText;
+static int s_sessionTitleX = 0;
+static int s_sessionTitleY = 0;
+static int s_sessionTitleW = 0;
+static int s_sessionTitleTextW = 0;
+static int s_sessionTitleOffset = 0;
+static unsigned long s_sessionTitleStartedAt = 0;
+static unsigned long s_sessionTitleLastStepAt = 0;
+static const int SESSION_TITLE_LINE_H = 12;
+static const unsigned long SESSION_TITLE_SCROLL_DELAY_MS = 700;
+static const unsigned long SESSION_TITLE_SCROLL_STEP_MS = 70;
+
+static void stopSessionTitleScroll() {
+    s_sessionTitleScrollActive = false;
+    s_sessionTitleText = "";
+    s_sessionTitleOffset = 0;
+}
+
 void disp_init() {
     M5.Display.setRotation(DISPLAY_ROTATION);  // native portrait 135x240
     M5.Display.setBrightness(255);
@@ -157,6 +176,7 @@ static void drawPrompt(const char* line1, const char* line2) {
 
 // ── State Screens ────────────────────────────────────────────
 void disp_wifi_setup(const char* hotspotSsid, const char* agent) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, false, false, agent);
     mascotVisible = true;
@@ -165,6 +185,7 @@ void disp_wifi_setup(const char* hotspotSsid, const char* agent) {
 }
 
 void disp_wifi_connecting(const char* ssid, const char* agent) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, false, false, agent);
     mascotVisible = true;
@@ -173,6 +194,7 @@ void disp_wifi_connecting(const char* ssid, const char* agent) {
 }
 
 void disp_pair_ready(const char* agent, const char* ssid) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, false, agent, ssid);
     mascotVisible = true;
@@ -181,6 +203,7 @@ void disp_pair_ready(const char* agent, const char* ssid) {
 }
 
 void disp_pairing(const char* agent) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, false, agent);
     mascotVisible = true;
@@ -189,6 +212,7 @@ void disp_pairing(const char* agent) {
 }
 
 void disp_idle(const char* agent, bool connected) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, connected, agent);
     mascotVisible = true;
@@ -197,6 +221,7 @@ void disp_idle(const char* agent, bool connected) {
 }
 
 void disp_listening(const char* agent) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, true, agent);
     mascotVisible = true;
@@ -205,6 +230,7 @@ void disp_listening(const char* agent) {
 }
 
 void disp_sending(const char* agent) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, true, agent);
     mascotVisible = true;
@@ -213,6 +239,7 @@ void disp_sending(const char* agent) {
 }
 
 void disp_processing(const char* agent) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, true, agent);
     mascotVisible = true;
@@ -281,18 +308,23 @@ static void drawScrollingText() {
 }
 
 void disp_playing(const char* summary, const char* agent) {
+    (void)agent;
+    String newText = summary ? summary : "";
+    // Avoid the full-screen clear/redraw on every call: summary messages may
+    // arrive repeatedly (e.g. during streaming), and clearing the screen each
+    // time produces visible flicker. Only repaint when the text actually changes.
+    if (s_lastText == newText) return;
+
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
-    disp_status_bar(-1, true, true, agent);
     mascotVisible = false;
 
-    if (!summary || !summary[0]) return;
+    s_lastText = newText;
+    if (newText.length() == 0) return;
 
-    if (s_lastText != summary) {
-        s_lastText = summary;
-        s_textLines = wrapTextLines(summary, M5.Display.width() - TEXT_AREA_MARGIN * 2);
-        s_scrollOffset = 0;
-        s_textShownAt = millis();
-    }
+    s_textLines = wrapTextLines(newText.c_str(), M5.Display.width() - TEXT_AREA_MARGIN * 2);
+    s_scrollOffset = 0;
+    s_textShownAt = millis();
     drawScrollingText();
 }
 
@@ -309,9 +341,10 @@ void disp_animate_text() {
     if (now - lastScroll < 50) return;
     lastScroll = now;
 
-    // Clear only the text area and redraw the status bar separator.
+    // Clear only the text area. The status-bar separator sits two pixels above
+    // textAreaTop() and is never touched by the text, so there is no need to
+    // redraw it here (doing so caused visible flicker during scrolling).
     M5.Display.fillRect(0, textAreaTop(), M5.Display.width(), textAreaHeight(), TFT_BLACK);
-    M5.Display.drawFastHLine(0, STATUS_BAR_H, M5.Display.width(), TFT_DARKGREY);
 
     s_scrollOffset++;
     drawScrollingText();
@@ -339,6 +372,7 @@ bool disp_text_showing_for(unsigned long ms) {
 }
 
 void disp_connecting(const char* desktopName, const char* agent) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, false, agent);
     mascotVisible = true;
@@ -350,6 +384,7 @@ void disp_connecting(const char* desktopName, const char* agent) {
 }
 
 void disp_error(const char* msg, const char* agent) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_RED);
     disp_status_bar(-1, false, false, agent);
     mascotVisible = false;
@@ -389,6 +424,7 @@ void disp_updating_progress(int8_t percent) {
 }
 
 void disp_updating(int8_t percent, const char* version, const char* agent) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, true, agent);
     mascotVisible = false;
@@ -416,6 +452,7 @@ void disp_updating(int8_t percent, const char* version, const char* agent) {
 
 // ── Menu ──────────────────────────────────────────────────────
 void disp_menu(const char* agent, int selected, const Str* items, int count, int8_t rssi, bool wifiConnected, bool wsConnected) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(rssi, wifiConnected, wsConnected, agent);
     mascotVisible = false;
@@ -442,7 +479,24 @@ void disp_menu(const char* agent, int selected, const Str* items, int count, int
     }
 }
 
+static void drawSelectedSessionTitle() {
+    int maxOffset = s_sessionTitleTextW - s_sessionTitleW;
+    int drawOffset = s_sessionTitleOffset;
+    if (drawOffset > maxOffset) drawOffset = maxOffset;
+    if (drawOffset < 0) drawOffset = 0;
+
+    M5.Display.fillRect(0, s_sessionTitleY, M5.Display.width(), SESSION_TITLE_LINE_H, TFT_BLACK);
+    M5.Display.setTextSize(1);
+    M5.Display.setTextDatum(textdatum_t::top_left);
+    M5.Display.setTextColor(TFT_GREEN);
+    M5.Display.drawString("> ", 4, s_sessionTitleY);
+    M5.Display.setClipRect(s_sessionTitleX, s_sessionTitleY, s_sessionTitleW, SESSION_TITLE_LINE_H);
+    M5.Display.drawString(s_sessionTitleText, s_sessionTitleX - drawOffset, s_sessionTitleY);
+    M5.Display.clearClipRect();
+}
+
 void disp_agent_session_menu(const char* agent, int selected, const char* const* titles, const char* const* cwd, int count, int8_t rssi, bool wifiConnected, bool wsConnected) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(rssi, wifiConnected, wsConnected, agent);
     mascotVisible = false;
@@ -467,15 +521,59 @@ void disp_agent_session_menu(const char* agent, int selected, const char* const*
 
         M5.Display.setClipRect(0, y, M5.Display.width(), rowH);
         M5.Display.setTextColor(sel ? TFT_GREEN : TFT_WHITE);
-        M5.Display.drawString(String(sel ? "> " : "  ") + title, 4, y);
+        if (sel) {
+            const int titleX = 4 + M5.Display.textWidth("> ");
+            const int titleW = M5.Display.width() - titleX - 2;
+            M5.Display.drawString("> ", 4, y);
+            M5.Display.setClipRect(titleX, y, titleW, SESSION_TITLE_LINE_H);
+            M5.Display.drawString(title, titleX, y);
+            M5.Display.clearClipRect();
+            int textW = M5.Display.textWidth(title);
+            if (textW > titleW) {
+                s_sessionTitleScrollActive = true;
+                s_sessionTitleText = title;
+                s_sessionTitleX = titleX;
+                s_sessionTitleY = y;
+                s_sessionTitleW = titleW;
+                s_sessionTitleTextW = textW;
+                s_sessionTitleOffset = 0;
+                s_sessionTitleStartedAt = millis();
+                s_sessionTitleLastStepAt = s_sessionTitleStartedAt;
+            }
+        } else {
+            M5.Display.drawString(String("  ") + title, 4, y);
+        }
         M5.Display.setTextColor(sel ? TFT_DARKGREEN : TFT_DARKGREY);
         M5.Display.drawString(String("  ") + dir, 4, y + 12);
         M5.Display.clearClipRect();
     }
 }
 
+void disp_animate_session_title() {
+    if (!s_sessionTitleScrollActive) return;
+
+    unsigned long now = millis();
+    if (now - s_sessionTitleStartedAt < SESSION_TITLE_SCROLL_DELAY_MS) return;
+    if (now - s_sessionTitleLastStepAt < SESSION_TITLE_SCROLL_STEP_MS) return;
+    s_sessionTitleLastStepAt = now;
+
+    int maxOffset = s_sessionTitleTextW - s_sessionTitleW;
+    if (maxOffset <= 0) {
+        stopSessionTitleScroll();
+        return;
+    }
+
+    s_sessionTitleOffset++;
+    if (s_sessionTitleOffset > maxOffset + 18) {
+        s_sessionTitleOffset = 0;
+        s_sessionTitleStartedAt = now;
+    }
+    drawSelectedSessionTitle();
+}
+
 // ── Confirmation ──────────────────────────────────────────────
 void disp_confirm(const char* agent, const char* prompt, const char* const* options, int count, int selected) {
+    stopSessionTitleScroll();
     M5.Display.fillScreen(TFT_BLACK);
     disp_status_bar(-1, true, true, agent);
     mascotVisible = false;

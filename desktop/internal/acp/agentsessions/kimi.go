@@ -43,6 +43,9 @@ func ListKimiSessions(home string, limit int) ([]acp.AgentSession, error) {
 			continue
 		}
 		state := kimiSessionState(entry.SessionDir)
+		if strings.TrimSpace(state.LastPrompt) == "" {
+			continue
+		}
 		title := state.Title
 		if strings.TrimSpace(title) == "" {
 			title = state.LastPrompt
