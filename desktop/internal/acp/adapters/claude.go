@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"desktop/internal/acp"
+	"desktop/internal/acp/agentsessions"
 
 	"github.com/beyond5959/acp-adapter/pkg/claudeacp"
 )
@@ -315,6 +316,24 @@ func (a *ClaudeAdapter) LoadSession(acpSessionID string, history []acp.Message) 
 	a.mu.Unlock()
 	log.Printf("[claude] session loaded: %s", loaded)
 	return nil
+}
+
+func (a *ClaudeAdapter) ListAgentSessions(limit int) ([]acp.AgentSession, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	return agentsessions.ListClaudeSessions(home, limit)
+}
+
+func (a *ClaudeAdapter) LoadAgentSession(id, cwd string) error {
+	a.SetCWD(cwd)
+	return a.LoadSession(id, nil)
+}
+
+func (a *ClaudeAdapter) StartNewAgentSession(cwd string) error {
+	a.SetCWD(cwd)
+	return a.Stop()
 }
 
 func (a *ClaudeAdapter) Info() acp.AgentInfo { return a.info }

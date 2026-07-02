@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
 
 	"desktop/internal/acp"
+	"desktop/internal/acp/agentsessions"
 )
 
 // CodexAdapter implements the Anya ACP interface on top of the OpenAI Codex CLI
@@ -249,6 +251,30 @@ func (a *CodexAdapter) LoadSession(acpSessionID string, history []acp.Message) e
 	a.mu.Unlock()
 	log.Printf("[codex] thread resumed: %s", sid)
 	return nil
+}
+
+func (a *CodexAdapter) ListAgentSessions(limit int) ([]acp.AgentSession, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	return agentsessions.ListCodexSessions(home, limit)
+}
+
+func (a *CodexAdapter) LoadAgentSession(id, cwd string) error {
+	a.SetCWD(cwd)
+	return a.LoadSession(id, nil)
+}
+
+func (a *CodexAdapter) StartNewAgentSession(cwd string) error {
+	a.SetCWD(cwd)
+	a.mu.Lock()
+	a.sessionID = ""
+	a.initDone = false
+	a.activeTurnID = ""
+	a.lastTurnStartReqID = 0
+	a.mu.Unlock()
+	return a.pm.Stop()
 }
 
 // dispatchLoop reads NDJSON messages from the Codex app-server process and

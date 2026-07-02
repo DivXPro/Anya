@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
 	"desktop/internal/acp"
+	"desktop/internal/acp/agentsessions"
 )
 
 type OpenCodeAdapter struct {
@@ -194,6 +196,29 @@ func (a *OpenCodeAdapter) LoadSession(acpSessionID string, history []acp.Message
 	a.mu.Unlock()
 	log.Printf("[opencode] session loaded: %s", loaded)
 	return nil
+}
+
+func (a *OpenCodeAdapter) ListAgentSessions(limit int) ([]acp.AgentSession, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	return agentsessions.ListOpenCodeSessions(home, limit)
+}
+
+func (a *OpenCodeAdapter) LoadAgentSession(id, cwd string) error {
+	a.SetCWD(cwd)
+	return a.LoadSession(id, nil)
+}
+
+func (a *OpenCodeAdapter) StartNewAgentSession(cwd string) error {
+	a.SetCWD(cwd)
+	a.mu.Lock()
+	a.sessionID = ""
+	a.initDone = false
+	a.resetPending = false
+	a.mu.Unlock()
+	return a.pm.Stop()
 }
 
 func (a *OpenCodeAdapter) CurrentSessionID() string {
