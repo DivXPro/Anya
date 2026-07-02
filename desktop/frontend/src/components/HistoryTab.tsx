@@ -108,7 +108,7 @@ function HistoryTab() {
 
   const renderBubble = (m: Message) => {
     const isUser = m.role === "user";
-    const agentId = sessionAgentIdById[m.session_id];
+    const agentId = sessionAgentIdById[m.session_id ?? ""];
     const agent = agentId ? agentById[agentId] : undefined;
     const fullTime = new Date(m.created_at).toLocaleString();
 
