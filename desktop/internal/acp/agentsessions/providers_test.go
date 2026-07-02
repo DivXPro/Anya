@@ -111,7 +111,7 @@ func TestClaudeProviderListsRecentProjectJsonl(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected 1 session, got %+v", got)
 	}
-	if got[0].ID != sessionPath || got[0].Title != "Recent Claude task" || got[0].CWD != "/tmp/claude/project" {
+	if got[0].ID != "session-1" || got[0].Title != "Recent Claude task" || got[0].CWD != "/tmp/claude/project" {
 		t.Fatalf("unexpected session: %+v", got[0])
 	}
 	if got[0].Source != "claude-code" || !got[0].CanResume {

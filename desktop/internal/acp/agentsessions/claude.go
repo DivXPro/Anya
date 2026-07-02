@@ -41,7 +41,7 @@ func ListClaudeSessions(home string, limit int) ([]acp.AgentSession, error) {
 			title = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 		}
 		sessions = append(sessions, acp.AgentSession{
-			ID:        path,
+			ID:        strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
 			Title:     title,
 			CWD:       cwd,
 			UpdatedAt: info.ModTime(),
